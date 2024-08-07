@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.core.paginator import Paginator
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,dowload_bgcs
+from api.schemas import OutputType
 
 
 def landing_page(request):
@@ -40,33 +41,52 @@ def results_page(request):
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
-    start_position = int(start_position)
-    end_position = int(end_position)
+    try:
+        start_position = int(start_position)
+        end_position = int(end_position)
 
-    print(mgyc,start_position,end_position)
 
-    # Call the API function to get the plot HTML
-    plot_html = get_contig_region_plot(request, mgyc=mgyc, start_position=start_position, end_position=end_position)
-
-    # Render the BGC page with the plot
-    return render(request, 'bgc_page.html', {'plot_html': plot_html})
+        # Call the API function to get the plot HTML
+        plot_html = get_contig_region_plot(request, mgyc=mgyc, start_position=start_position, end_position=end_position)
+        # print(mgyc,start_position,end_position)
+        # print(mgyc,start_position,end_position)
+        # Render the BGC page with the plot
+        # return render(request, 'bgc_page.html', {'plot_html': plot_html})
+        return render(request, 'bgc_page.html', {
+            'plot_html': plot_html,
+            'mgyc': mgyc,
+            'start_position': start_position,
+            'end_position': end_position,
+        })
+    except Exception as e:
+        logging.error(f"Error in bgc_page view: {e}")
+        return HttpResponse(f"An error occurred: {e}", status=500)
     return render(request, 'bgc_page.html', context)
 
-def download_bgcs(request, mgyc, start_position, end_position):
-    start_position = int(start_position)
-    end_position = int(end_position)
-    output_type = request.GET.get('output_type', 'genbank')  # Default to GenBank if not specified
+def download_bgc_data(request, mgyc, start_position, end_position):
+    try:
+        mgyc, start_position, end_position = 'MGYC001033023516 825 16683'.split()
+        
+        start_position = int(start_position)
+        end_position = int(end_position)
+        
+        print(mgyc,start_position,end_position)
+        output_type = request.GET.get('output_type', 'gbk')  # Default to GenBank if not specified
 
-    # Call the API function to get the download data
-    response = dowload_bgcs(
-        request,
-        mgyc=mgyc,
-        start_position=start_position,
-        end_position=end_position,
-        output_type=output_type,
-    )
+        # Call the API function to get the download data
+        response = dowload_bgcs(
+            request,
+            mgyc=mgyc,
+            start_position=start_position,
+            end_position=end_position,
+            output_type=OutputType(output_type),
+        )
 
-    return response
+        return response
+    except Exception as e:
+        print('eeee',e)
+        logging.error(f"Error in bgc_page view: {e}")
+        return HttpResponse(f"An error occurred: {e}", status=500)
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)

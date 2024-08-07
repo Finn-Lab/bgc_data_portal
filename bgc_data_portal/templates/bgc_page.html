@@ -1,16 +1,31 @@
+<!-- bgc_data_portal/templates/bgc_page.html -->
 {% extends 'base.html' %}
+
 {% block title %}BGC Plot{% endblock %}
 
 {% block content %}
-<section class="vf-intro">
-  <div class="vf-grid">
-    <div class="vf-grid__col--span-12">
-      <h2 class="vf-intro__heading">Biosynthetic Gene Cluster Plot</h2>
-      <div class="vf-content">
+<div class="vf-grid vf-grid__col--span-12">
+    <section class="vf-content">
+        <h1 class="vf-text vf-text-heading--1">Biosynthetic Gene Cluster Plot</h1>
         <!-- Display the plot here -->
-        {{ plot_html|safe }}
-      </div>
-    </div>
-  </div>
-</section>
+        <div class="vf-content__body">
+            {{ plot_html|safe }}
+        </div>
+        <!-- Download options -->
+        <form action="{% url 'download_bgc_data' mgyc start_position end_position %}" method="get" class="vf-form">
+            <div class="vf-form__item">
+                <label for="output_type" class="vf-form__label">Select Format</label>
+                <select id="output_type" name="output_type" class="vf-form__select">
+                    <option value="gbk">GenBank</option>
+                    <option value="fasta">FASTA</option>
+                    <option value="json">JSON</option>
+                </select>
+            </div>
+            <div class="vf-form__item">
+                <button type="submit" class="vf-button vf-button--primary">Download</button>
+            </div>
+        </form>
+        <a href="{% url 'results_page' %}" class="vf-button vf-button--secondary">Back to Results</a>
+    </section>
+</div>
 {% endblock %}

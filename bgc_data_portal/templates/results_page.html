@@ -62,7 +62,55 @@
           <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
         </div>
       </div>
+      
+      <!-- Contig edges -->
+      <div class="vf-form__item">
+        <label for="Edges" class="vf-form__label">Contig edges</label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true" {% if request.GET.complete == 'true' %}checked{% endif %}>
+          <label for="antismash" class="vf-checkbox__label">Complete</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true" {% if request.GET.single_truncated == 'true' %}checked{% endif %}>
+          <label for="single_truncated" class="vf-checkbox__label">Single</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true" {% if request.GET.double_truncated == 'true' %}checked{% endif %}>
+          <label for="double_truncated" class="vf-checkbox__label">Double</label>
+        </div>
+      </div>
 
+      <!-- Biome lineage -->
+      <div class="vf-form__item">
+        <label for="biome_lineage" class="vf-form__label">Biome</label>
+        <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
+      </div>
+      
+      <!-- Pfam -->
+      <div class="vf-form__item">
+        <label for="protein_pfam" class="vf-form__label">Pfam</label>
+        <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
+      </div>
+      
+      <!-- Pfam Strategy -->
+      <div class="vf-form__item">
+        <label for="pfam_strategy" class="vf-form__label">Pfam strategy</label>
+        <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
+            <option value="AND" {% if request.GET.pfam_strategy == "AND" %}selected{% endif %}>AND</option>
+            <option value="OR" {% if request.GET.pfam_strategy == "OR" %}selected{% endif %}>OR</option>
+        </select>
+      </div>
+
+      <!-- Aggregate Strategy -->
+      <div class="vf-form__item">
+        <label for="aggragate_strategy" class="vf-form__label">Aggregate strategy</label>
+        <select id="aggragate_strategy" name="aggragate_strategy" class="vf-form__select">
+            <option value="single" {% if request.GET.aggragate_strategy == "single" %}selected{% endif %}>Single</option>
+            <option value="union" {% if request.GET.aggragate_strategy == "union" %}selected{% endif %}>Union</option>
+            <option value="intersection" {% if request.GET.aggragate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+        </select>
+      </div>
+      
       <!-- Submit Button -->
       <div class="vf-form__item">
         <button type="submit" class="vf-button vf-button--primary">Update Search</button>
