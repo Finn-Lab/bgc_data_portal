@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}Search Results{% endblock %}
+
+{% block content %}
+<section class="vf-intro">
+  <div class="vf-grid">
+    <div class="vf-grid__col--span-12">
+      <h2 class="vf-intro__heading">Search results</h2>
+      <p class="vf-text">Search the database of biosynthetic gene clusters (BGCs).</p>
+            <form action="{% url 'results_page' %}" method="get">
+        <label for="search-keyword" class="vf-form__label">Search by Keyword</label>
+        <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword...">
+        <button type="submit" class="vf-button vf-button--primary">Search</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<div class="vf-grid">
+  <!-- Search Sidebar -->
+  <aside class="vf-grid__col--span-3">
+    <form action="{% url 'results_page' %}" method="get" class="vf-form">
+      <h3>Refine Your Search</h3>
+      
+      <!-- BGC Class Name -->
+      <div class="vf-form__item">
+        <label for="bgc_class_name" class="vf-form__label">BGC Class Name</label>
+        <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
+      </div>
+
+      <!-- BGC Accession -->
+      <div class="vf-form__item">
+        <label for="bgc_accession" class="vf-form__label">BGC Accession</label>
+        <input type="text" id="bgc_accession" name="bgc_accession" class="vf-form__input" value="{{ request.GET.bgc_accession }}">
+      </div>
+
+      <!-- Assembly Accession -->
+      <div class="vf-form__item">
+        <label for="assembly_accession" class="vf-form__label">Assembly Accession</label>
+        <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
+      </div>
+
+      <!-- Contig MGYC -->
+      <div class="vf-form__item">
+        <label for="contig_mgyc" class="vf-form__label">Contig MGYC</label>
+        <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
+      </div>
+
+      <!-- Detectors -->
+      <div class="vf-form__item">
+        <label for="detectors" class="vf-form__label">BGC Detectors</label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true" {% if request.GET.antismash == 'true' %}checked{% endif %}>
+          <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true" {% if request.GET.gecco == 'true' %}checked{% endif %}>
+          <label for="gecco" class="vf-checkbox__label">GECCO</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true" {% if request.GET.sanntis == 'true' %}checked{% endif %}>
+          <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
+        </div>
+      </div>
+
+      <!-- Submit Button -->
+      <div class="vf-form__item">
+        <button type="submit" class="vf-button vf-button--primary">Update Search</button>
+      </div>
+    </form>
+  </aside>
+
+  <!-- Search Results -->
+  <div class="vf-grid__col--span-9">
+    <section class="vf-content">
+      <h2>Search Results</h2>
+      <table class="vf-table">
+        <thead>
+          <tr>
+            <th>BGC Accession</th>
+            <th>Assembly Accession</th>
+            <th>Contig MGYC</th>
+            <th>Start Position</th>
+            <th>End Position</th>
+            <th>Detector Names</th>
+            <th>Class Names</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for bgc in results %}
+          <tr>
+            <td>
+              <a href="{% url 'bgc_page' bgc.contig_mgyc bgc.start_position bgc.end_position %}">
+                {{ bgc.bgc_accessions.0 }}
+              </a>
+            </td>
+            <td>{{ bgc.assembly_accession }}</td>
+            <td>{{ bgc.contig_mgyc }}</a></td>
+            <td>{{ bgc.start_position }}</td>
+            <td>{{ bgc.end_position }}</td>
+            <td>{{ bgc.bgc_detector_names }}</td>
+            <td>{{ bgc.bgc_class_names }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div class="pagination">
+        {% if results.has_previous %}
+          <a href="?{% if request.GET.page %}page={{ results.previous_page_number }}&{% endif %}{{ request.GET.urlencode }}" class="vf-button vf-button--secondary">Previous</a>
+        {% endif %}
+        {% if results.has_next %}
+          <a href="?{% if request.GET.page %}page={{ results.next_page_number }}&{% endif %}{{ request.GET.urlencode }}" class="vf-button vf-button--primary">Next</a>
+        {% endif %}
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

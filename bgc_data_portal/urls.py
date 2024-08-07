@@ -16,11 +16,21 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from api.api import api
-from .views import index
-# from bgc_plots.views import plot_view as views_plot_view
+from . import views
+from django.conf import settings
+from django.conf.urls.static import static
+
+handler404 = 'bgc_data_portal.views.custom_404_view'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("api/v1/", api.urls),
-    # path('', include('bgc_plots.urls')),
-]
+    path("api/v1/", api.urls,name='api'),
+    path('', views.landing_page, name='landing_page'),
+    path('results/', views.results_page, name='results_page'),
+    path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern
+    path('download/<str:mgyc>/<int:start_position>/<int:end_position>/', views.download_bgcs, name='download_bgcs'),  # New download route
+
+]#+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+
+

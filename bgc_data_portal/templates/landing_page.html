@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block title %}Home{% endblock %}
+
+{% block content %}
+<section class="vf-intro">
+  <div class="vf-grid">
+    <div class="vf-grid__col--span-12">
+      <h2 class="vf-intro__heading">Welcome to the Biosynthetic Gene Cluster Portal</h2>
+      <p class="vf-text">Search and explore the extensive database of biosynthetic gene clusters (BGCs).</p>
+    </div>
+  </div>
+</section>
+
+<section class="vf-content vf-content--primary">
+  <div class="vf-grid">
+    <div class="vf-grid__col--span-12">
+      <form action="{% url 'results_page' %}" method="get">
+        <label for="search-keyword" class="vf-form__label">Search by Keyword</label>
+        <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword...">
+        <button type="submit" class="vf-button vf-button--primary">Search</button>
+      </form>
+
+      <form action="{% url 'results_page' %}" method="get">
+        <h3>Complex Query</h3>
+        <!-- Add input fields for complex query parameters similar to the API fields -->
+        <button type="submit" class="vf-button vf-button--secondary">Search BGCs</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

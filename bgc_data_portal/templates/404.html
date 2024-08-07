@@ -1,0 +1,30 @@
+<!-- bgc_data_portal/templates/404.html -->
+{% extends 'base.html' %}
+
+{% block title %}Page Not Found{% endblock %}
+
+{% block content %}
+
+
+<div class="vf-grid vf-grid__col--span-12">
+    <section class="vf-content">
+        <h1 class="vf-text vf-text-heading--1">Page Not Found (404)</h1>
+        <p class="vf-lede">The page you were looking for doesn't exist or may have been moved.</p>
+        <a href="{% url 'landing_page' %}" class="vf-button vf-button--primary">Return to Home</a>
+    </section>
+</div>
+
+<section class="vf-intro">
+    <div class="vf-grid">
+      <div class="vf-grid__col--span-12">
+        <h2 class="vf-intro__heading">Search results</h2>
+        <p class="vf-text">Search the database of biosynthetic gene clusters (BGCs).</p>
+              <form action="{% url 'results_page' %}" method="get">
+          <label for="search-keyword" class="vf-form__label">Search by Keyword</label>
+          <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword...">
+          <button type="submit" class="vf-button vf-button--primary">Search</button>
+        </form>
+      </div>
+    </div>
+</section>
+{% endblock %}

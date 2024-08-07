@@ -87,7 +87,7 @@ class BgcAggregator:
                 start_position=current_group.start_position,
                 end_position=current_group.end_position,
                 bgc_detector_names=list(aggregated_detector_names),  # Set is fine as is
-                bgc_class_names=list(aggregated_class_names),  # Set is fine as is
+                bgc_class_names=list(sorted({name for names in aggregated_class_names for name in names})),  # Set is fine as is
             ))
 
         return output_schemas
@@ -163,7 +163,7 @@ class BgcAggregator:
                     start_position=current_group.start_position,
                     end_position=current_group.end_position,
                     bgc_detector_names=list(aggregated_detector_names),
-                    bgc_class_names=list(aggregated_class_names),
+                    bgc_class_names=list(sorted({name for names in aggregated_class_names for name in names})),
                 ))
 
         return output_schemas

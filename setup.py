@@ -26,6 +26,9 @@ setup(
         'numpy',
         'joblib',
         'seaborn',
+        'requests',
+        # '',
+        # '',
         # '',
     ],
     classifiers=[

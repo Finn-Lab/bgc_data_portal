@@ -14,22 +14,33 @@
 import json
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio  # Import the plotly.io module for HTML conversion
 from django.http import Http404
 from seaborn import color_palette
 from .pfam_annots import pfamToGoSlim, pfam_desc
 from api.utils import RegionFeatureError, get_region_features
 
+# Utility function to convert a seaborn color to a Plotly-compatible format
+def seaborn_to_rgb_string(color):
+    return f'rgb({int(color[0] * 255)}, {int(color[1] * 255)}, {int(color[2] * 255)})'
+
 # Constants
 EXTENDED_NUCLEOTIDE_WINDOW = 2000
-DEFAULT_ANNOT_COLOR = color_palette('Set3')[2]
-DEFAULT_CDS_COLOR = '#ffffff'
+
+# Convert Seaborn color palette to a Plotly-compatible format
+DEFAULT_ANNOT_COLOR = seaborn_to_rgb_string(color_palette('Set3')[2])
+DEFAULT_CDS_COLOR = '#ffffff'  # This is already in a Plotly-compatible format
+
+# Process GO Slim colors
 sorted_go_slims = sorted({slim for slim_set in pfamToGoSlim.values() for slim in slim_set})
-GO_SLIM_COLORS = {go_slim: color_palette('husl', len(sorted_go_slims))[i] 
-                  for i, go_slim in enumerate(sorted_go_slims) }
+GO_SLIM_COLORS = {go_slim: seaborn_to_rgb_string(color_palette('husl', len(sorted_go_slims))[i]) 
+                  for i, go_slim in enumerate(sorted_go_slims)}
+
+# Process detector colors
 DETECTOR_COLORS = {
-    'SanntiS': color_palette('Set3')[0],
-    'GECCO': color_palette('Set3')[1],
-    'antiSMASH': color_palette('Set3')[3],
+    'SanntiS': seaborn_to_rgb_string(color_palette('Set3')[0]),
+    'GECCO': seaborn_to_rgb_string(color_palette('Set3')[1]),
+    'antiSMASH': seaborn_to_rgb_string(color_palette('Set3')[3]),
 }
 
 class ContigRegionViewer:
@@ -196,7 +207,6 @@ class ContigRegionViewer:
         for _, row in non_method_data.sort_values(legend_rank_column).iterrows():
             color = row[color_column] if color_column else 'white'
 
-            print(row)
             trace = go.Scatter(
                 x=row["xs"],
                 y=row["ys"],
@@ -204,8 +214,8 @@ class ContigRegionViewer:
                 mode="lines",
                 line=dict(color='black', width=3. if row['type'] == 'CDS' else 1.),
                 fillcolor=color,
-                hoverinfo="text",
-                text="""<a href="https://plot.ly/">{}</a>""".format("Text"),#row[names],
+                # hoverinfo="text",
+                # text="""<a href="https://plot.ly/">{}</a>""".format("Text"),#row[names],
                 name=row[legend_trace_name_column],
                 showlegend=row[legend_trace_name_column] not in added_legends,
                 legendgroup=row[legend_text_column],
@@ -229,7 +239,7 @@ class ContigRegionViewer:
 
         # Plot method tracks
         method_positions = [-(shape_height * 1.2) - i * method_track_offset for i in range(len(method_data))]
-        for i, row in enumerate(method_data.sort_values(legend_rank_column).iterrows()):
+        for i, (_,row) in enumerate(method_data.sort_values(legend_rank_column).iterrows()):
             trace = go.Scatter(
                 x=[row['start'], row['end']],
                 y=[method_positions[i], method_positions[i]],
@@ -271,4 +281,6 @@ class ContigRegionViewer:
             plotly.graph_objs.Figure: The generated plotly figure.
         """
         features_df = ContigRegionViewer.format_data_for_plot(contig_name, start_position, end_position)
-        return ContigRegionViewer.create_bgc_plot(features_df)
+        fig =  ContigRegionViewer.create_bgc_plot(features_df)
+        html_str = pio.to_html(fig, full_html=False)  # full_html=False to embed in an existing HTML structure
+        return html_str

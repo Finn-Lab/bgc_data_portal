@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Biosynthetic Gene Cluster Portal{% endblock %}</title>
+    <!-- Visual Framework CSS from CDN -->
+    <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
+    {% load static %}
+    <!-- Your custom CSS, if any -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    <header class="vf-header">
+        <div class="vf-header__content">
+            <h1 class="vf-logo"><a href="{% url 'landing_page' %}">Biosynthetic Gene Cluster Portal</a></h1>
+        </div>
+    </header>
+
+    <main class="vf-main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="vf-footer">
+        <p>© 2024 Biosynthetic Gene Cluster Portal</p>
+    </footer>
+
+    <!-- Visual Framework JS from CDN -->
+    <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
+    <!-- Your custom JS, if any -->
+    <script src="{% static 'js/scripts.js' %}"></script>
+</body>
+</html>
