@@ -61,11 +61,9 @@ def bgc_page(request, mgyc,start_position,end_position):
     except Exception as e:
         logging.error(f"Error in bgc_page view: {e}")
         return HttpResponse(f"An error occurred: {e}", status=500)
-    return render(request, 'bgc_page.html', context)
 
 def download_bgc_data(request, mgyc, start_position, end_position):
     try:
-        mgyc, start_position, end_position = 'MGYC001033023516 825 16683'.split()
         
         start_position = int(start_position)
         end_position = int(end_position)

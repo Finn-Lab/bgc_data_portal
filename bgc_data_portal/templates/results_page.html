@@ -46,45 +46,31 @@
         <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
       </div>
 
-      <!-- Detectors -->
-      <div class="vf-form__item">
-        <label for="detectors" class="vf-form__label">BGC Detectors</label>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true" {% if request.GET.antismash == 'true' %}checked{% endif %}>
-          <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true" {% if request.GET.gecco == 'true' %}checked{% endif %}>
-          <label for="gecco" class="vf-checkbox__label">GECCO</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true" {% if request.GET.sanntis == 'true' %}checked{% endif %}>
-          <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
-        </div>
-      </div>
-      
-      <!-- Contig edges -->
-      <div class="vf-form__item">
-        <label for="Edges" class="vf-form__label">Contig edges</label>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true" {% if request.GET.complete == 'true' %}checked{% endif %}>
-          <label for="antismash" class="vf-checkbox__label">Complete</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true" {% if request.GET.single_truncated == 'true' %}checked{% endif %}>
-          <label for="single_truncated" class="vf-checkbox__label">Single</label>
-        </div>
-        <div class="vf-checkbox">
-          <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true" {% if request.GET.double_truncated == 'true' %}checked{% endif %}>
-          <label for="double_truncated" class="vf-checkbox__label">Double</label>
-        </div>
-      </div>
-
       <!-- Biome lineage -->
       <div class="vf-form__item">
         <label for="biome_lineage" class="vf-form__label">Biome</label>
         <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
       </div>
+      
+      <!-- Truncation -->
+      <div class="vf-form__item">
+        <label for="Edges" class="vf-form__label">Contig edges</label>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true"
+                   {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
+            <label for="complete" class="vf-checkbox__label">Complete</label>
+        </div>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
+                   {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
+            <label for="single_truncated" class="vf-checkbox__label">Single</label>
+        </div>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
+                   {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
+            <label for="double_truncated" class="vf-checkbox__label">Double</label>
+        </div>
+    </div>
       
       <!-- Pfam -->
       <div class="vf-form__item">
@@ -99,6 +85,26 @@
             <option value="AND" {% if request.GET.pfam_strategy == "AND" %}selected{% endif %}>AND</option>
             <option value="OR" {% if request.GET.pfam_strategy == "OR" %}selected{% endif %}>OR</option>
         </select>
+      </div>
+
+      <!-- Detectors -->
+      <div class="vf-form__item">
+        <label for="detectors" class="vf-form__label">BGC Detectors</label>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
+                   {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
+            <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
+        </div>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
+                   {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
+            <label for="gecco" class="vf-checkbox__label">GECCO</label>
+        </div>
+        <div class="vf-checkbox">
+            <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
+                   {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
+            <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
+        </div>
       </div>
 
       <!-- Aggregate Strategy -->

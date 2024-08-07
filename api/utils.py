@@ -1,7 +1,10 @@
 
+from functools import reduce
+import operator
 from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
 from typing import List, Optional,Union
 from django.db.models import Q,F
+import re
 
 class RegionFeatureError(Exception):
     """Custom exception for errors related to region features."""
@@ -56,8 +59,6 @@ def search_keyword_in_models(keyword: str):
 
     return bgc_ids
 
-
-
 def complex_bgc_search(
               _detectors : Optional[list] = None,
               _bgc_class_name: Optional[str] = None, 
@@ -69,10 +70,11 @@ def complex_bgc_search(
               _double_truncated: bool = True, 
               _biome_lineage: Optional[str] = None, 
             #   _keyword: Optional[str] = None, 
-              _protein_pfam: Optional[List[str]] = None, # TODO
+              _protein_pfam: str = None, # TODO
               _pfam_strategy: Optional[str] = None # TODO
               ):
 
+    
     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 
     if _detectors:
@@ -90,6 +92,8 @@ def complex_bgc_search(
     if _contig_mgyc:
         qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
     
+    if _biome_lineage:
+        qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
 
     # TODO
     """
@@ -98,20 +102,83 @@ def complex_bgc_search(
         qs = qs.filter(Q(partial__partial_name__in=partials))
     """
 
-    if _biome_lineage:
-        qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
-    
-    # if _keyword:
-    #     qs = qs.filter(
-    #         models.Q(bgc_class__bgc_class_name__icontains=_keyword) |
-    #         models.Q(mgyc__assembly__biome__lineage__icontains=_keyword) |
-    #         models.Q(bgc_metadata__icontains=_keyword)
-    #     )
     
     if _protein_pfam:
-        qs = qs.filter(mgyc__metadata__protein__pfam__icontains=_protein_pfam)
+        # Define the Pfam queries
+        pfam_queries = [
+            Q(
+                mgyc__metadata__protein__pfam__icontains=pfam,
+                mgyc__metadata__start_position__lte=F('end_position'),  # Metadata start is before or at BGC end
+                mgyc__metadata__end_position__gte=F('start_position')   # Metadata end is after or at BGC start
+            )
+            for pfam in _protein_pfam
+        ]
+
+        # Combine the queries using the specified strategy
+        if _pfam_strategy == 'AND':
+            qs = qs.filter(reduce(operator.and_, pfam_queries))
+        elif _pfam_strategy == 'OR':
+            qs = qs.filter(reduce(operator.or_, pfam_queries))
 
     return qs
+
+
+# def complex_bgc_search(
+#               _detectors : Optional[list] = None,
+#               _bgc_class_name: Optional[str] = None, 
+#               _bgc_accession: Optional[str] = None, 
+#               _assembly_accession: Optional[str] = None, 
+#               _contig_mgyc: Optional[str] = None, 
+#               _complete: bool = True, # TODO, FUNCTION WRITEN BUT NEEDS DB MODEL AND POPULATE
+#               _single_truncated: bool = True, 
+#               _double_truncated: bool = True, 
+#               _biome_lineage: Optional[str] = None, 
+#             #   _keyword: Optional[str] = None, 
+#               _protein_pfam: str = None, # TODO
+#               _pfam_strategy: Optional[str] = None # TODO
+#               ):
+
+#     qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
+
+#     if _detectors:
+#         qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=_detectors))
+    
+#     if _bgc_class_name:
+#         qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
+    
+#     if _bgc_accession:
+#         qs = qs.filter(bgc_accession__icontains=_bgc_accession)
+    
+#     if _assembly_accession:
+#         qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)
+    
+#     if _contig_mgyc:
+#         qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
+    
+
+#     # TODO
+#     """
+#     partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
+#     if partials:
+#         qs = qs.filter(Q(partial__partial_name__in=partials))
+#     """
+
+#     if _biome_lineage:
+#         qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
+    
+#     if _protein_pfam:
+        
+#         pfam_queries = [Q(mgyc__metadata__protein__pfam__icontains=pfam) for pfam in _protein_pfam]
+
+#         if pfam_strategy == 'AND':
+#             qs = qs.filter(reduce(operator.and_, pfam_queries))
+#         elif pfam_strategy == 'OR':
+#             qs = qs.filter(reduce(operator.or_, pfam_queries))
+
+#         # qs = qs.filter(mgyc__metadata__protein__pfam__icontains=_protein_pfam)
+
+#     return qs
+
 
 def get_region_features( 
               mgyc: str = None, 
