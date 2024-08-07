@@ -39,7 +39,6 @@ class BgcAggregator:
 
             if len(schemas)<2:
                 continue
-                print(schemas)
 
             current_group = schemas[0]
             aggregated_ids = {current_group.bgc_id}

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plotly Plot</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Clickable Plotly Plot</h1>
+    <div id="plotly-plot">{{ plot_div|safe }}</div>
+
+    <script>
+        // Handle point click event
+        document.getElementById('plotly-plot').on('plotly_click', function(data){
+            var pointURL = data.points[0].customdata;
+            if (pointURL) {
+                window.location.href = pointURL;
+            }
+        });
+    </script>
+</body>
+</html>

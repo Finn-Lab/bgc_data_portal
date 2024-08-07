@@ -1,5 +1,5 @@
 
-from ninja import NinjaAPI, Schema, ModelSchema
+from ninja import NinjaAPI, Router, Schema, ModelSchema
 from ninja.pagination import paginate
 from ninja.errors import HttpError
 from typing import List, Optional,Union
@@ -9,13 +9,13 @@ from ninja import Query
 from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
 from .schemas import Aggregate,PfamStrategy
 from .schemas import BgcSearchOutputSchema, BgcSearchUserOutputSchema, BgcSearchInputSchema, OutputType
+from .utils import RegionFeatureError, get_region_features,complex_bgc_search,search_keyword_in_models
 from .generate_outputs import WriteRegion#, generate_json, generate_fasta
 from .aggregate_bgcs import BgcAggregator
-from django.shortcuts import get_object_or_404
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
+from bgc_plots.contig_region_visualisation import ContigRegionViewer
 
 api = NinjaAPI()
-
 
 @api.exception_handler(HttpError)
 def custom_error_handler(request, exc):
@@ -25,8 +25,33 @@ def custom_error_handler(request, exc):
         status=exc.status_code,
     )
 
-_detectors = ['antiSMASH','GECCO','SanntiS']
 _partials = ['complete','single_truncated','double_truncated']
+_detectors = ['antiSMASH','GECCO','SanntiS']
+
+@api.get("/search/", response=List[BgcSearchUserOutputSchema])
+@paginate
+def search_by_keyword(request, keyword: str):
+    """ Search for matching BGCs based on the keyword """
+
+    matching_bgcs = search_keyword_in_models(keyword)
+
+    # Fetch the full BGC records based on the matching IDs
+    bgcs = Bgc.objects.filter(bgc_id__in=matching_bgcs)
+
+    # Transform the bgc objects into the output schema
+    return [
+        BgcSearchUserOutputSchema(
+            bgc_accessions=[bgc.bgc_accession],
+            assembly_accession=bgc.mgyc.assembly.accession,
+            contig_mgyc=bgc.mgyc.mgyc,
+            start_position=bgc.start_position,
+            end_position=bgc.end_position,
+            bgc_detector_names=[bgc.bgc_detector.bgc_detector_name],
+            bgc_class_names=[bgc.bgc_class.bgc_class_name]
+        )
+        for bgc in bgcs
+    ]
+
 
 @api.get("/bgcs/", response=List[BgcSearchUserOutputSchema])
 @paginate
@@ -42,51 +67,29 @@ def search_bgcs(request,
               single_truncated: bool = True, 
               double_truncated: bool = True, 
               biome_lineage: Optional[str] = None, 
-              keyword: Optional[str] = None, 
+            #   keyword: Optional[str] = None, 
               protein_pfam: Optional[List[str]] = Query(None), # TODO
-              pfam_strategy: PfamStrategy = None, # TODO
+              pfam_strategy: PfamStrategy = PfamStrategy.intersection, # TODO
               aggragate_strategy: Aggregate = Aggregate.single,
     ):
-
-    qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
+    "complex search queries, where users can filter BGCs based on multiple criteria. The aggregation strategies implemented enable users to retrieve BGC regions that are consensus results from more than one BGC detector tool."
 
     detectors = [name for name,value in zip(_detectors,[antismash,gecco,sanntis]) if value!=False]    
-    if detectors:
-        qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=detectors))
-    
-    if bgc_class_name:
-        qs = qs.filter(bgc_class__bgc_class_name__icontains=bgc_class_name)
-    
-    if bgc_accession:
-        qs = qs.filter(bgc_accession__icontains=bgc_accession)
-    
-    if assembly_accession:
-        qs = qs.filter(mgyc__assembly__accession__icontains=assembly_accession)
-    
-    if contig_mgyc:
-        qs = qs.filter(mgyc__mgyc__icontains=contig_mgyc)
-        # qs = qs.filter(mgyc__assembly__biome__lineage__icontains=biome_lineage)
-    
 
-    # TODO
-    """
-    partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
-    if partials:
-        qs = qs.filter(Q(partial__partial_name__in=partials))
-    """
-
-    if biome_lineage:
-        qs = qs.filter(mgyc__assembly__biome__lineage__icontains=biome_lineage)
-    
-    if keyword:
-        qs = qs.filter(
-            models.Q(bgc_class__bgc_class_name__icontains=keyword) |
-            models.Q(mgyc__assembly__biome__lineage__icontains=keyword) |
-            models.Q(bgc_metadata__icontains=keyword)
-        )
-    
-    if protein_pfam:
-        qs = qs.filter(mgyc__protein__pfam__icontains=protein_pfam)
+    bgcs = complex_bgc_search( 
+              detectors,
+              bgc_class_name, 
+              bgc_accession, 
+              assembly_accession, 
+              contig_mgyc, 
+              complete, # TODO, FUNCTION WRITEN BUT NEEDS DB MODEL AND POPULATE
+              single_truncated, 
+              double_truncated, 
+              biome_lineage, 
+            #   keyword, 
+              protein_pfam, # TODO
+              pfam_strategy, # TODO
+    )
     
     individual_bgcs = [
        BgcSearchInputSchema(
@@ -99,7 +102,7 @@ def search_bgcs(request,
             bgc_detector_name=bgc.bgc_detector.bgc_detector_name,
             bgc_class_name=bgc.bgc_class.bgc_class_name,
             )
-            for bgc in qs
+            for bgc in bgcs
     ]
 
     # Agregte strategy function
@@ -120,6 +123,7 @@ def search_bgcs(request,
     ]
 
 
+
 @api.get("/contig_region/")
 def dowload_bgcs(request, 
               mgyc: str = None, 
@@ -127,24 +131,12 @@ def dowload_bgcs(request,
               end_position: int = None,
               output_type: OutputType = OutputType.fasta,
     ):
-
-    # Query the database to get the contig and associated assembly
-    contig = get_object_or_404(Contig, pk=mgyc)
-    assembly_accession = contig.assembly.accession
-
-    # Retrieve BGCs that are within or partially overlap with the specified region
-    bgcs = Bgc.objects.filter(
-        mgyc=mgyc,
-        start_position__lte=end_position,
-        end_position__gte=start_position
-    )
-
-    # Retrieve proteins within or partially overlapping the specified region
-    protein_metadata = Metadata.objects.filter(
-        mgyc=mgyc,
-        start_position__lte=end_position,
-        end_position__gte=start_position
-    ).select_related('mgyp')
+    " Function to download data in specified format given an MGYC and location"
+    try:
+        # Get region features using the utility function
+        contig, assembly_accession, bgcs, protein_metadata = get_region_features(mgyc, start_position, end_position)
+    except RegionFeatureError as e:
+        raise Http404(str(e))
 
     # Generate GenBank file
     write_output_function = getattr(WriteRegion,output_type.value)
@@ -155,3 +147,15 @@ def dowload_bgcs(request,
     response['Content-Disposition'] = f'attachment; filename="{mgyc}_{start_position}_{end_position}.{output_type.value}"'
     return response
 
+
+@api.get("/contig_region_plot/")
+def get_contig_region_plot(request, 
+            mgyc: str = None, 
+            start_position: int = None, 
+            end_position: int = None
+            ):
+    " plot a BGC region"
+    
+    plot_html = ContigRegionViewer.plot_contig_region(mgyc,start_position,end_position)
+    return HttpResponse(plot_html, content_type='text/html')
+    

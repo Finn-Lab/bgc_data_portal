@@ -14,12 +14,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 from api.api import api
 from .views import index
+# from bgc_plots.views import plot_view as views_plot_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("api/", api.urls),
-    path("", index, name="index")
+    path("api/v1/", api.urls),
+    # path('', include('bgc_plots.urls')),
 ]

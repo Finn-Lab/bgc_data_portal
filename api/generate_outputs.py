@@ -93,7 +93,6 @@ class WriteRegion:
         )
         details = {'Detected BGCs':[],'Sequence description':"".join(contig_description)}
         for bgc in bgcs:
-            print(bgc)            
             bgc_key_prefix = f"bgc_{bgc.bgc_accession}"
             bgc_accession = bgc.bgc_accession
             detector = bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown"

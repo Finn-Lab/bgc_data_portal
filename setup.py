@@ -18,9 +18,15 @@ setup(
     packages=find_packages(exclude=["tests*"]),  # Automatically find and include your packages
     include_package_data=True,  # Include files from MANIFEST.in
     install_requires=[
-        "Django>=3.0,<4.0",  # Specify Django version compatible with your project
-        "biopython>=1.79",  # Biopython dependency
-        "django-ninja>=0.12.0",  # Django Ninja dependency
+        "Django",  # Specify Django version compatible with your project
+        "biopython",  # Biopython dependency
+        "django-ninja",  # Django Ninja dependency
+        'pyvis',
+        'pandas',
+        'numpy',
+        'joblib',
+        'seaborn',
+        # '',
     ],
     classifiers=[
         "Development Status :: 3 - Alpha",  # Adjust as per your project's status

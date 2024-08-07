@@ -37,8 +37,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'api',
     'ninja',
+    'api',
+    # 'bgc_plots',
+    # 'dash_app',
+    # 'django_plotly_dash',
+    # 'django.contrib.staticfiles',  #
 ]
 
 MIDDLEWARE = [
@@ -49,6 +53,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+# 
+    # 'django_plotly_dash.middleware.BaseMiddleware',
+    # 'django_plotly_dash.middleware.ExternalRedirectionMiddleware',
 ]
 
 ROOT_URLCONF = 'bgc_data_portal.urls'
@@ -126,3 +133,11 @@ STATIC_URL = '/static/'
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Configure Django Plotly Dash
+PLOTLY_DASH = {
+    "ws_route": "ws/channel",
+    "http_route": "http/dpda/",
+    "cache_timeout_initial_arguments": 60,
+    "serve_locally": True,
+}
