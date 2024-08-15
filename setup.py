@@ -39,15 +39,10 @@ setup(
         "License :: OSI Approved :: MIT License",  # Replace with your chosen license
         "Natural Language :: English",
         "Operating System :: OS Independent",
-        "Programming Language :: Python",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    python_requires='>=3.7',  # Minimum Python version requirement
+    python_requires='>=3.9',  # Minimum Python version requirement
     keywords="django bioinformatics biopython ninja",
     license="MIT",  # Replace with your chosen license
     project_urls={
