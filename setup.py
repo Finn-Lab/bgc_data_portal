@@ -21,13 +21,12 @@ setup(
         "Django",  # Specify Django version compatible with your project
         "biopython",  # Biopython dependency
         "django-ninja",  # Django Ninja dependency
-        'pyvis',
         'pandas',
         'numpy',
         'joblib',
         'seaborn',
         'requests',
-        # '',
+        'plotly',
         # '',
         # '',
     ],
