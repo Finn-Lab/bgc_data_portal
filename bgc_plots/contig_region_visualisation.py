@@ -78,7 +78,7 @@ class ContigRegionViewer:
                 'end': bgc.end_position,
                 'strand': 0,
                 'type': 'CLUSTER',
-                'ID': bgc.bgc_accession,
+                'ID': bgc.mgyb,
                 'source': bgc.bgc_detector.bgc_detector_name,
                 'legend_rank': 0,
                 'legend_trace_name': bgc.bgc_detector.bgc_detector_name,
@@ -106,27 +106,28 @@ class ContigRegionViewer:
                 'legend_text': None,
                 'url': protein_url,
             })
-            for pfam in json.loads(protein.pfam):
-                pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
-                pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
-                pfam_id = pfam.get('PFAM')
+            pfam_json = json.loads(protein.pfam)
+            if type(pfam_json)==list:
+                for pfam in pfam_json:
+                    pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
+                    pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
+                    pfam_id = pfam.get('PFAM')
 
 
-                go_slim = pfamToGoSlim.get(pfam_id, ['Pfam annotation'])[0]
-                print(go_slim,pfam_id)
-                features.append({
-                    'start': pfam_start,
-                    'end': pfam_end,
-                    'strand': meta.strand,
-                    'type': 'ANNOT',
-                    'ID': pfam_id,
-                    'source': 'PFAM',
-                    'legend_rank': 2,
-                    'legend_trace_name': go_slim,
-                    'color': GO_SLIM_COLORS.get(go_slim, DEFAULT_ANNOT_COLOR),
-                    'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
-                    'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
-                })
+                    go_slim = pfamToGoSlim.get(pfam_id, ['Pfam annotation'])[0]
+                    features.append({
+                        'start': pfam_start,
+                        'end': pfam_end,
+                        'strand': meta.strand,
+                        'type': 'ANNOT',
+                        'ID': pfam_id,
+                        'source': 'PFAM',
+                        'legend_rank': 2,
+                        'legend_trace_name': go_slim,
+                        'color': GO_SLIM_COLORS.get(go_slim, DEFAULT_ANNOT_COLOR),
+                        'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                        'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
+                    })
 
         return pd.DataFrame(features)
 
@@ -223,6 +224,7 @@ class ContigRegionViewer:
                 legendrank=row[legend_rank_column],
                 customdata=(row[url_column],),
                 # url=row[url_column]
+                customdata=(row[url_column],)
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
@@ -285,17 +287,5 @@ class ContigRegionViewer:
         """
         features_df = ContigRegionViewer.format_data_for_plot(contig_name, start_position, end_position)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
-        html_str = pio.to_html(fig, full_html=False,div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
-        html_str += """
-            <script>
-                var plot = document.getElementById('bgc-plot');
-                plot.on('plotly_click', function(data){
-                    var point = data.points[0];
-                    if (point.data.customdata.length) {
-                        var url = point.data.customdata[0];
-                        window.open(url, '_blank');  // Open the URL in a new tab
-                    }
-                });
-            </script>
-        """
+        html_str = pio.to_html(fig, full_html=False)  # full_html=False to embed in an existing HTML structure
         return html_str

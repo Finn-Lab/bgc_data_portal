@@ -6,8 +6,7 @@ class BgcAggregator:
     def single(input_schemas: List[BgcSearchInputSchema], detector_names: List[str]) -> List[BgcSearchOutputSchema]:
         return [
             BgcSearchOutputSchema(
-                bgc_ids=[bgc.bgc_id],
-                bgc_accessions=[bgc.bgc_accession],
+                mgybs=[bgc.mgyb],
                 assembly_accession=bgc.assembly_accession,
                 contig_mgyc=bgc.contig_mgyc,
                 start_position=bgc.start_position,
@@ -41,8 +40,7 @@ class BgcAggregator:
 
 
             current_group = schemas[0]
-            aggregated_ids = {current_group.bgc_id}
-            aggregated_accessions = {current_group.bgc_accession}
+            aggregated_ids = {current_group.mgyb}
             aggregated_detector_names = {current_group.bgc_detector_name}
             aggregated_class_names = {current_group.bgc_class_name}
 
@@ -57,16 +55,14 @@ class BgcAggregator:
                     # Update the current group's end_position
                     current_group.end_position = max(current_group.end_position, schema.end_position)
                     # Aggregate the values
-                    aggregated_ids.add(schema.bgc_id)
-                    aggregated_accessions.add(schema.bgc_accession)
+                    aggregated_ids.add(schema.mgyb)
                     aggregated_detector_names.add(schema.bgc_detector_name)
                     aggregated_class_names.add(schema.bgc_class_name)
                 elif len(aggregated_ids)>=2:
                     
                     # If not overlapping, save the current group and start a new one
                     output_schemas.append(BgcSearchOutputSchema(
-                        bgc_ids=list(aggregated_ids),  # Convert set to list
-                        bgc_accessions=list(aggregated_accessions),  # Convert set to list
+                        mgybs=list(aggregated_ids),  # Convert set to list
                         assembly_accession=current_group.assembly_accession,
                         contig_mgyc=current_group.contig_mgyc,
                         start_position=current_group.start_position,
@@ -76,15 +72,13 @@ class BgcAggregator:
                     ))
                     # Start a new group
                     current_group = schema
-                    aggregated_ids = {schema.bgc_id}
-                    aggregated_accessions = {schema.bgc_accession}
+                    aggregated_ids = {schema.mgyb}
                     aggregated_detector_names = {schema.bgc_detector_name}
                     aggregated_class_names = {schema.bgc_class_name}
             # Don't forget to add the last group
             if len(aggregated_ids)>=2:
                 output_schemas.append(BgcSearchOutputSchema(
-                    bgc_ids=list(aggregated_ids),  # Convert set to list
-                    bgc_accessions=list(aggregated_accessions),  # Convert set to list
+                    mgybs=list(aggregated_ids),  # Convert set to list
                     assembly_accession=current_group.assembly_accession,
                     contig_mgyc=current_group.contig_mgyc,
                     start_position=current_group.start_position,
@@ -121,8 +115,7 @@ class BgcAggregator:
                 # continue
 
             current_group = filtered_schemas[0]
-            aggregated_ids = {current_group.bgc_id}
-            aggregated_accessions = {current_group.bgc_accession}
+            aggregated_ids = {current_group.mgyb}
             aggregated_detector_names = {current_group.bgc_detector_name}
             aggregated_class_names = {current_group.bgc_class_name}
 
@@ -143,16 +136,14 @@ class BgcAggregator:
                     current_group.end_position = min(current_group.end_position, schema.end_position)
                     current_group.start_position = max(current_group.start_position, schema.start_position)
                     # Aggregate the values
-                    aggregated_ids.add(schema.bgc_id)
-                    aggregated_accessions.add(schema.bgc_accession)
+                    aggregated_ids.add(schema.mgyb)
                     aggregated_detector_names.add(schema.bgc_detector_name)
                     aggregated_class_names.add(schema.bgc_class_name)
 
                 elif len(aggregated_ids)>=2:
                     # If not overlapping, start a new group, or if it doesn't match all detector names, skip
                     output_schemas.append(BgcSearchOutputSchema(
-                        bgc_ids=list(aggregated_ids),
-                        bgc_accessions=list(aggregated_accessions),
+                        mgybs=list(aggregated_ids),
                         assembly_accession=current_group.assembly_accession,
                         contig_mgyc=current_group.contig_mgyc,
                         start_position=current_group.start_position,
@@ -162,16 +153,14 @@ class BgcAggregator:
                     ))
 
                     current_group = schema
-                    aggregated_ids = {schema.bgc_id}
-                    aggregated_accessions = {schema.bgc_accession}
+                    aggregated_ids = {schema.mgyb}
                     aggregated_detector_names = {schema.bgc_detector_name}
                     aggregated_class_names = {schema.bgc_class_name}
 
             # Don't forget to add the last group if it meets the criteria
             if len(aggregated_ids)>=2:
                 output_schemas.append(BgcSearchOutputSchema(
-                    bgc_ids=list(aggregated_ids),
-                    bgc_accessions=list(aggregated_accessions),
+                    mgybs=list(aggregated_ids),
                     assembly_accession=current_group.assembly_accession,
                     contig_mgyc=current_group.contig_mgyc,
                     start_position=current_group.start_position,

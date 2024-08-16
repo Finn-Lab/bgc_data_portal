@@ -22,7 +22,7 @@ class BgcSearchCallSchema(Schema):
     antismash: Optional[bool] = True
     gecco: Optional[bool] = True
     sanntis: Optional[bool] = True
-    bgc_accession: Optional[str] = None
+    mgyb: Optional[str] = None
     bgc_class_name: Optional[str] = None
     assembly_accession: Optional[str] = None
     biome_lineage: Optional[str] = None
@@ -37,8 +37,7 @@ class BgcSearchCallSchema(Schema):
     aggragate_strategy: Aggregate = Aggregate.single
     
 class BgcSearchInputSchema(Schema):
-    bgc_id: Optional[int] = None
-    bgc_accession: Optional[str] = None
+    mgyb: Optional[int] = None
     assembly_accession: Optional[str] = None
     contig_mgyc: Optional[str] = None
     start_position: Optional[int] = None
@@ -47,8 +46,7 @@ class BgcSearchInputSchema(Schema):
     bgc_class_name: Optional[str] = None
 
 class BgcSearchOutputSchema(Schema):
-    bgc_ids: List[int]
-    bgc_accessions: List[str]
+    mgybs: List[int]
     assembly_accession: str
     contig_mgyc: str
     start_position: int
@@ -57,7 +55,7 @@ class BgcSearchOutputSchema(Schema):
     bgc_class_names: List[str]
 
 class BgcSearchUserOutputSchema(Schema):
-    bgc_accessions: List[str]
+    mgybs: List[int]
     assembly_accession: str
     contig_mgyc: str
     start_position: int

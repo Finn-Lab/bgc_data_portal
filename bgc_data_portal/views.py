@@ -1,13 +1,15 @@
 from django.shortcuts import render
 from django.core.paginator import Paginator
+from django.http import HttpResponse
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,dowload_bgcs
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
+# import logging
 
-
+# logging.basicConfig(level=logging.INFO)
+# logger = logging.getLogger(__name__)
+                           
 def landing_page(request):
     return render(request, 'landing_page.html')
-
-
 
 def results_page(request):
     try:
@@ -17,7 +19,7 @@ def results_page(request):
             gecco=request.GET.get('gecco', 'true') == 'true',
             sanntis=request.GET.get('sanntis', 'true') == 'true',
             bgc_class_name=request.GET.get('bgc_class_name'),
-            bgc_accession=request.GET.get('bgc_accession'),
+            mgyb=request.GET.get('mgyb'),
             assembly_accession=request.GET.get('assembly_accession'),
             contig_mgyc=request.GET.get('contig_mgyc'),
             complete=request.GET.get('complete', 'true') == 'true',

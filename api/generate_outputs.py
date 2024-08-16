@@ -31,7 +31,7 @@ class WriteRegion:
                 location=FeatureLocation(bgc.start_position, bgc.end_position),
                 type="BGC",
                 qualifiers={
-                    "bgc_accession": bgc.bgc_accession,
+                    "mgyb": bgc.mgyb,
                     "bgc_class": bgc.bgc_class.bgc_class_name if bgc.bgc_class else "Unknown",
                     "bgc_detector": bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown",
                 }
@@ -50,16 +50,18 @@ class WriteRegion:
                     "pfam": protein.pfam,
                 }
             )
-            for pfam in json.loads(protein.pfam):
-                pfam_start_postiion = meta.start_position + (pfam.get('envelope_start')*3)
-                pfam_end_position = meta.start_position + (pfam.get('envelope_end')*3)
-                qualifiers = dict(pfam)
-                qualifiers.update({"protein_id": protein.mgyp})
-                feature = SeqFeature(
-                    location=FeatureLocation(pfam_start_postiion, pfam_end_position, strand=meta.strand),
-                    type="PFAM",
-                    qualifiers=qualifiers
-                )
+            pfam_json = json.loads(protein.pfam)
+            if type(pfam_json)==list:
+                for pfam in json.loads(protein.pfam):
+                    pfam_start_postiion = meta.start_position + (pfam.get('envelope_start')*3)
+                    pfam_end_position = meta.start_position + (pfam.get('envelope_end')*3)
+                    qualifiers = dict(pfam)
+                    qualifiers.update({"protein_id": protein.mgyp})
+                    feature = SeqFeature(
+                        location=FeatureLocation(pfam_start_postiion, pfam_end_position, strand=meta.strand),
+                        type="PFAM",
+                        qualifiers=qualifiers
+                    )
 
             record.features.append(feature)
 
@@ -93,15 +95,15 @@ class WriteRegion:
         )
         details = {'Detected BGCs':[],'Sequence description':"".join(contig_description)}
         for bgc in bgcs:
-            bgc_key_prefix = f"bgc_{bgc.bgc_accession}"
-            bgc_accession = bgc.bgc_accession
+            bgc_key_prefix = f"bgc_{bgc.mgyb}"
+            mgyb = bgc.mgyb
             detector = bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown"
             detector_version = bgc.bgc_detector.version if bgc.bgc_detector else "Unknown"
             bgc_class = bgc.bgc_class.bgc_class_name if bgc.bgc_class else "Unknown"
             start_position = str(bgc.start_position)
             end_position = str(bgc.end_position)
             details["Detected BGCs"].append(
-                f"Accession: {bgc_accession};Start {start_position}; End: {end_position}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
+                f"Accession: {mgyb};Start {start_position}; End: {end_position}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
             )
         # Prepare the single subregion with consolidated details
         subregion = {

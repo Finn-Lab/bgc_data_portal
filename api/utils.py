@@ -8,6 +8,7 @@ from typing import List, Optional,Union
 from django.db.models import Q,F
 import re
 
+
 class RegionFeatureError(Exception):
     """Custom exception for errors related to region features."""
     pass
@@ -16,14 +17,15 @@ class RegionFeatureError(Exception):
 def search_keyword_in_models(keyword: str):
     # Build a Q object for filtering BGC based on its own fields
     bgc_query = Q(
-        Q(bgc_accession__icontains=keyword) |
         Q(bgc_metadata__icontains=keyword)
     )
+
+    if keyword.startswith("MGYB") and keyword[4:].isdigit():
+        bgc_query |= Q(Q(mgyb=int(keyword[4:])))
     
     # Filter Contig by the keyword in its fields
     contig_query = Q(
-        Q(contig_name__icontains=keyword) |
-        Q(mgyc__icontains=keyword) 
+        Q(mgyc=keyword) 
     )
 
     # Include related Assembly and Biome fields in the search
@@ -33,11 +35,13 @@ def search_keyword_in_models(keyword: str):
         Q(assembly__biome__lineage__icontains=keyword)
     )
 
+    print(f'\n\n\n{keyword}\n\n')   
     # Find matching contigs
     matching_contigs = Contig.objects.filter(contig_query)
-
+    print(f'\n\n\n{keyword}\r\n')   
+    
     # Get BGCs associated with the matching contigs
-    bgc_ids_from_contigs = Bgc.objects.filter(mgyc__in=matching_contigs).values_list('bgc_id', flat=True)
+    mgybs_from_contigs = Bgc.objects.filter(mgyc__in=matching_contigs).values_list('mgyb', flat=True)
 
     # Find proteins matching the keyword
     matching_proteins = Protein.objects.filter(
@@ -50,21 +54,21 @@ def search_keyword_in_models(keyword: str):
     )
 
     # Get BGCs that overlap with the matching proteins/metadata on the same contig
-    bgc_ids_from_protein_metadata = Bgc.objects.filter(
+    mgybs_from_protein_metadata = Bgc.objects.filter(
         Q(mgyc__metadata__in=matching_metadata) &
         Q(start_position__lte=F('mgyc__metadata__end_position')) &
         Q(end_position__gte=F('mgyc__metadata__start_position'))
-    ).values_list('bgc_id', flat=True)
+    ).values_list('mgyb', flat=True)
 
     # Combine all found BGC ids
-    bgc_ids = set(bgc_ids_from_contigs) | set(bgc_ids_from_protein_metadata) | set(Bgc.objects.filter(bgc_query).values_list('bgc_id', flat=True))
+    mgybs = set(mgybs_from_contigs) | set(mgybs_from_protein_metadata) | set(Bgc.objects.filter(bgc_query).values_list('mgyb', flat=True))
 
-    return bgc_ids
+    return mgybs
 
 def complex_bgc_search(
               _detectors : Optional[list] = None,
               _bgc_class_name: Optional[str] = None, 
-              _bgc_accession: Optional[str] = None, 
+              _mgyb: Optional[str] = None, 
               _assembly_accession: Optional[str] = None, 
               _contig_mgyc: Optional[str] = None, 
               _complete: bool = True, # TODO, FUNCTION WRITEN BUT NEEDS DB MODEL AND POPULATE
@@ -85,14 +89,14 @@ def complex_bgc_search(
         if _bgc_class_name:
             qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
         
-        if _bgc_accession:
-            qs = qs.filter(bgc_accession__icontains=_bgc_accession)
+        if _mgyb:
+            qs = qs.filter(mgyb=_mgyb)
         
         if _assembly_accession:
-            qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)
+            qs = qs.filter(mgyc__assembly__accession=_assembly_accession)
         
         if _contig_mgyc:
-            qs = qs.filter(mgyc__mgyc__icontains=_contig_mgyc)
+            qs = qs.filter(mgyc__mgyc=_contig_mgyc)
         
         if _biome_lineage:
             qs = qs.filter(mgyc__assembly__biome__lineage__icontains=_biome_lineage)
@@ -130,7 +134,7 @@ def complex_bgc_search(
 # def complex_bgc_search(
 #               _detectors : Optional[list] = None,
 #               _bgc_class_name: Optional[str] = None, 
-#               _bgc_accession: Optional[str] = None, 
+#               _mgyb: Optional[str] = None, 
 #               _assembly_accession: Optional[str] = None, 
 #               _contig_mgyc: Optional[str] = None, 
 #               _complete: bool = True, # TODO, FUNCTION WRITEN BUT NEEDS DB MODEL AND POPULATE
@@ -150,8 +154,8 @@ def complex_bgc_search(
 #     if _bgc_class_name:
 #         qs = qs.filter(bgc_class__bgc_class_name__icontains=_bgc_class_name)
     
-#     if _bgc_accession:
-#         qs = qs.filter(bgc_accession__icontains=_bgc_accession)
+#     if _mgyb:
+#         qs = qs.filter(mgyb__icontains=_mgyb)
     
 #     if _assembly_accession:
 #         qs = qs.filter(mgyc__assembly__accession__icontains=_assembly_accession)

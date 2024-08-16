@@ -5,6 +5,7 @@
 __pycache__
 db.sqlite3
 *.db
+!bgc_database.db.debug.db
 media
 
 # Backup files # 

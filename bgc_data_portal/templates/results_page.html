@@ -30,8 +30,8 @@
 
       <!-- BGC Accession -->
       <div class="vf-form__item">
-        <label for="bgc_accession" class="vf-form__label">BGC Accession</label>
-        <input type="text" id="bgc_accession" name="bgc_accession" class="vf-form__input" value="{{ request.GET.bgc_accession }}">
+        <label for="mgyb" class="vf-form__label">BGC Accession</label>
+        <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
       </div>
 
       <!-- Assembly Accession -->
@@ -145,7 +145,7 @@
           <tr>
             <td>
               <a href="{% url 'bgc_page' bgc.contig_mgyc bgc.start_position bgc.end_position %}">
-                {{ bgc.bgc_accessions.0 }}
+                {{ bgc.mgybs.0 }}
               </a>
             </td>
             <td>{{ bgc.assembly_accession }}</td>

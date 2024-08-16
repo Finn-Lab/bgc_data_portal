@@ -16,6 +16,11 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+DEBUG_DB = os.getenv('DEBUG_DB')
+DATABASE_NAME = os.getenv(
+    'PROD_DATABASE' if DEBUG_DB.lower()=='false' else 'DEV_DATABASE',
+    f"sqlite:///{BASE_DIR}/bgc_database.db.debug.db"
+    )
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
@@ -86,7 +91,7 @@ WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': '/Users/fragoso/Work/software/bgc_data_portal/bgc_database_DUMMY.db',
+        'NAME': DATABASE_NAME,
         # 'NAME': BASE_DIR / 'bgc_database_DUMMY.db',
     }
 }

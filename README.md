@@ -1,6 +1,6 @@
 DB to Django models
 ```
-python manage.py inspectdb > models.py
+python manage.py inspectdb > api/models.py
 ```
 - chanmges the AutoField to IntegerField
 - add max_length to CharFields

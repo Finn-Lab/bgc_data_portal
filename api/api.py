@@ -41,11 +41,11 @@ def perform_keyword_search(keyword: Optional[str] = None):
         bgcs = Bgc.objects.all()
     else:
         matching_bgcs = search_keyword_in_models(keyword)
-        bgcs = Bgc.objects.filter(bgc_id__in=matching_bgcs)
+        bgcs = Bgc.objects.filter(mgyb__in=matching_bgcs)
 
     return [
         BgcSearchUserOutputSchema(
-            bgc_accessions=[bgc.bgc_accession],
+            mgybs=[bgc.mgyb],
             assembly_accession=bgc.mgyc.assembly.accession,
             contig_mgyc=bgc.mgyc.mgyc,
             start_position=bgc.start_position,
@@ -63,7 +63,7 @@ def perform_complex_search(_params):
     bgcs = complex_bgc_search(
         detectors,
         _params.bgc_class_name,
-        _params.bgc_accession,
+        _params.mgyb,
         _params.assembly_accession,
         _params.contig_mgyc,
         _params.complete,
@@ -76,8 +76,7 @@ def perform_complex_search(_params):
 
     individual_bgcs = [
         BgcSearchInputSchema(
-            bgc_id=bgc.bgc_id,
-            bgc_accession=bgc.bgc_accession,
+            mgyb=bgc.mgyb,
             assembly_accession=bgc.mgyc.assembly.accession,
             contig_mgyc=bgc.mgyc.mgyc,
             start_position=bgc.start_position,
@@ -95,7 +94,7 @@ def perform_complex_search(_params):
 
     return [
         BgcSearchUserOutputSchema(
-            bgc_accessions=aggregated_bgc.bgc_accessions,
+            mgybs=aggregated_bgc.mgybs,
             assembly_accession=aggregated_bgc.assembly_accession,
             contig_mgyc=aggregated_bgc.contig_mgyc,
             start_position=aggregated_bgc.start_position,
@@ -145,7 +144,6 @@ def dowload_bgcs(request,
     response['Content-Disposition'] = f'attachment; filename="{mgyc}_{start_position}_{end_position}.{output_type.value}"'
     return response
 
-
 @api.get("/contig_region_plot/")
 def get_contig_region_plot(request, 
             mgyc: str = None, 
@@ -153,7 +151,7 @@ def get_contig_region_plot(request,
             end_position: int = None
             ):
     " plot a BGC region"
-    
+    print(mgyc,start_position,end_position)
     plot_html = ContigRegionViewer.plot_contig_region(mgyc,start_position,end_position)
     return plot_html #HttpResponse(plot_html, content_type='text/html')
     
