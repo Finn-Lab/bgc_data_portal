@@ -221,6 +221,7 @@ class ContigRegionViewer:
                 legendgroup=row[legend_text_column],
                 legendgrouptitle_text=row[legend_text_column],
                 legendrank=row[legend_rank_column],
+                customdata=(row[url_column],),
                 # url=row[url_column]
             )
             added_legends.add(row[legend_trace_name_column])
@@ -251,6 +252,8 @@ class ContigRegionViewer:
                 legendgroup=row[legend_text_column],
                 legendgrouptitle_text=row[legend_text_column],
                 legendrank=row[legend_rank_column],
+                customdata=(row[url_column],),
+                # customdata=(row[url_column],),
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
@@ -282,5 +285,17 @@ class ContigRegionViewer:
         """
         features_df = ContigRegionViewer.format_data_for_plot(contig_name, start_position, end_position)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
-        html_str = pio.to_html(fig, full_html=False)  # full_html=False to embed in an existing HTML structure
+        html_str = pio.to_html(fig, full_html=False,div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
+        html_str += """
+            <script>
+                var plot = document.getElementById('bgc-plot');
+                plot.on('plotly_click', function(data){
+                    var point = data.points[0];
+                    if (point.data.customdata.length) {
+                        var url = point.data.customdata[0];
+                        window.open(url, '_blank');  // Open the URL in a new tab
+                    }
+                });
+            </script>
+        """
         return html_str
