@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.2.335">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Santiago Sanchez">
+<meta name="dcterms.date" content="2024-08-20">
+
+<title>Biosynthetic Gene Cluster Portal Documentation - Explore BGCs</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1.6em;
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<script src="../site_libs/quarto-html/quarto.js"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 20,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar docked nav-fixed">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg navbar-dark ">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container">
+    <a class="navbar-brand" href="../index.html">
+    <span class="navbar-title">Biosynthetic Gene Cluster Portal Documentation</span>
+    </a>
+  </div>
+          <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+  <span class="navbar-toggler-icon"></span>
+</button>
+          <div class="collapse navbar-collapse" id="navbarCollapse">
+            <ul class="navbar-nav navbar-nav-scroll me-auto">
+  <li class="nav-item">
+    <a class="nav-link" href="../index.html">
+ <span class="menu-text">Home</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../getting-started.html">
+ <span class="menu-text">Getting Started</span></a>
+  </li>  
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal"><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
+  </li>  
+</ul>
+              <div id="quarto-search" class="" title="Search"></div>
+          </div> <!-- /navcollapse -->
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+    <div class="container-fluid d-flex justify-content-between">
+      <h1 class="quarto-secondary-nav-title">Explore BGCs</h1>
+      <button type="button" class="quarto-btn-toggle btn" aria-label="Show secondary navigation">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse sidebar-navigation docked overflow-auto">
+      <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+      </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../using-portal/explore-bgcs.html" class="sidebar-item-text sidebar-link active">Explore BGCs</a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../using-portal/bgc-details.html" class="sidebar-item-text sidebar-link">BGC Details</a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../api-documentation.html" class="sidebar-item-text sidebar-link">API Documentation</a>
+  </div>
+</li>
+    </ul>
+    </div>
+    <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#advanced-search" id="toc-advanced-search" class="nav-link active" data-scroll-target="#advanced-search">Advanced Search</a>
+  <ul class="collapse">
+  <li><a href="#search-fields" id="toc-search-fields" class="nav-link" data-scroll-target="#search-fields">Search Fields</a></li>
+  </ul></li>
+  <li><a href="#results-table" id="toc-results-table" class="nav-link" data-scroll-target="#results-table">Results Table</a>
+  <ul class="collapse">
+  <li><a href="#results-summary" id="toc-results-summary" class="nav-link" data-scroll-target="#results-summary">Results Summary</a></li>
+  <li><a href="#explanation-of-table-columns" id="toc-explanation-of-table-columns" class="nav-link" data-scroll-target="#explanation-of-table-columns">Explanation of Table Columns</a></li>
+  <li><a href="#downloading-search-results" id="toc-downloading-search-results" class="nav-link" data-scroll-target="#downloading-search-results">Downloading Search Results</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</nav>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title d-none d-lg-block">Explore BGCs</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Santiago Sanchez </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">August 20, 2024</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<section id="advanced-search" class="level2">
+<h2 class="anchored" data-anchor-id="advanced-search">Advanced Search</h2>
+<p>The Advanced Search bar allows you to perform fine-grained queries to explore BGC Data Portal. Below is a detailed explanation of each search field and examples of complex search queries to help you utilise this feature effectively.</p>
+<section id="search-fields" class="level3">
+<h3 class="anchored" data-anchor-id="search-fields">Search Fields</h3>
+<ul>
+<li><p><strong>BGC Class Name</strong>:<br>
+Enter one or more BGC class names (i.e., alkaloid, nrp, other, polyketide, ripp, saccharide, or terpene) separated by spaces or commas. The search will return BGCs that contain at least one of the specified classes (using an OR logic).</p></li>
+<li><p><strong>MGYB</strong>:<br>
+Specify a particular MGYB (BGC accession of portal) to directly retrieve data associated with that BGC.</p></li>
+<li><p><strong>Assembly Accession</strong>:<br>
+Input an ENA assembly accession to find predicted BGCs within that specific assembly.</p></li>
+<li><p><strong>Contig MGYC</strong>:<br>
+Provide a specific MGYC (contig accession) to locate BGCs within that contig.</p></li>
+<li><p><strong>Biome</strong>:<br>
+Enter terms related to the biome lineage (e.g., sediment, hydrothermal vent) to filter BGCs that originate from assemblies associated with those biomes.</p></li>
+<li><p><strong>BGC Completeness</strong>:<br>
+Select from the following options to refine your search based on the BGCs’ contig boundaries:</p>
+<ul>
+<li><strong>Full-Length BGC</strong>: The BGC is entirely within the contig, meaning both start and end positions are within the boundaries of the contig, indicating a complete prediction.</li>
+<li><strong>Single</strong>: Partial BGC (Single edge). The BGC extends to one end of the contig, suggesting that the prediction may be truncated at one side because the contig ends there.</li>
+<li><strong>Double</strong>: Partial BGC (Double edges). The BGC spans the entire length of the contig, indicating that the prediction is likely truncated on both sides, with both ends of the BGC coinciding with the ends of the contig.</li>
+</ul></li>
+<li><p><strong>Pfam</strong>:<br>
+Enter one or more Pfam accessions (e.g., PF00109, PF00501) separated by spaces or commas. You can define the strategy to search BGCs containing these Pfams:</p>
+<ul>
+<li><strong>OR</strong>: The resulting BGCs have at least one of the specified Pfams.</li>
+<li><strong>AND</strong>: The resulting BGCs must include all specified Pfams.</li>
+</ul></li>
+<li><p><strong>Pfam Strategy</strong>:<br>
+The <strong>Pfam Strategy</strong> field determines how the search will interpret multiple Pfam entries. You have two options:</p>
+<ul>
+<li><p><strong>OR Logic</strong>: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter <code>PF00109 PF00501</code> and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.</p></li>
+<li><p><strong>AND Logic</strong>: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter <code>PF00109 PF00501</code> and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.</p></li>
+</ul></li>
+<li><p><strong>Aggregate Strategy</strong>:<br>
+The <strong>Aggregate Strategy</strong> determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:</p>
+<ul>
+<li><p><strong>Single</strong>:<br>
+This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar but not identical regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.</p></li>
+<li><p><strong>Union</strong>:<br>
+The Union strategy merges regions where at least one gene overlaps across predictions from different tools. The resulting region will be defined by the outermost start and end positions of these overlapping predictions. This strategy creates a broader region that represents all potential BGCs detected by at least one of the selected tools, providing a more inclusive view of the data. It is useful when you want to ensure that you capture all possible BGCs, even if only partially supported by some tools.</p></li>
+<li><p><strong>Intersection</strong>:<br>
+The Intersection strategy is the most stringent. It only includes regions where all the selected detection tools agree. The resulting BGC region will be the longest contiguous sequence that all tools have predicted as a BGC. This strategy is particularly useful when you want high-confidence predictions, as it guarantees that the region is supported by multiple independent tools, reducing the likelihood of false positives.</p></li>
+</ul></li>
+</ul>
+</section>
+</section>
+<section id="results-table" class="level2">
+<h2 class="anchored" data-anchor-id="results-table">Results Table</h2>
+<p>After conducting a search, the results will be displayed in a paginated table. Below are key components of the results summary and table, along with instructions for downloading and interpreting the data.</p>
+<section id="results-summary" class="level3">
+<h3 class="anchored" data-anchor-id="results-summary">Results Summary</h3>
+<ul>
+<li><strong>Total Number of Aggregated Regions</strong><br>
+</li>
+<li><strong>Class Distribution plot</strong></li>
+<li><strong>BGC Completeness Distribution plot</strong></li>
+</ul>
+</section>
+<section id="explanation-of-table-columns" class="level3">
+<h3 class="anchored" data-anchor-id="explanation-of-table-columns">Explanation of Table Columns</h3>
+<ul>
+<li><p><strong>MGYB</strong>:<br>
+The BGC accession (or aggregated accession) for the resulting region.</p></li>
+<li><p><strong>Assembly Accession</strong>:<br>
+The ENA assembly accession number where the BGC was predicted.</p></li>
+<li><p><strong>Contig MGYC</strong>:<br>
+The accession of the contig containing the BGC.</p></li>
+<li><p><strong>Start Position</strong>:<br>
+The start coordinate of the BGC within the contig.</p></li>
+<li><p><strong>End Position</strong>:<br>
+The end coordinate of the BGC within the contig.</p></li>
+<li><p><strong>Detector Names</strong>:<br>
+Lists the BGC detectors that contributed to the aggregated prediction.</p></li>
+<li><p><strong>Class Names</strong>:<br>
+The predicted BGC classes within the aggregated region.</p></li>
+</ul>
+</section>
+<section id="downloading-search-results" class="level3">
+<h3 class="anchored" data-anchor-id="downloading-search-results">Downloading Search Results</h3>
+<p>You can download the search results as a <strong>TSV</strong> file, which can be used in conjunction with the API to retrieve the data locally.</p>
+<p>This information will help you explore, interpret, and utilise the data from the BGC Portal effectively.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    target: function(trigger) {
+      return trigger.previousElementSibling;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">© 2024 Biosynthetic Gene Cluster Portal</div>   
+    <div class="nav-footer-right">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal">
+      <i class="bi bi-github" role="img">
+</i> 
+    </a>
+  </li>  
+</ul>
+    </div>
+  </div>
+</footer>
+
+
+
+</body></html>

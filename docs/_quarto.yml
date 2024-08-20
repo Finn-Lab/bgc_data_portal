@@ -1,40 +1,59 @@
+
 project:
   type: website
 
 website:
-  title: "Biosynthetic Gene Cluster (BGC) Data Portal"
+  title: "Biosynthetic Gene Cluster Portal Documentation"
+  description: "Guides, examples, and API documentation for using the Biosynthetic Gene Cluster Portal."
   navbar:
-    background: primary
     left:
       - text: "Home"
         href: index.qmd
-      - text: "About"
-        href: about.qmd
-      - text: "API"
-        href: api.qmd
+      - text: "Getting Started"
+        href: getting-started.qmd
+    right: 
+      - icon: github
+        href: https://github.com/Finn-Lab/bgc_data_portal 
   sidebar:
     style: "docked"
     search: true
     contents:
-      - text: "Introduction"
-        href: index.qmd
-      - text: "Getting Started"
-        href: getting-started.qmd
-      - text: "Usage"
-        href: usage.qmd
-      - text: "API"
-        href: api.qmd
+      - text: "Home Page"
+        href: using-portal/landing-page-features.qmd
+      - text: "Explore BGCs"
+        href: using-portal/explore-bgcs.qmd
+      - text: "BGC Details"
+        href: using-portal/bgc-details.qmd
+      - text: "API Documentation"
+        href: api-documentation.qmd
+  page-footer:
+    left: "© 2024 Biosynthetic Gene Cluster Portal"
+    right: 
+      - icon: github
+        href: https://github.com/Finn-Lab/bgc_data_portal 
 
 format:
   html:
-    theme: flatly
-    css: styles.css
+    theme: default
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    # toc-active-border: true
+    code-fold: false
 
-# format:
-#   html:
-#     theme: cosmo
-#     css: styles.css
-#     toc: true
+# Sections
+files:
+  - index.qmd
+  - getting-started.qmd
+  - using-portal/landing-page-features.qmd
+  - using-portal/search-results.qmd
+  - using-portal/bgc-details.qmd
+  - api-documentation.qmd
 
 
-
+# Additional options
+metadata:
+  title: "Biosynthetic Gene Cluster Portal Documentation"
+  # description: "Documentation for the BGC Portal, including user guides, API instructions, and use cases."
+  author: "Microbiome Informatics Team, EMBL-EBI"
+  date: "2024"

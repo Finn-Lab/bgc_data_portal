@@ -1,0 +1,60 @@
+---
+title: "BGC Details"
+author: "Santiago Sanchez"
+date: "2024-08-20"
+format: html
+---
+
+
+This section provides a detailed guide on how to explore the BGC details page within the Biosynthetic Gene Cluster (BGC) Portal. Users can gain insights into the predicted BGC regions, understand various annotations, and download relevant data files.
+
+
+## Basic Information
+
+At the top of the BGC details page, users will find essential information about the aggregated region. This includes:
+
+- **Assembly Accession**: The ENA (European Nucleotide Archive) assembly accession associated with the predicted BGC region. This is a unique identifier for the assembly from which the BGC was predicted. The assembly accession is linked to the MGnify assembly page, where users can explore the assembly in more detail.
+
+- **Contig Information**: The contig accession (MGYC) where the BGC was predicted. The contig is a segment of the assembly, and the accession is linked to the MGnify contig viewer, allowing further exploration of the contig.
+
+- **Biome Data**: Information about the biome from which the assembly originates. Biome data provides context on the environmental source of the DNA sequence, which can be important for understanding the ecological relevance of the BGC.
+
+- **Prediction Details**: This includes the start and end positions of the aggregated region within the contig, the BGC detectors involved in the prediction, and the BGC classes predicted within the region. This data helps users understand the scope and source of the BGC prediction.
+
+## BGC Plot
+
+The BGC plot is a visual representation of the predicted BGC within the contig. It includes several layers of information:
+
+- **Coding Regions (CDS)**: Displayed as white arrows with black edges, each arrow represents a coding sequence within the contig. The direction of the arrow indicates the strand on which the gene is located. Users can click on these arrows to reveal additional **CDS data**, including protein sequence and Pfam annotations.
+
+- **Pfam annotations**: Pfam domains within the CDS are represented by colored arrows inside the white CDS arrows. The color corresponds to the Gene Ontology (GO) slim molecular function associated with that Pfam. Clicking reveals additional **CDS data**, including links to the Pfan entries in InterPro.
+
+- **BGC predictions**: Horizontal colored bars at the bottom of the plot represent BGC predictions by individual detection tools. 
+
+- **Aggregated region**: An unfilled horizontal bar at the bottom of the plot represents the aggregated BGC region. This region encompasses the consensus prediction from all specified detectors, and its coordinates are reflected in the results table.
+
+
+## CDS Data
+
+When users click on a coding sequence (CDS) in the plot, detailed information about the CDS is displayed:
+
+- **Protein Sequence**: The amino acid sequence of the protein encoded by the CDS. This sequence is crucial for further functional analysis or comparisons with other sequences.
+
+- **Pfam Details**: Information about the Pfam domain(s) within the CDS, including descriptions and associated GO terms. This helps in understanding the potential function of the protein.
+
+- **Representative Protein**: A link to the representative protein in the MGnify proteins database. This link provides additional information about the protein, including its structure, biome distribution, and other relevant annotations.
+
+## Download Options
+
+The BGC details page offers download options for users who wish to retrieve data for further analysis:
+
+- **GeneBank**: This file contains the nucleotide sequence of the aggregated BGC region, along with annotated features such as predicted genes, translation sequences, Pfam domains, and BGC region information. The GeneBank format is widely used for storing detailed sequence data, and it is compatible with various bioinformatics tools.
+
+- **JSON**: The JSON file is formatted according to antiSMASH specifications and can be used directly within the antiSMASH ecosystem. This file is useful for users who want to perform further analysis using antiSMASH tools or integrate the data into their existing antiSMASH workflows.
+
+- **FASTA**: This file provides the nucleotide sequence of the aggregated BGC region in FASTA format. FASTA is a simple, widely-used format for representing nucleotide sequences, making it easy to use with various sequence analysis tools.
+
+- **GFF3**: The GFF3 file contains the annotations of the aggregated BGC region and its constituent CDSs. The GFF3 format is commonly used for representing gene features and is compatible with many genome browsers and annotation tools.
+
+These download options allow users to take the predicted BGC data into their preferred analysis pipelines, ensuring flexibility and compatibility with different bioinformatics platforms.
+

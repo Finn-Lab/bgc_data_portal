@@ -1,7 +1,16 @@
 ---
-title: "Welcome to My Django App Documentation"
+title: "Introduction"
+author: "Santiago Sanchez"
+date: "2024-08-20"
+output: html_document
 ---
 
-## Introduction
 
-Welcome to the official documentation for My Django App. Here you'll find everything you need to know about using and developing the app.
+## Overview of the BGC Portal
+
+Biosynthetic gene clusters are important for understanding the production of natural products, including antibiotics and other bioactive compounds. The BGC Portal provides a resource for researchers who need access to predicted biosynthetic gene clusters from a wide range of metagenomic datasets from MGnify.
+
+The **Biosynthetic Gene Cluster (BGC) Portal** is a platform designed to facilitate the exploration, analysis, and retrieval of biosynthetic gene cluster predictions from metagenomic assemblies. 
+
+The portal integrates data from multiple prediction tools, enabling users to perform detailed searches, visualise results, and download data in various formats. 
+

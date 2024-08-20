@@ -6,8 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="author" content="Santiago Sanchez">
+<meta name="dcterms.date" content="2024-08-20">
 
-<title>Biosynthetic Gene Cluster (BGC) Data Portal - Usage</title>
+<title>Biosynthetic Gene Cluster Portal Documentation - API Documentation</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -60,10 +62,9 @@ ul.task-list li input[type="checkbox"] {
 }</script>
 
 
-<link rel="stylesheet" href="styles.css">
 </head>
 
-<body class="nav-sidebar docked nav-fixed fullcontent">
+<body class="nav-sidebar docked nav-fixed">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -71,7 +72,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container">
     <a class="navbar-brand" href="./index.html">
-    <span class="navbar-title">Biosynthetic Gene Cluster (BGC) Data Portal</span>
+    <span class="navbar-title">Biosynthetic Gene Cluster Portal Documentation</span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -80,16 +81,19 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./index.html" aria-current="page">
+    <a class="nav-link" href="./index.html">
  <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="./about.html">
- <span class="menu-text">About</span></a>
+    <a class="nav-link" href="./getting-started.html">
+ <span class="menu-text">Getting Started</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./api.html">
- <span class="menu-text">API</span></a>
+</ul>
+            <ul class="navbar-nav navbar-nav-scroll ms-auto">
+  <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal"><i class="bi bi-github" role="img">
+</i> 
+ <span class="menu-text"></span></a>
   </li>  
 </ul>
               <div id="quarto-search" class="" title="Search"></div>
@@ -98,7 +102,7 @@ ul.task-list li input[type="checkbox"] {
     </nav>
   <nav class="quarto-secondary-nav" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
     <div class="container-fluid d-flex justify-content-between">
-      <h1 class="quarto-secondary-nav-title">Usage</h1>
+      <h1 class="quarto-secondary-nav-title">API Documentation</h1>
       <button type="button" class="quarto-btn-toggle btn" aria-label="Show secondary navigation">
         <i class="bi bi-chevron-right"></i>
       </button>
@@ -118,42 +122,66 @@ ul.task-list li input[type="checkbox"] {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./index.html" class="sidebar-item-text sidebar-link">Introduction</a>
+  <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./getting-started.html" class="sidebar-item-text sidebar-link">Getting Started</a>
+  <a href="./using-portal/explore-bgcs.html" class="sidebar-item-text sidebar-link">Explore BGCs</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./usage.html" class="sidebar-item-text sidebar-link active">Usage</a>
+  <a href="./using-portal/bgc-details.html" class="sidebar-item-text sidebar-link">BGC Details</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./api.html" class="sidebar-item-text sidebar-link">API</a>
+  <a href="./api-documentation.html" class="sidebar-item-text sidebar-link active">API Documentation</a>
   </div>
 </li>
     </ul>
     </div>
+    <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#api-documentation" id="toc-api-documentation" class="nav-link active" data-scroll-target="#api-documentation">API Documentation</a>
+  <ul class="collapse">
+  <li><a href="#what-is-an-api" id="toc-what-is-an-api" class="nav-link" data-scroll-target="#what-is-an-api">What is an API?</a></li>
+  <li><a href="#accessing-the-api-documentation" id="toc-accessing-the-api-documentation" class="nav-link" data-scroll-target="#accessing-the-api-documentation">Accessing the API Documentation</a></li>
+  </ul></li>
+  </ul>
+</nav>
 </nav>
 <!-- margin-sidebar -->
-    
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title d-none d-lg-block">Usage</h1>
+<h1 class="title d-none d-lg-block">API Documentation</h1>
 </div>
 
 
 
 <div class="quarto-title-meta">
 
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Santiago Sanchez </p>
+          </div>
+  </div>
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">August 20, 2024</p>
+    </div>
+  </div>
   
     
   </div>
@@ -161,11 +189,18 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<section id="usage-instructions" class="level2">
-<h2 class="anchored" data-anchor-id="usage-instructions">Usage Instructions</h2>
-<p>Detailed usage instructions for My Django App…</p>
+<section id="api-documentation" class="level1">
+<h1>API Documentation</h1>
+<section id="what-is-an-api" class="level2">
+<h2 class="anchored" data-anchor-id="what-is-an-api">What is an API?</h2>
+<p>An API (Application Programming Interface) allows different software applications to communicate with each other. In the context of the Biosynthetic Gene Cluster (BGC) Portal, the API provides a programmatic way for users to access and interact with the portal’s data. This can be especially useful for automating workflows, integrating the portal’s data with other bioinformatics tools, or performing large-scale analyses without needing to use the web interface.</p>
+</section>
+<section id="accessing-the-api-documentation" class="level2">
+<h2 class="anchored" data-anchor-id="accessing-the-api-documentation">Accessing the API Documentation</h2>
+<p>For detailed information on how to use the API, including available endpoints and request formats, please refer to the comprehensive API documentation available on the Portal’s Home page under the “API Access” section.</p>
 
 
+</section>
 </section>
 
 </main> <!-- /main -->
@@ -303,6 +338,21 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 });
 </script>
 </div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">© 2024 Biosynthetic Gene Cluster Portal</div>   
+    <div class="nav-footer-right">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal">
+      <i class="bi bi-github" role="img">
+</i> 
+    </a>
+  </li>  
+</ul>
+    </div>
+  </div>
+</footer>
 
 
 

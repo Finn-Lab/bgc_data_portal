@@ -1,0 +1,28 @@
+---
+title: "Home Page"
+author: "Santiago Sanchez"
+date: "2024-08-20"
+output: html_document
+---
+
+
+The Home Page serves as the primary navigation hub for the **Biosynthetic Gene Cluster (BGC) Portal**. This page provides quick access to the main functionalities of the portal, allowing users to search for BGCs, access API documentation, find user guides, and learn more about the project.
+
+## Keyword Search
+
+At the top of every page, you will find the **Keyword Search** bar. This feature allows you to quickly perform a basic search across the BGC Portal data and documents using specific keywords or accessions. 
+This tool is designed to provide a fast and straightforward way to retrieve data without requiring advanced search criteria.
+
+## Access and Explore Options
+
+The Home Page offers several options to access and explore metagenomic BGC data:
+
+**Explore BGCs** gives access to more detailed searches using advanced criteria. This feature is particularly useful for users who need to perform complex queries or refine their search results based on specific parameters. Also provides basic statistics on the data portal alongside the detailed results of their searches. 
+
+**API Access** section provides documentation for users who wish to programmatically interact with the BGC Portal. Review the documentation, which includes endpoint descriptions and parameter details.
+
+**User Documentation** section is where you will find guides on how to use the BGC Portal.
+
+**About Us** section provides background information on the BGC Portal and the team behind its development.
+
+This page is access point to exploring and utilising the BGC Portal.

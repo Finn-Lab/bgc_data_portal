@@ -32,7 +32,7 @@ def custom_error_handler(request, exc):
         status=exc.status_code,
     )
 
-_partials = ['complete','single_truncated','double_truncated']
+_partials = ['full_length','single_truncated','double_truncated']
 _detectors = ['antiSMASH','GECCO','SanntiS']
 
 def perform_keyword_search(keyword: Optional[str] = None):
@@ -66,7 +66,7 @@ def perform_complex_search(_params):
         _params.mgyb,
         _params.assembly_accession,
         _params.contig_mgyc,
-        _params.complete,
+        _params.full_length,
         _params.single_truncated,
         _params.double_truncated,
         _params.biome_lineage,

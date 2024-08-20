@@ -133,16 +133,16 @@
 
 <!-- Truncation -->
 <div class="vf-form__item">
-  <label for="Edges" class="vf-form__label">Contig edges
+  <label for="Edges" class="vf-form__label">BGC Completeness
     <span class="tooltip-container">
       <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Contig edges indicate whether the BGC is complete, single-truncated, or double-truncated.</span>
+      <span class="tooltip-text">BGC Completeness indicate whether the BGC is full_length, single-truncated, or double-truncated.</span>
     </span>
   </label>
   <div class="vf-checkbox">
-    <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true"
-           {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
-    <label for="complete" class="vf-checkbox__label">Complete</label>
+    <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true"
+           {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
+    <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
   </div>
   <div class="vf-checkbox">
     <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"

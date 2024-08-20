@@ -23,7 +23,7 @@ def results_page(request):
             mgyb=request.GET.get('mgyb'),
             assembly_accession=request.GET.get('assembly_accession'),
             contig_mgyc=request.GET.get('contig_mgyc'),
-            complete=request.GET.get('complete', 'true') == 'true',
+            full_length=request.GET.get('full_length', 'true') == 'true',
             single_truncated=request.GET.get('single_truncated', 'true') == 'true',
             double_truncated=request.GET.get('double_truncated', 'true') == 'true',
             biome_lineage=request.GET.get('biome_lineage'),

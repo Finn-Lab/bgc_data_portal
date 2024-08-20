@@ -103,7 +103,7 @@ def complex_bgc_search(
 
         # TODO
         """
-        partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
+        partials = [name for name,value in zip(_partials,[full_length,single_truncated,double_truncated]) if value!=False]    
         if partials:
             qs = qs.filter(Q(partial__partial_name__in=partials))
         """
@@ -166,7 +166,7 @@ def complex_bgc_search(
 
 #     # TODO
 #     """
-#     partials = [name for name,value in zip(_partials,[complete,single_truncated,double_truncated]) if value!=False]    
+#     partials = [name for name,value in zip(_partials,[full_length,single_truncated,double_truncated]) if value!=False]    
 #     if partials:
 #         qs = qs.filter(Q(partial__partial_name__in=partials))
 #     """

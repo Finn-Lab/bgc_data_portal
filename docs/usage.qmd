@@ -1,7 +1,0 @@
----
-title: "Usage"
----
-
-## Usage Instructions
-
-Detailed usage instructions for My Django App...

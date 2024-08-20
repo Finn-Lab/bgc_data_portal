@@ -6,8 +6,10 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
+<meta name="author" content="Santiago Sanchez">
+<meta name="dcterms.date" content="2024-08-20">
 
-<title>Biosynthetic Gene Cluster (BGC) Data Portal - Getting Started</title>
+<title>Biosynthetic Gene Cluster Portal Documentation - Getting Started</title>
 <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -60,10 +62,9 @@ ul.task-list li input[type="checkbox"] {
 }</script>
 
 
-<link rel="stylesheet" href="styles.css">
 </head>
 
-<body class="nav-sidebar docked nav-fixed fullcontent">
+<body class="nav-sidebar docked nav-fixed">
 
 <div id="quarto-search-results"></div>
   <header id="quarto-header" class="headroom fixed-top">
@@ -71,7 +72,7 @@ ul.task-list li input[type="checkbox"] {
       <div class="navbar-container container-fluid">
       <div class="navbar-brand-container">
     <a class="navbar-brand" href="./index.html">
-    <span class="navbar-title">Biosynthetic Gene Cluster (BGC) Data Portal</span>
+    <span class="navbar-title">Biosynthetic Gene Cluster Portal Documentation</span>
     </a>
   </div>
           <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
@@ -80,17 +81,15 @@ ul.task-list li input[type="checkbox"] {
           <div class="collapse navbar-collapse" id="navbarCollapse">
             <ul class="navbar-nav navbar-nav-scroll me-auto">
   <li class="nav-item">
-    <a class="nav-link active" href="./index.html" aria-current="page">
+    <a class="nav-link" href="./index.html">
  <span class="menu-text">Home</span></a>
   </li>  
   <li class="nav-item">
-    <a class="nav-link" href="./about.html">
- <span class="menu-text">About</span></a>
+    <a class="nav-link active" href="./getting-started.html" aria-current="page">
+ <span class="menu-text">Getting Started</span></a>
   </li>  
-  <li class="nav-item">
-    <a class="nav-link" href="./api.html">
- <span class="menu-text">API</span></a>
-  </li>  
+  <li class="dropdown-header">
+ <span class="menu-text">Using the Portal</span></li>
 </ul>
               <div id="quarto-search" class="" title="Search"></div>
           </div> <!-- /navcollapse -->
@@ -118,29 +117,43 @@ ul.task-list li input[type="checkbox"] {
     <ul class="list-unstyled mt-1">
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./index.html" class="sidebar-item-text sidebar-link">Introduction</a>
+  <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page Features</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./getting-started.html" class="sidebar-item-text sidebar-link active">Getting Started</a>
+  <a href="./using-portal/explore-bgcs.html" class="sidebar-item-text sidebar-link">Explore BGCs</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./usage.html" class="sidebar-item-text sidebar-link">Usage</a>
+  <a href="./using-portal/bgc-details.html" class="sidebar-item-text sidebar-link">BGC Details</a>
   </div>
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./api.html" class="sidebar-item-text sidebar-link">API</a>
+  <a href="./api-documentation.html" class="sidebar-item-text sidebar-link">API Documentation</a>
   </div>
 </li>
     </ul>
     </div>
+    <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#basic-navigation" id="toc-basic-navigation" class="nav-link active" data-scroll-target="#basic-navigation">Basic Navigation</a>
+  <ul class="collapse">
+  <li><a href="#home-page" id="toc-home-page" class="nav-link" data-scroll-target="#home-page">1. Home Page</a></li>
+  <li><a href="#explore-bgcs-page" id="toc-explore-bgcs-page" class="nav-link" data-scroll-target="#explore-bgcs-page">2. Explore BGCs Page</a></li>
+  <li><a href="#bgc-details-page" id="toc-bgc-details-page" class="nav-link" data-scroll-target="#bgc-details-page">3. BGC Details Page</a></li>
+  </ul></li>
+  <li><a href="#glossary-of-terms" id="toc-glossary-of-terms" class="nav-link" data-scroll-target="#glossary-of-terms">Glossary of Terms</a></li>
+  </ul>
+</nav>
 </nav>
 <!-- margin-sidebar -->
-    
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+    </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
@@ -153,7 +166,19 @@ ul.task-list li input[type="checkbox"] {
 
 <div class="quarto-title-meta">
 
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Santiago Sanchez </p>
+          </div>
+  </div>
     
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">August 20, 2024</p>
+    </div>
+  </div>
   
     
   </div>
@@ -161,9 +186,52 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<section id="getting-started" class="level2">
-<h2 class="anchored" data-anchor-id="getting-started">Getting Started</h2>
-<p>Here’s how to get started with My Django App…</p>
+<section id="basic-navigation" class="level2">
+<h2 class="anchored" data-anchor-id="basic-navigation">Basic Navigation</h2>
+<p>The <strong>Biosynthetic Gene Cluster (BGC) Portal</strong> is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:</p>
+<section id="home-page" class="level3">
+<h3 class="anchored" data-anchor-id="home-page">1. Home Page</h3>
+<p>The Home Page is your entry point to the BGC Portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:</p>
+<ul>
+<li><strong>Keyword Search</strong>: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data.</li>
+<li><strong>Access and Explore Options</strong>:
+<ul>
+<li><strong>Search BGCs</strong>: Directs you to the Explore BGCs page for more detailed queries.</li>
+<li><strong>API Access</strong>: Provides documentation on how to use the API for programmatic access to BGC data.</li>
+<li><strong>User Documentation</strong>: Guides and examples to help you navigate and utilise the portal effectively.</li>
+<li><strong>About Us</strong>: Information about the project, including details on the EUREMAP initiative supporting marine bioprospecting research.</li>
+</ul></li>
+</ul>
+</section>
+<section id="explore-bgcs-page" class="level3">
+<h3 class="anchored" data-anchor-id="explore-bgcs-page">2. Explore BGCs Page</h3>
+<p>The Explore BGCs Page is where users can perform detailed searches and view the results. It includes:</p>
+<ul>
+<li><strong>Advanced Search Sidebar</strong>: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more.</li>
+<li><strong>Results Table</strong>: Displays the outcomes of your search in a paginated format, with options to download the data in TSV or Bash script formats. The table includes key details such as BGC accession, assembly accession, contig information, and detector names.</li>
+</ul>
+</section>
+<section id="bgc-details-page" class="level3">
+<h3 class="anchored" data-anchor-id="bgc-details-page">3. BGC Details Page</h3>
+<p>The BGC Details Page provides an in-depth view of a specific biosynthetic gene cluster. Key features include:</p>
+<ul>
+<li><strong>Aggregated Region Basic Information</strong>: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.</li>
+<li><strong>BGC Plot</strong>: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors.</li>
+<li><strong>CDS Data</strong>: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.</li>
+<li><strong>Download Options</strong>: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3.</li>
+</ul>
+</section>
+</section>
+<section id="glossary-of-terms" class="level2">
+<h2 class="anchored" data-anchor-id="glossary-of-terms">Glossary of Terms</h2>
+<p>Below are definitions of key terms and concepts used in the BGC Portal:</p>
+<ul>
+<li><strong>Biosynthetic Gene Cluster (BGC)</strong>: A group of genes that collectively are predicted to produce a secondary metabolite by a specific BGC detector, often with ecological or pharmaceutical significance.</li>
+<li><strong>Aggregated Region</strong>: In the context of the BGC Portal, an aggregated region refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting aggregated region represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.</li>
+<li><strong>MGYB</strong>: A specific accession number related to each BGC predictions within the portal.</li>
+<li><strong>Aggregate Strategy</strong>: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final predicted BGC regions.</li>
+</ul>
+<p>For more detailed instructions, please refer to the specific sections of the documentation.</p>
 
 
 </section>
@@ -303,6 +371,21 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 });
 </script>
 </div> <!-- /content -->
+<footer class="footer">
+  <div class="nav-footer">
+    <div class="nav-footer-left">© 2024 Biosynthetic Gene Cluster Portal</div>   
+    <div class="nav-footer-right">
+      <ul class="footer-items list-unstyled">
+    <li class="nav-item compact">
+    <a class="nav-link" href="https://github.com/Finn-Lab/bgc_data_portal">
+      <i class="bi bi-github" role="img">
+</i> 
+    </a>
+  </li>  
+</ul>
+    </div>
+  </div>
+</footer>
 
 
 

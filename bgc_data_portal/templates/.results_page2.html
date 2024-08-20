@@ -49,15 +49,15 @@
       </div>
     </div>
 
-    <!-- Group 2: Contig Edges and BGC Detectors -->
+    <!-- Group 2: BGC Completeness and BGC Detectors -->
     <div class="vf-grid__col--span-12" style="border: 1px solid #e1e1e1; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
       <div class="vf-grid">
         <div class="vf-grid__col--span-6">
-          <label for="Edges" class="vf-form__label">Contig edges</label>
+          <label for="Edges" class="vf-form__label">BGC Completeness</label>
           <div class="vf-checkbox">
-            <input type="checkbox" id="complete" name="complete" class="vf-checkbox__input" value="true" 
-                   {% if request.GET.complete == 'true' or request.GET.complete is None %}checked{% endif %}>
-            <label for="complete" class="vf-checkbox__label">Complete</label>
+            <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true" 
+                   {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
+            <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
           </div>
           <div class="vf-checkbox">
             <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
@@ -91,7 +91,7 @@
         <div class="vf-grid__col--span-12">
           <span class="vf-icon vf-icon__tooltip" data-vf-js-tooltip="true" aria-describedby="group2-tooltip">?</span>
           <div id="group2-tooltip" role="tooltip" class="vf-tooltip">
-            This group allows you to refine your search by contig edges and BGC detectors.
+            This group allows you to refine your search by BGC Completeness and BGC detectors.
           </div>
         </div>
       </div>
