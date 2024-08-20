@@ -1,3 +1,5 @@
+# api.py
+
 import re
 from ninja import NinjaAPI, Router, Schema, ModelSchema
 from ninja.pagination import paginate
@@ -16,36 +18,28 @@ from django.http import Http404, HttpResponse
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 from bgc_data_portal import __version__, __name__, __description__
 
-
 api = NinjaAPI(
     title="Biosynthetic Gene Cluster (BGC) Portal API",
     description="API for accessing and retrieving biosynthetic gene cluster predictions from metagenomic assemblies.",
     version=__version__,
-    docs_url="/docs/"
+    docs_url="/api/docs"
 )
 
 @api.exception_handler(HttpError)
 def custom_error_handler(request, exc):
-    """
-    Handles errors returned by the API, providing a clear error message.
-    """
+    """Handle custom errors with a detailed message."""
     return api.create_response(
         request,
         {"detail": str(exc)},
         status=exc.status_code,
     )
 
-# Constants for BGC completeness and detector names
-_PARTIALS = ['full_length', 'single_truncated', 'double_truncated']
-_DETECTORS = ['antiSMASH', 'GECCO', 'SanntiS']
+# Constants for search filtering
+_partials = ['full_length', 'single_truncated', 'double_truncated']
+_detectors = ['antiSMASH', 'GECCO', 'SanntiS']
 
 def perform_keyword_search(keyword: Optional[str] = None):
-    """
-    Searches BGCs by a given keyword. If no keyword is provided, returns all BGCs.
-
-    :param keyword: A keyword to search across BGCs and associated data.
-    :return: A list of BGCs matching the keyword search.
-    """
+    """Search BGCs by a specific keyword, returning relevant records."""
     if keyword is None:
         bgcs = Bgc.objects.all()
     else:
@@ -65,28 +59,22 @@ def perform_keyword_search(keyword: Optional[str] = None):
         for bgc in bgcs
     ]
 
-def perform_complex_search(params: BgcSearchCallSchema):
-    """
-    Performs a complex search for BGCs based on multiple criteria.
-
-    :param params: Parameters for complex BGC search, including detector names, BGC class, assembly accession, and others.
-    :return: A list of aggregated BGCs based on the search criteria.
-    """
-    detectors = [name for name, value in zip(_DETECTORS, [params.antismash, params.gecco, params.sanntis]) if value]
-    pfams = re.split(r"[,\s]", params.protein_pfam)
-    
+def perform_complex_search(_params):
+    """Perform a complex BGC search based on multiple criteria."""
+    detectors = [name for name, value in zip(_detectors, [_params.antismash, _params.gecco, _params.sanntis]) if value]
+    _pfams = re.split("[,\s]", _params.protein_pfam)
     bgcs = complex_bgc_search(
         detectors,
-        params.bgc_class_name,
-        params.mgyb,
-        params.assembly_accession,
-        params.contig_mgyc,
-        params.full_length,
-        params.single_truncated,
-        params.double_truncated,
-        params.biome_lineage,
-        pfams,
-        params.pfam_strategy.value,
+        _params.bgc_class_name,
+        _params.mgyb,
+        _params.assembly_accession,
+        _params.contig_mgyc,
+        _params.full_length,
+        _params.single_truncated,
+        _params.double_truncated,
+        _params.biome_lineage,
+        _pfams,
+        _params.pfam_strategy.value,
     )
 
     individual_bgcs = [
@@ -102,8 +90,8 @@ def perform_complex_search(params: BgcSearchCallSchema):
         for bgc in bgcs
     ]
 
-    # Aggregate BGC regions according to the selected strategy
-    aggregate_function = getattr(BgcAggregator, params.aggregate_strategy.value)
+    # Aggregate strategy function
+    aggregate_function = getattr(BgcAggregator, _params.aggregate_strategy.value)
     aggregated_bgcs = aggregate_function(individual_bgcs, detectors)
 
     return [
@@ -119,18 +107,20 @@ def perform_complex_search(params: BgcSearchCallSchema):
         for aggregated_bgc in aggregated_bgcs
     ]
 
-@api.get("/search/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Keyword search for BGCs")
+
+@api.get("/search/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Keyword Search for BGCs")
 @paginate
 def search_by_keyword(request, keyword: str):
     """
     Perform a keyword search across the BGC Portal.
 
-    Use this endpoint to retrieve BGCs based on keywords or accession numbers.
-    This is equivalent to the portal's keyword search.
+    Use this endpoint to retrieve BGCs based on keywords or accession numbers. 
+    This is equivalent to the portal's keyword search feature.
     """
     return perform_keyword_search(keyword)
 
-@api.get("/bgcs/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Advanced search for BGCs")
+
+@api.get("/bgcs/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Advanced Search for BGCs")
 @paginate
 def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
     """
@@ -142,7 +132,8 @@ def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
     """
     return perform_complex_search(params)
 
-@api.get("/contig_region/", tags=["Data download"], summary="Download BGC data by contig region")
+
+@api.get("/contig_region/", tags=["Data Download"], summary="Download BGC Data by Contig Region")
 def download_bgcs(request, 
                  mgyc: str = None, 
                  start_position: int = None, 
@@ -155,20 +146,21 @@ def download_bgcs(request,
     in your desired format (FASTA, GeneBank, JSON, GFF3).
     """
     try:
+        # Get region features using the utility function
         contig, assembly_accession, bgcs, protein_metadata = get_region_features(mgyc, start_position, end_position)
     except RegionFeatureError as e:
         raise Http404(str(e))
 
-    # Generate the requested output format
+    # Generate the requested file format
     write_output_function = getattr(WriteRegion, output_type.value)
     output_content = write_output_function(contig, start_position, end_position, assembly_accession, bgcs, protein_metadata)
 
-    # Return the file as an HTTP response
+    # Return the file as a response
     response = HttpResponse(output_content, content_type=f'contig_region/{output_type}')
     response['Content-Disposition'] = f'attachment; filename="{mgyc}_{start_position}_{end_position}.{output_type.value}"'
     return response
 
-@api.get("/contig_region_plot/", tags=["Visualisation"], summary="Visualise a BGC Region")
+@api.get("/contig_region_plot/", tags=["Visualization"], summary="Visualize a BGC Region")
 def get_contig_region_plot(request, 
                            mgyc: str = None, 
                            start_position: int = None, 

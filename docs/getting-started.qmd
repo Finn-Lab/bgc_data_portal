@@ -14,7 +14,7 @@ The **Biosynthetic Gene Cluster (BGC) Portal** is designed with three primary co
 
 The Home Page is your entry point to the BGC Portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:
 
-- **Keyword Search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data.
+- **Keyword Search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/search/` endpoint of the API.
 - **Access and Explore Options**: 
   - **Search BGCs**: Directs you to the Explore BGCs page for more detailed queries.
   - **API Access**: Provides documentation on how to use the API for programmatic access to BGC data.
@@ -25,8 +25,8 @@ The Home Page is your entry point to the BGC Portal. Here, you can navigate to d
 
 The Explore BGCs Page is where users can perform detailed searches and view the results. It includes:
 
-- **Advanced Search Sidebar**: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more.
-- **Results Table**: Displays the outcomes of your search in a paginated format, with options to download the data in TSV or Bash script formats. The table includes key details such as BGC accession, assembly accession, contig information, and detector names.
+- **Advanced Search Sidebar**: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more. This is equivalent to calling the `GET /api/v1/bgcs/` endpoint of the API.
+- **Results Table**: Displays the outcomes of your search in a paginated format, with options to download the data in TSV. The table includes key details such as BGC accession, assembly accession, contig information, and detector names. This results are equivalent to the results of calling the `GET /api/v1/search/` or `GET /api/v1/bgcs/`  endpoints of the API.
 
 ### 3. BGC Details Page
 
@@ -35,7 +35,7 @@ The BGC Details Page provides an in-depth view of a specific biosynthetic gene c
 - **Aggregated Region Basic Information**: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.
 - **BGC Plot**: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors.
 - **CDS Data**: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.
-- **Download Options**: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3.
+- **Download Options**: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3. This is equivalent to calling the `GET /api/v1/contig_region/` endpoint of the API using the MGYC and start/end positions of the aggregated region.
 
 ## Glossary of Terms
 

@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator
 from django.http import HttpResponse
-from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,dowload_bgcs
+from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 # import logging
 
@@ -29,7 +29,7 @@ def results_page(request):
             biome_lineage=request.GET.get('biome_lineage'),
             protein_pfam=request.GET.get('protein_pfam',''),
             pfam_strategy=PfamStrategy(request.GET.get('pfam_strategy', 'intersection')),
-            aggragate_strategy=Aggregate(request.GET.get('aggragate_strategy', 'single'))
+            aggregate_strategy=Aggregate(request.GET.get('aggregate_strategy', 'single'))
         )
 
         if keyword:
@@ -81,7 +81,7 @@ def download_bgc_data(request, mgyc, start_position, end_position):
         output_type = request.GET.get('output_type', 'gbk')  # Default to GenBank if not specified
 
         # Call the API function to get the download data
-        response = dowload_bgcs(
+        response = download_bgcs(
             request,
             mgyc=mgyc,
             start_position=start_position,

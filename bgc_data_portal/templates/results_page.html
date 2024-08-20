@@ -208,16 +208,16 @@
 
 <!-- Aggregate Strategy -->
 <div class="vf-form__item">
-  <label for="aggragate_strategy" class="vf-form__label">Aggregate strategy
+  <label for="aggregate_strategy" class="vf-form__label">Aggregate strategy
     <span class="tooltip-container">
       <span class="tooltip-icon">?</span>
       <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
     </span>
   </label>
-  <select id="aggragate_strategy" name="aggragate_strategy" class="vf-form__select">
-    <option value="single" {% if request.GET.aggragate_strategy == "single" %}selected{% endif %}>Single</option>
-    <option value="union" {% if request.GET.aggragate_strategy == "union" %}selected{% endif %}>Union</option>
-    <option value="intersection" {% if request.GET.aggragate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+  <select id="aggregate_strategy" name="aggregate_strategy" class="vf-form__select">
+    <option value="single" {% if request.GET.aggregate_strategy == "single" %}selected{% endif %}>Single</option>
+    <option value="union" {% if request.GET.aggregate_strategy == "union" %}selected{% endif %}>Union</option>
+    <option value="intersection" {% if request.GET.aggregate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
   </select>
 </div>
 
