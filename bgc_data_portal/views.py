@@ -36,7 +36,6 @@ def results_page(request):
         if keyword:
             results = perform_keyword_search(keyword)
         else:
-            # print(complex_query_params)
             results = perform_complex_search(complex_query_params)
     except Exception as e:
         print('error:',e)
@@ -68,7 +67,7 @@ def bgc_page(request, mgyc,start_position,end_position):
         # predicted classes
         _predicted_classes_dict = {detector:sorted({individual_class for attrib in gr['attrib'] for individual_class in attrib['BGC_CLASS'].split(',') }) for detector,gr in aggr_df[aggr_df['type']=='CLUSTER'].sort_values('source').groupby('source')}
         predicted_classes_dict = {k:_predicted_classes_dict[k] for k in sorted(_predicted_classes_dict,key=lambda x:x.lower())}
-        print(predicted_classes_dict)
+
         # functional_annotation_dict
         MAX_GOSLIM_COLUM=7
         functional_annotation_dict = {}
@@ -78,7 +77,18 @@ def bgc_page(request, mgyc,start_position,end_position):
             if i!=0 and i%MAX_GOSLIM_COLUM==0:
                 col_name+='_next'
             functional_annotation_dict.setdefault(col_name,[]).append(f"- {term}")
-        
+
+
+        # cds_info_dict
+        cds_info_dict = {attrib.get('mgyp'):attrib for attrib in features_df[features_df['type']=='CDS']['attrib']} 
+        # add cluster_representative_url
+        for p in cds_info_dict:
+            cds_info_dict[p].update({
+                'cluster_representative_url':f"https://www.ebi.ac.uk/metagenomics/proteins/{cds_info_dict[p]['cluster_representative']}/" if cds_info_dict[p]['cluster_representative'] else None,
+                'protein_length':len(cds_info_dict[p]['sequence']),
+            })
+            print(cds_info_dict[p]['pfam'])
+        # cds_info_dict = {attrib.get('mgyp') for attrib in aggr_df[aggr_df['type']!='CLUSTER']['attrib']}
         # Render the BGC page with the plot
         return render(request, 'bgc_page.html', {
             'plot_html': plot_html,
@@ -87,7 +97,7 @@ def bgc_page(request, mgyc,start_position,end_position):
             'biome_lineage':biome_lineage,
             'predicted_classes_dict': predicted_classes_dict,
             'functional_annotation_dict':functional_annotation_dict,
-            'mgyc': mgyc,
+            'cds_info_dict': cds_info_dict,
             'mgyc': mgyc,
             'start_position': start_position,
             'end_position': end_position,
@@ -102,7 +112,6 @@ def download_bgc_data(request, mgyc, start_position, end_position):
         start_position = int(start_position)
         end_position = int(end_position)
         
-        print(mgyc,start_position,end_position)
         output_type = request.GET.get('output_type', 'gbk')  # Default to GenBank if not specified
 
         # Call the API function to get the download data

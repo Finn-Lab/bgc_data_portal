@@ -35,10 +35,8 @@ def search_keyword_in_models(keyword: str):
         Q(assembly__biome__lineage__icontains=keyword)
     )
 
-    print(f'\n\n\n{keyword}\n\n')   
     # Find matching contigs
     matching_contigs = Contig.objects.filter(contig_query)
-    print(f'\n\n\n{keyword}\r\n')   
     
     # Get BGCs associated with the matching contigs
     mgybs_from_contigs = Bgc.objects.filter(mgyc__in=matching_contigs).values_list('mgyb', flat=True)

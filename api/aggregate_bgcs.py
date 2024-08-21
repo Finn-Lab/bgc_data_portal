@@ -49,9 +49,7 @@ class BgcAggregator:
                 
                 # Check if current schema overlaps with the current group
                 if schema.start_position <= current_group.end_position:
-                    # print(current_group)
-                    # print(schema)
-                    # print('\n\n')
+
                     # Update the current group's end_position
                     current_group.end_position = max(current_group.end_position, schema.end_position)
                     # Aggregate the values
@@ -121,13 +119,7 @@ class BgcAggregator:
 
 
             for i in range(1, len(filtered_schemas)):
-                schema = filtered_schemas[i]
-                if contig_mgyc == 'MGYC001033022779':
-                    print('CURR',current_group)
-                    print('SCH',schemas)
-                    print('\n\n')
-
-                    print(schema.start_position <= current_group.end_position)
+                schema = filtered_schemas[i]   
                 
                 # Check if the current schema overlaps with the current group and has all detector names
                 if schema.start_position <= current_group.end_position:

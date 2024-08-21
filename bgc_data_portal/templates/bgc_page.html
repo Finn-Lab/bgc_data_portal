@@ -23,6 +23,53 @@
         grid-template-columns: 1fr 1fr 1fr; /* Two columns */
         gap: 1rem; /* Space between columns */
     }
+    .protein-sequence-container {
+      word-wrap: break-word;
+      overflow-y: scroll;
+      height: 10em;
+      padding: 10px;
+      background-color: #e1fae8;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      letter-spacing: 2px;
+    }
+    .sequenceViewerDiv {
+        overflow: auto !important;
+    }
+    
+    .download-form {
+        display: flex;
+        align-items: flex-end; /* Align the dropdown and button at the bottom */
+        justify-content: flex-end; /* Align the form to the right */
+        max-width: 33%; /* Make the form take up about a third of the page width */
+        margin-left: auto; /* Push the form to the right side */
+    }
+    .vf-form__item--inline.stacked-item {
+        display: flex;
+        flex-direction: column; /* Stack the label on top of the select */
+        margin-right: 10px; /* Space between the dropdown and the button */
+        flex: 1; /* Allow the select to take up more space */
+    }
+    .vf-form__label {
+        margin-bottom: 5px; /* Space between the label and the select */
+        font-size: 0.875rem; /* Make the label slightly smaller */
+    }
+    .wider-select {
+        width: 100%; /* Make the select take up the full width of its container */
+        min-width: 150px; /* Ensure it's wide enough to show the options properly */
+        padding: 5px 10px; /* Adjust padding to align with the button */
+        height: 42px; /* Set a fixed height to match the button */
+        line-height: 1.5; /* Align text vertically */
+    }
+    .vf-button--compact {
+        padding: 5px 15px; /* Compact padding for the button */
+        font-size: 0.875rem; /* Slightly smaller font size */
+        height: 38px; /* Set a fixed height to match the select */
+        line-height: 1; /* Align text vertically */
+    }
 </style>
 
 <div class="vf-grid vf-grid__col--span-12">
@@ -95,8 +142,6 @@
                     <p class="vf-summary__text">{{ end_position }}</p>
                 </article>
             </div>
-
-            
         </section>
     </section>
 </div>
@@ -110,23 +155,168 @@
         <div class="vf-content__body">
             {{ plot_html|safe }}
         </div>
-
         <!-- Download options -->
-        <form action="{% url 'download_bgc_data' mgyc start_position end_position %}" method="get" class="vf-form">
-            <div class="vf-form__item">
+        <form action="{% url 'download_bgc_data' mgyc start_position end_position %}" method="get" class="vf-form download-form">
+            <div class="vf-form__item vf-form__item--inline stacked-item">
                 <label for="output_type" class="vf-form__label">Select Format</label>
-                <select id="output_type" name="output_type" class="vf-form__select">
+                <select id="output_type" name="output_type" class="vf-form__select wider-select">
                     <option value="gbk">GenBank</option>
                     <option value="fasta">FASTA</option>
                     <option value="json">JSON</option>
                 </select>
             </div>
-            <div class="vf-form__item">
-                <button type="submit" class="vf-button vf-button--primary">Download</button>
+            <div class="vf-form__item vf-form__item--inline">
+                <button type="submit" class="vf-button vf-button--primary vf-button--compact">Download</button>
             </div>
         </form>
 
-        <a href="{% url 'results_page' %}" class="vf-button vf-button--secondary">Back to Results</a>
+        <!-- CDS Information Section -->
+        <div id="cds-info" class="vf-grid vf-grid__col-12"></div>
+        <h2 id="cds_header" class="vf-text vf-text-heading--3">CDS information</h2>
+        <p id="default-message">Click a CDS in the plot to display information.</p>
+        <!-- <div id="cds-info" class="vf-section-content | vf-grid vf-grid__col-12"> -->
+            <!-- CDS details will be dynamically loaded here -->   
+        </div>
+     </section>
+
+
+
+
     </section>
+
 </div>
+<hr class="vf-divider| vf-u-fullbleed" style="--context-margin--inline: 3rem;">
+
+<a href="{% url 'results_page' %}" class="vf-button vf-button--secondary">Back to Results</a>
+
+<script>
+    var plot = document.getElementById('bgc-plot');
+    var cdsInfoDict = {{ cds_info_dict|safe }};  // Pass the dictionary as a JSON object to JavaScript
+
+    plot.on('plotly_click', function(data){
+        var point = data.points[0];
+        if (point.data.customdata.length) {
+            var cds_id = point.data.customdata[1]; // Assume this is the CDS ID or key
+            // Retrieve the CDS information from the dictionary
+            var cdsInfo = cdsInfoDict[cds_id];
+            document.getElementById('default-message').style.display = 'none';
+            document.getElementById('cds_header').style.display = 'none';
+
+            if (cdsInfo) {
+                let pfamTableRows = cdsInfo.pfam.map(dct => `
+                    <tr class="vf-table__row">
+                        <td class="vf-table__cell">
+                            <a href="https://www.ebi.ac.uk/interpro/entry/pfam/${dct.PFAM}/" target="_blank">
+                                ${dct.PFAM}
+                            </a>
+                        </td>
+                        <td class="vf-table__cell">${dct.envelope_start}</td>
+                        <td class="vf-table__cell">${dct.envelope_end}</td>
+                        <!-- <td class="vf-table__cell">${dct.go_slim}</td>  Replace with actual GOslim data if available -->
+                        <td class="vf-table__cell">${dct['e-val']}</td>
+                    </tr>
+                `).join('');
+
+                // Override the CDS info section with the retrieved data
+                document.getElementById('cds-info').innerHTML = `
+                    <h2 id="cds_header" class="vf-text vf-text-heading--3" style="font-weight: bold;">${cds_id}</h2>
+                    <div class="vf-summary">
+                    
+
+                        <!-- Summary Section -->
+                        <section class="vf-summary-container | embl-grid">
+                            <!-- Protein Information  -->
+                            <div class="vf-section-header">
+                                <h2 class="vf-section-header__heading">CDS Information</h2>
+                            </div>
+                            <div class="vf-section-content | vf-grid vf-grid__col-5">
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Cluster representative</h3>
+                                    <p class="vf-summary__text">
+                                        <a href=${cdsInfo.cluster_representative_url} class="vf-summary__link">${cdsInfo.cluster_representative}</a>
+                                    </p>                
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Protein length</h3>
+                                    <p class="vf-summary__text">${cdsInfo.protein_length}</p>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Gene caller</h3>
+                                    <p class="vf-summary__text">${cdsInfo.gene_caller}</p>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Start</h3>
+                                    <p class="vf-summary__text">${cdsInfo.start}</p>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">End</h3>
+                                    <p class="vf-summary__text">${cdsInfo.end}</p>
+                                </article>
+                                <article class="vf-summary">
+                                    <h3 class="vf-summary__title">Strand</h3>
+                                    <p class="vf-summary__text">${cdsInfo.strand}</p>
+                                </article>
+                            </div>
+                        </section>
+
+                        
+                            <div class="vf-card__content | vf-stack vf-stack--400 | sequenceViewerDiv">
+                                <h3 class="vf-card__heading">Sequence Viewer</h3>
+                                <div id="proteinSequenceContainer" class="protein-sequence-container">
+                                    ${cdsInfo.sequence.trim()}
+                                </div>
+                                <div class="right-align">
+                                    <button id="copy_button" class="vf-button vf-button--primary vf-button--sm">Copy</button>
+                                </div>
+                            </div>
+
+                        <!-- PFAM Annotations Table -->
+                            <div class="vf-card__content | vf-stack vf-stack--400">
+                                <h3 class="vf-card__heading">PFAM Annotations</h3>
+                                <table class="vf-table | vf-u-fullbleed">
+                                    <thead class="vf-table__header">
+                                        <tr class="vf-table__row">
+                                            <th class="vf-table__heading" scope="col">PFAM</th>
+                                            <th class="vf-table__heading" scope="col">Envelope Start</th>
+                                            <th class="vf-table__heading" scope="col">Envelope End</th>
+                                            <!-- <th class="vf-table__heading" scope="col">GOslim</th> -->
+                                            <th class="vf-table__heading" scope="col">E-value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="vf-table__body">
+                                        ${pfamTableRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                        <!-- Add more fields as needed -->
+                    </div>
+                `;
+
+                // Re-attach the event listener to the new copy button
+                document.getElementById('copy_button').addEventListener('click', function() {
+                    // Get the sequence text from the container and trim it to remove excess whitespace
+                    var sequenceText = document.getElementById('proteinSequenceContainer').textContent.trim();
+
+                    // Use the Clipboard API to copy the trimmed text to the clipboard
+                    navigator.clipboard.writeText(sequenceText).then(function() {
+                        // Success feedback (optional)
+                        console.log('Sequence copied to clipboard!');
+                    }).catch(function(error) {
+                        // Error feedback (optional)
+                        console.error('Failed to copy text: ', error);
+                    });
+                });
+            } else {
+                // Handle case where no CDS information is found for the given ID
+                document.getElementById('cds-info').innerHTML = `
+                    <div class="vf-summary">
+                        <h3 class="vf-summary__title">CDS Information Not Found</h3>
+                    </div>
+                `;
+            }
+        }
+    });
+</script>
+
+
 {% endblock %}

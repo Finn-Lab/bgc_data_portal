@@ -92,8 +92,9 @@ class ContigRegionViewer:
         for meta in protein_metadata:
 
             protein = meta.mgyp
-            
+            pfam_json = json.loads(protein.pfam) if protein.pfam !='NaN' else []
             protein_url = f"https://www.ebi.ac.uk/metagenomics/proteins/{meta.mgyp.mgyp}/" if meta.mgyp.mgyp.startswith('MGYP') else None
+
             features.append({
                 'start': meta.start_position,
                 'end': meta.end_position,
@@ -109,32 +110,39 @@ class ContigRegionViewer:
                 'attrib':{'cluster_representative':protein.cluster_representative,
                           'assembly_accession':assembly_accession,
                           'biome_lineage':meta.assembly.biome.lineage,
+                          'mgyp':meta.mgyp.mgyp,
+                          'sequence':protein.sequence,
+                          'cluster_representative':protein.cluster_representative or meta.mgyp.mgyp,
+                          'pfam':pfam_json,
+                          'gene_caller':'Prodigal',# meta.gene_caller.gene_caller TODO
+                          'start':meta.start_position,
+                          'end':meta.end_position,
+                          'strand':meta.strand,
                           },
             })
-            pfam_json = json.loads(protein.pfam)
-            if type(pfam_json)==list:
-                for pfam in pfam_json:
-                    pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
-                    pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
-                    pfam_id = pfam.get('PFAM')
+            for pfam in pfam_json:
+                pfam_start = meta.start_position + (pfam.get('envelope_start') * 3)
+                pfam_end = meta.start_position + (pfam.get('envelope_end') * 3)
+                pfam_id = pfam.get('PFAM')
 
-                    go_slim = pfamToGoSlim.get(pfam_id, [None])
-                    print('PFAM:',go_slim)
-                    features.append({
-                        'start': pfam_start,
-                        'end': pfam_end,
-                        'strand': meta.strand,
-                        'type': 'ANNOT',
-                        'ID': pfam_id,
-                        'source': 'PFAM',
-                        'legend_rank': 2,
-                        'legend_trace_name': go_slim[0] or 'Pfam annotation',
-                        'color': GO_SLIM_COLORS.get(go_slim[0] or None, DEFAULT_ANNOT_COLOR),
-                        'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
-                        'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
-                        'attrib':{'GOslim':go_slim},
-                    })
-
+                go_slim = pfamToGoSlim.get(pfam_id, [None])
+                features.append({
+                    'start': pfam_start,
+                    'end': pfam_end,
+                    'strand': meta.strand,
+                    'type': 'ANNOT',
+                    'ID': pfam_id,
+                    'source': 'PFAM',
+                    'legend_rank': 2,
+                    'legend_trace_name': go_slim[0] or 'Pfam annotation',
+                    'color': GO_SLIM_COLORS.get(go_slim[0] or None, DEFAULT_ANNOT_COLOR),
+                    'legend_text': pfam_desc.get(pfam_id, 'Domain of Unknown Function'),
+                    'url': f"https://www.ebi.ac.uk/interpro/entry/pfam/{pfam_id}/",
+                    'attrib':{
+                        'GOslim':go_slim,
+                        'mgyp':meta.mgyp.mgyp,
+                        },
+                })
         return pd.DataFrame(features)
 
     @staticmethod
@@ -228,7 +236,7 @@ class ContigRegionViewer:
                 legendgroup=row[legend_text_column],
                 legendgrouptitle_text=row[legend_text_column],
                 legendrank=row[legend_rank_column],
-                customdata=(row[url_column],),
+                customdata=(row[url_column],row['attrib'].get('mgyp')),
                 # url=row[url_column]
             )
             added_legends.add(row[legend_trace_name_column])
@@ -259,7 +267,7 @@ class ContigRegionViewer:
                 legendgroup=row[legend_text_column],
                 legendgrouptitle_text=row[legend_text_column],
                 legendrank=row[legend_rank_column],
-                customdata=(row[url_column],),
+                customdata=(row[url_column],row['attrib'].get('mgyp')),
             )
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
@@ -289,20 +297,19 @@ class ContigRegionViewer:
         Returns:
             plotly.graph_objs.Figure: The generated plotly figure.
         """
-        # print('\n\n\njajajajaj')
         features_df = ContigRegionViewer.format_data_for_plot(mgyc, start_position, end_position)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)
         html_str = pio.to_html(fig, full_html=False, div_id='bgc-plot')  # full_html=False to embed in an existing HTML structure
-        html_str += """
-            <script>
-                var plot = document.getElementById('bgc-plot');
-                plot.on('plotly_click', function(data){
-                    var point = data.points[0];
-                    if (point.data.customdata.length) {
-                        var url = point.data.customdata[0];
-                        window.open(url, '_blank');  // Open the URL in a new tab
-                    }
-                });
-            </script>
-        """
+        # html_str += """
+        #     <script>
+        #         var plot = document.getElementById('bgc-plot');
+        #         plot.on('plotly_click', function(data){
+        #             var point = data.points[0];
+        #             if (point.data.customdata.length) {
+        #                 var url = point.data.customdata[0];
+        #                 window.open(url, '_blank');  // Open the URL in a new tab
+        #             }
+        #         });
+        #     </script>
+        # """
         return html_str,features_df
