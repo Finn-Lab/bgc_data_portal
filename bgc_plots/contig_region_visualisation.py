@@ -208,7 +208,9 @@ class ContigRegionViewer:
         non_method_data = features_df[features_df['type'] != 'CLUSTER']
         sequence_length = max(features_df["end"])
         sequence_start = min(features_df["start"])
+        xaxis_range = [sequence_start - (sequence_length * 0.02), max(sequence_length, 23000)]
 
+        # shape_height*=0.5
         # Compute trace data
         non_method_data[["xs", "ys", "types"]] = non_method_data.apply(
             lambda row: pd.Series(ContigRegionViewer.create_trace_data(
@@ -231,16 +233,19 @@ class ContigRegionViewer:
                 mode="lines",
                 line=dict(color='black', width=3. if row['type'] == 'CDS' else 1.),
                 fillcolor=color,
-                # hoverinfo="text",
-                # text="""<a href="https://plot.ly/">{}</a>""".format("Text"),#row[names],
-                name=row[legend_trace_name_column],
+                text=f"{row['ID']}" + (f": {row['legend_text']}" if row['type'] != 'CDS' else '') ,#row[names],
+                hoverinfo="text+x+y",
+                name=row[legend_trace_name_column] if row['type'] != 'CDS' else 'Arrow',
                 showlegend=row[legend_trace_name_column] not in added_legends,
-                legendgroup=row[legend_text_column],
-                legendgrouptitle_text=row[legend_text_column],
+                legendgroup='GO slim' if row['type'] != 'CDS' else 'CDS',#row[legend_text_column],
+                legendgrouptitle_text='Pfam - GO slim' if row['type'] != 'CDS' else 'CDS',#row[legend_text_column],
                 legendrank=row[legend_rank_column],
                 customdata=(row[url_column],row['attrib'].get('mgyp')),
                 # url=row[url_column]
             )
+            if row['type']== 'ANNOT':
+                print(row)
+                print(row[legend_trace_name_column] not in added_legends or row['type'] != 'CDS')
             added_legends.add(row[legend_trace_name_column])
             traces.append(trace)
             
@@ -265,10 +270,11 @@ class ContigRegionViewer:
                 line=dict(color=row[color_column], width=9.),
                 hoverinfo="text",
                 text=f"{row[names]}: {row['start']} - {row['end']}",
-                showlegend=row[legend_trace_name_column] not in added_legends,
-                legendgroup=row[legend_text_column],
-                legendgrouptitle_text=row[legend_text_column],
+                showlegend= True,#row[legend_trace_name_column] not in added_legends,
+                legendgroup='BGCs',#row[legend_text_column],
+                legendgrouptitle_text='BGC',#row[legend_text_column],
                 legendrank=row[legend_rank_column],
+                name=row['source'],
                 customdata=(row[url_column],row['attrib'].get('mgyp')),
             )
             added_legends.add(row[legend_trace_name_column])
@@ -276,8 +282,10 @@ class ContigRegionViewer:
 
         # Layout adjustments
         layout = go.Layout(
-            xaxis=dict(showgrid=False, zeroline=False, range=[sequence_start - (sequence_length * 0.02), sequence_length]),
-            yaxis=dict(showgrid=False, zeroline=False, range=[min(method_positions) - shape_height, shape_height]),
+            # xaxis=dict(showgrid=False, zeroline=False, range=[sequence_start - (sequence_length * 0.02), sequence_length]),
+            xaxis=dict(showgrid=False, zeroline=False, range=xaxis_range),
+
+            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, range=[min(method_positions) - shape_height, shape_height]),
             showlegend=show_legend,
             plot_bgcolor=background_color,
             paper_bgcolor=background_color,
