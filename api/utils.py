@@ -184,7 +184,38 @@ def complex_bgc_search(
 #         # qs = qs.filter(mgyc__metadata__protein__pfam__icontains=_protein_pfam)
 
 #     return qs
+def get_modified_positions(bgcs, protein_metadata, global_start_position, global_end_position):
+    # List to store modified BGC objects
+    modified_bgcs = []
+    modified_protein_metadata = []
 
+    for bgc in bgcs:
+        # Calculate the new start and end positions for each BGC object
+        new_start = max(bgc.start_position, global_start_position)
+        new_end = min(bgc.end_position, global_end_position)
+        
+        # Create a copy of the object with modified attributes
+        modified_bgc = bgc
+        modified_bgc.start_position = new_start
+        modified_bgc.end_position = new_end
+        
+        # Append the modified object to the list
+        modified_bgcs.append(modified_bgc)
+
+    for protein in protein_metadata:
+        # Calculate the new start and end positions for each ProteinMetadata object
+        new_start = max(protein.start_position, global_start_position)
+        new_end = min(protein.end_position, global_end_position)
+        
+        # Create a copy of the object with modified attributes
+        modified_protein = protein
+        modified_protein.start_position = new_start
+        modified_protein.end_position = new_end
+        
+        # Append the modified object to the list
+        modified_protein_metadata.append(modified_protein)
+    
+    return modified_bgcs, modified_protein_metadata
 
 def get_region_features( 
               mgyc: str = None, 
@@ -214,4 +245,7 @@ def get_region_features(
         end_position__gte=start_position
     ).select_related('mgyp')
 
+    # modified_bgcs, modified_protein_metadata = get_modified_positions(bgcs, protein_metadata, start_position, end_position)
+
     return contig,assembly_accession,bgcs,protein_metadata
+    # return contig,assembly_accession,modified_bgcs,modified_protein_metadata

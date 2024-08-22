@@ -28,7 +28,10 @@ class WriteRegion:
         # Add features for each BGC
         for bgc in bgcs:
             feature = SeqFeature(
-                location=FeatureLocation(bgc.start_position, bgc.end_position),
+                location=FeatureLocation(
+                    max(bgc.start_position,start_position), 
+                    min(bgc.end_position,end_position)
+                    ),
                 type="BGC",
                 qualifiers={
                     "mgyb": bgc.mgyb,
@@ -41,8 +44,13 @@ class WriteRegion:
         # Add features for each protein with strand information
         for meta in protein_metadata:
             protein = meta.mgyp
+            meta_start_position = max(meta.start_position,start_position)
+            meta_end_position = min(meta.end_position,end_position)
             feature = SeqFeature(
-                location=FeatureLocation(meta.start_position, meta.end_position, strand=meta.strand),
+                location=FeatureLocation(
+                    meta_start_position, 
+                    meta_end_position,
+                    strand=meta.strand),
                 type="CDS",
                 qualifiers={
                     "protein_id": protein.mgyp,
@@ -50,6 +58,7 @@ class WriteRegion:
                     "pfam": protein.pfam,
                 }
             )
+            record.features.append(feature)
             pfam_json = json.loads(protein.pfam)
             if type(pfam_json)==list:
                 for pfam in json.loads(protein.pfam):
@@ -100,8 +109,8 @@ class WriteRegion:
             detector = bgc.bgc_detector.bgc_detector_name if bgc.bgc_detector else "Unknown"
             detector_version = bgc.bgc_detector.version if bgc.bgc_detector else "Unknown"
             bgc_class = bgc.bgc_class.bgc_class_name if bgc.bgc_class else "Unknown"
-            start_position = str(bgc.start_position)
-            end_position = str(bgc.end_position)
+            start_position = str(max(bgc.start_position,start_position))
+            end_position = str(min(bgc.end_position,end_position))
             details["Detected BGCs"].append(
                 f"Accession: {mgyb};Start {start_position}; End: {end_position}; Detector: {detector}v{detector_version};Class: {bgc_class}; "
             )

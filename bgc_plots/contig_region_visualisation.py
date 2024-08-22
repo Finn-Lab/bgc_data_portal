@@ -38,6 +38,7 @@ GO_SLIM_COLORS = {go_slim: seaborn_to_rgb_string(color_palette('husl', len(sorte
 
 # Process detector colors
 DETECTOR_COLORS = {
+    "Aggregated region": seaborn_to_rgb_string(color_palette('Set3')[8]),
     'SanntiS': seaborn_to_rgb_string(color_palette('Set3')[0]),
     'GECCO': seaborn_to_rgb_string(color_palette('Set3')[1]),
     'antiSMASH': seaborn_to_rgb_string(color_palette('Set3')[3]),
@@ -87,6 +88,21 @@ class ContigRegionViewer:
                 'url': None,
                 'attrib':{'BGC_CLASS':bgc.bgc_class.bgc_class_name if bgc.bgc_class else 'Unknown'},
             })
+        # Add aggregated region
+        features.append({
+            'start': start_position,
+            'end': end_position,
+            'strand': 0,
+            'type': 'CLUSTER',
+            'ID': f"{contig_name}_{start_position}-{end_position}",
+            'source': "Aggregated region",
+            'legend_rank': 0,
+            'legend_trace_name': "Aggregated region",
+            'color': DETECTOR_COLORS["Aggregated region"],
+            'legend_text': "Aggregated region",
+            'url': None,
+            'attrib':{'BGC_CLASS':"Aggregated region"},
+        })
 
         # Protein features
         for meta in protein_metadata:
@@ -262,7 +278,7 @@ class ContigRegionViewer:
 
         # Plot method tracks
         method_positions = [-(shape_height * 1.2) - i * method_track_offset for i in range(len(method_data))]
-        for i, (_,row) in enumerate(method_data.sort_values(legend_rank_column).iterrows()):
+        for i, (_,row) in enumerate(method_data.sort_values([legend_rank_column,'source']).iterrows()):
             trace = go.Scatter(
                 x=[row['start'], row['end']],
                 y=[method_positions[i], method_positions[i]],

@@ -65,7 +65,7 @@ def bgc_page(request, mgyc,start_position,end_position):
         aggr_df = features_df[ (features_df.start>=start_position) & (features_df.end<=end_position)]
 
         # predicted classes
-        _predicted_classes_dict = {detector:sorted({individual_class for attrib in gr['attrib'] for individual_class in attrib['BGC_CLASS'].split(',') }) for detector,gr in aggr_df[aggr_df['type']=='CLUSTER'].sort_values('source').groupby('source')}
+        _predicted_classes_dict = {detector:sorted({individual_class for attrib in gr['attrib'] for individual_class in attrib['BGC_CLASS'].split(',') }) for detector,gr in aggr_df[(aggr_df['type']=='CLUSTER')&(aggr_df['source']!="Aggregated region")].sort_values('source').groupby('source')}
         predicted_classes_dict = {k:_predicted_classes_dict[k] for k in sorted(_predicted_classes_dict,key=lambda x:x.lower())}
 
         # functional_annotation_dict
