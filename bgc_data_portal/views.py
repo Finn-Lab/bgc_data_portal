@@ -54,6 +54,65 @@ def metadata_search_view(request):
         return render(request, 'metadata_table.html', context)
 
     return render(request, 'metadata_search.html', context)
+
+def explore_view(request):
+    
+    form = None
+    results = None
+    page = request.GET.get('page', 1)
+    # mgyc_value = request.GET.get('mgyc_value', None)
+
+    try:
+        keyword = request.GET.get('keyword')
+        complex_query_params = BgcSearchCallSchema(
+            antismash=request.GET.get('antismash', 'true') == 'true',
+            gecco=request.GET.get('gecco', 'true') == 'true',
+            sanntis=request.GET.get('sanntis', 'true') == 'true',
+            bgc_class_name=request.GET.get('bgc_class_name'),
+            mgyb=request.GET.get('mgyb'),
+            assembly_accession=request.GET.get('assembly_accession'),
+            contig_mgyc=request.GET.get('contig_mgyc'),
+            full_length=request.GET.get('full_length', 'true') == 'true',
+            single_truncated=request.GET.get('single_truncated', 'true') == 'true',
+            double_truncated=request.GET.get('double_truncated', 'true') == 'true',
+            biome_lineage=request.GET.get('biome_lineage'),
+            protein_pfam=request.GET.get('protein_pfam',''),
+            pfam_strategy=PfamStrategy(request.GET.get('pfam_strategy', 'intersection')),
+            aggregate_strategy=Aggregate(request.GET.get('aggregate_strategy', 'single'))
+        )
+
+        if keyword:
+            results = perform_keyword_search(keyword)
+        else:
+            results = perform_complex_search(complex_query_params)
+            
+        paginator = Paginator(results, 10)  # Show 10 items per page
+
+        print('LEN ALL RESS',len(results))
+        try:
+            results = paginator.page(page)
+        except PageNotAnInteger:
+            results = paginator.page(1)
+        except EmptyPage:
+            results = paginator.page(paginator.num_pages)
+
+    except:# Exception as e:
+        pass 
+        # print('error:',e)
+        # Paginate the results
+
+    context = {
+        'form': form,
+        'results': results,
+        'request_params': request.GET,
+    }
+
+    print('RESULT',len(results),request.GET.get('biome_lineage'),request.headers.get('x-requested-with') == 'XMLHttpRequest')
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+        return render(request, 'explore_table.html', context)
+
+    return render(request, 'explore_page.html', context)
+
 def results_page(request):
     try:
         keyword = request.GET.get('keyword')

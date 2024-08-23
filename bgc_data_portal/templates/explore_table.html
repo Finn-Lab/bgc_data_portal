@@ -1,0 +1,74 @@
+<!-- Results Section -->
+<section class="vf-content vf-stack vf-stack--400">
+    <div class="vf-grid vf-grid__col--span-12">
+      <div class="vf-grid__col--span-12">
+
+<h3 class="vf-section-header__heading">Results</h3>
+<table class="vf-table">
+  <thead class="vf-table__header">
+    <tr class="vf-table__row">
+      <th class="vf-table__heading" scope="col">BGC Accession</th>
+      <th class="vf-table__heading" scope="col">Assembly Accession</th>
+      <th class="vf-table__heading" scope="col">Contig MGYC</th>
+      <th class="vf-table__heading" scope="col">Start Position</th>
+      <th class="vf-table__heading" scope="col">End Position</th>
+      <th class="vf-table__heading" scope="col">Detector Names</th>
+      <th class="vf-table__heading" scope="col">Class Names</th>
+    </tr>
+  </thead>
+  <tbody class="vf-table__body">
+    {% for bgc in results %}
+    <tr class="vf-table__row">
+      <td class="vf-table__cell">
+        <a href="{% url 'bgc_page' bgc.contig_mgyc bgc.start_position bgc.end_position %}">
+          {{ bgc.mgybs.0 }}
+        </a>
+      </td>
+      <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
+      <td class="vf-table__cell">{{ bgc.contig_mgyc }}</td>
+      <td class="vf-table__cell">{{ bgc.start_position }}</td>
+      <td class="vf-table__cell">{{ bgc.end_position }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_detector_names }}</td>
+      <td class="vf-table__cell">{{ bgc.bgc_class_names }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<style>
+    .vf-button.vf-button--primary {
+        padding: 4px 8px; /* Reduce padding */
+        font-size: 12px;  /* Decrease font size */
+        line-height: 1.2; /* Adjust line height */
+    }
+    .vf-button.vf-button--secondary {
+        padding: 4px 8px; /* Reduce padding */
+        font-size: 14px;  /* Decrease font size */
+        line-height: 1.4; /* Adjust line height */
+    }
+</style>
+
+<!-- <div class="vf-pagination" style="text-align: center; margin-top: 20px;"> -->
+
+<div class="pagination" style="text-align: center; margin-top: 20px;">
+    <button class="vf-button vf-button--primary" data-page="1">First</button>
+    {% if results.has_previous %}
+      <button class="vf-button vf-button--secondary" data-page="{{ results.previous_page_number }}">Previous</button>
+    {% else %}
+      <button class="vf-button vf-button--secondary" disabled>Previous</button>
+    {% endif %}
+    <span class="vf-pagination__info">
+        Page {{ results.number }} of {{ results.paginator.num_pages }}
+    </span>
+
+    {% if results.has_next %}
+      <button class="vf-button vf-button--secondary" data-page="{{ results.next_page_number }}">Next</button>
+    {% else %}
+      <button class="vf-button vf-button--secondary" disabled>Next</button>
+    {% endif %}
+    <button class="vf-button vf-button--primary" data-page="{{ results.paginator.num_pages }}">Last</button>
+  </div>
+
+</div>
+</div>
+</section>
