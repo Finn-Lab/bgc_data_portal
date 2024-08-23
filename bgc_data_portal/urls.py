@@ -33,10 +33,8 @@ urlpatterns = [
 
     re_path(r'^docs/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'docs/_site'}, name='docs'),
     path('', views.landing_page, name='landing_page'),
-    path('results/', views.results_page, name='results_page'),
     path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern
     path('download/<str:mgyc>/<int:start_position>/<int:end_position>/', views.download_bgc_data, name='download_bgc_data'),  # New download route
-    path('metadata/search/', views.metadata_search_view, name='metadata_search'),
     path('explore/', views.explore_view, name='explore'),
 
 

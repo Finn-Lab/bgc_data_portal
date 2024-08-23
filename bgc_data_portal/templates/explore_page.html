@@ -230,18 +230,19 @@
   </aside>
 
 
-
-<section class="vf-content vf-stack vf-stack--400">
-  <div class="vf-grid vf-grid__col--span-12">
-    <div class="vf-grid__col--span-12">
-
-        <div id="results">
-            <p>Enter MGYC value to search for metadata.</p>
-        </div>
-
+  <section class="vf-content vf-stack vf-stack--400">
+    <div class="vf-grid vf-grid__col--span-12">
+      <div class="vf-grid__col--span-12">
+          <div id="results">
+              {% if results %}
+                  {% include 'explore_table.html' %}
+              {% else %}
+                  <p>Enter search criteria and click "Apply" to search for metadata.</p>
+              {% endif %}
+          </div>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
 <script>
  $(document).ready(function() {

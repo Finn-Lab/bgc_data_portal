@@ -55,15 +55,14 @@ def metadata_search_view(request):
 
     return render(request, 'metadata_search.html', context)
 
+from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
+from django.shortcuts import render
+
 def explore_view(request):
-    
-    form = None
     results = None
     page = request.GET.get('page', 1)
-    # mgyc_value = request.GET.get('mgyc_value', None)
-
+    keyword = request.GET.get('keyword', None)
     try:
-        keyword = request.GET.get('keyword')
         complex_query_params = BgcSearchCallSchema(
             antismash=request.GET.get('antismash', 'true') == 'true',
             gecco=request.GET.get('gecco', 'true') == 'true',
@@ -83,12 +82,10 @@ def explore_view(request):
 
         if keyword:
             results = perform_keyword_search(keyword)
-        else:
+        elif request.GET:
             results = perform_complex_search(complex_query_params)
-            
+        # print(len(keyword))
         paginator = Paginator(results, 10)  # Show 10 items per page
-
-        print('LEN ALL RESS',len(results))
         try:
             results = paginator.page(page)
         except PageNotAnInteger:
@@ -96,22 +93,22 @@ def explore_view(request):
         except EmptyPage:
             results = paginator.page(paginator.num_pages)
 
-    except:# Exception as e:
-        pass 
-        # print('error:',e)
-        # Paginate the results
+    except Exception as e:
+        print('error:', e)
+        results = None  # Ensure results is always defined even in case of an error
 
     context = {
-        'form': form,
         'results': results,
         'request_params': request.GET,
     }
 
-    print('RESULT',len(results),request.GET.get('biome_lineage'),request.headers.get('x-requested-with') == 'XMLHttpRequest')
+    # If it's an AJAX request, return the partial table
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return render(request, 'explore_table.html', context)
-
+    
+    # Otherwise, return the full page
     return render(request, 'explore_page.html', context)
+
 
 def results_page(request):
     try:
