@@ -67,159 +67,235 @@
   visibility: visible;
   opacity: 1;
 }
+.page-container {
+  display: flex;
+  gap: 20px; /* Space between the sidebar and the content section */
+}
+
+.search-sidebar {
+  flex: 0 0 30%; /* Sidebar occupies 30% of the width */
+  max-width: 300px; /* Ensures the sidebar doesn't get too wide */
+  background-color: #f7f7f7; /* Optional: Add a background color to distinguish the sidebar */
+  padding: 20px; /* Optional: Add padding inside the sidebar */
+  box-sizing: border-box;
+}
+
+.content-section {
+  flex: 1; /* Content section takes the remaining 70% of the width */
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Space between the plot and the results */
+}
+
+.plot-container {
+  height: 400px; /* Fixed height for the plot area */
+  background-color: #fff; /* Background color for the plot area */
+  border: 1px solid #ddd; /* Optional: Border around the plot area */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.results-container {
+  flex: 1; /* Results container takes up remaining space in the column */
+  background-color: #fff; /* Background color for the results area */
+  border: 1px solid #ddd; /* Optional: Border around the results area */
+  overflow-y: auto; /* Allows scrolling if the table content exceeds the container height */
+}
+
+.default-message {
+  text-align: center; /* Center the default message */
+  margin: auto; /* Ensure it is centered within the container */
+  padding: 20px; /* Padding around the text */
+  font-size: 16px;
+  color: #666;
+}
+.vf-table {
+  width: 100%; /* Ensure the table takes up the full width of the container */
+  table-layout: fixed; /* Forces fixed layout for columns */
+  border-collapse: collapse; /* Ensures there are no gaps between table cells */
+}
+
+.vf-table__header th,
+.vf-table__cell {
+  padding: 8px; /* Add padding to table cells */
+  white-space: nowrap; /* Prevent text from wrapping */
+  overflow: hidden; /* Hide overflowed text */
+  text-overflow: ellipsis; /* Show ellipsis (...) for truncated text */
+  max-width: 150px; /* Set a maximum width for table columns */
+  border: 1px solid #ddd; /* Add border to table cells */
+}
+
+.vf-table__header th {
+  background-color: #f7f7f7; /* Optional: background color for header cells */
+  font-weight: bold;
+}
+
+.vf-table__cell a {
+  text-decoration: none;
+  color: inherit; /* Ensure links inherit the text color */
+}
+
+.vf-table__cell a:hover {
+  text-decoration: underline;
+}
+
+.vf-table__row:nth-child(even) {
+  background-color: #f9f9f9; /* Optional: background color for alternating rows */
+}
 </style>
 
-<div class="vf-grid">
+<div class="page-container">
   <!-- Search Sidebar -->
-  <aside class="vf-grid__col--span-3">
+  <aside class="search-sidebar">
     <form id="search-form" action="{% url 'explore' %}" method="get" class="vf-form">
       <h3>Advanced Search</h3>
       
       
-<!-- BGC Class Name -->
-<div class="vf-form__item">
-  <label for="bgc_class_name" class="vf-form__label">BGC Class Name
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">The BGC Class Name is used to classify the biosynthetic gene clusters based on their type.</span>
-    </span>
-  </label>
-  <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
-</div>
+      <!-- BGC Class Name -->
+      <div class="vf-form__item">
+        <label for="bgc_class_name" class="vf-form__label">BGC Class Name
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The BGC Class Name is used to classify the biosynthetic gene clusters based on their type.</span>
+          </span>
+        </label>
+        <input type="text" id="bgc_class_name" name="bgc_class_name" class="vf-form__input" value="{{ request.GET.bgc_class_name }}">
+      </div>
 
-<!-- BGC Accession -->
-<div class="vf-form__item">
-  <label for="mgyb" class="vf-form__label">BGC Accession
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">The BGC Accession is the unique identifier assigned to a biosynthetic gene cluster.</span>
-    </span>
-  </label>
-  <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
-</div>
+      <!-- BGC Accession -->
+      <div class="vf-form__item">
+        <label for="mgyb" class="vf-form__label">BGC Accession
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The BGC Accession is the unique identifier assigned to a biosynthetic gene cluster.</span>
+          </span>
+        </label>
+        <input type="text" id="mgyb" name="mgyb" class="vf-form__input" value="{{ request.GET.mgyb }}">
+      </div>
 
-<!-- Assembly Accession -->
-<div class="vf-form__item">
-  <label for="assembly_accession" class="vf-form__label">Assembly Accession
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">The Assembly Accession is the identifier for the assembled sequence from which the BGC was predicted.</span>
-    </span>
-  </label>
-  <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
-</div>
+      <!-- Assembly Accession -->
+      <div class="vf-form__item">
+        <label for="assembly_accession" class="vf-form__label">Assembly Accession
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Assembly Accession is the identifier for the assembled sequence from which the BGC was predicted.</span>
+          </span>
+        </label>
+        <input type="text" id="assembly_accession" name="assembly_accession" class="vf-form__input" value="{{ request.GET.assembly_accession }}">
+      </div>
 
-<!-- Contig MGYC -->
-<div class="vf-form__item">
-  <label for="contig_mgyc" class="vf-form__label">Contig MGYC
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">The Contig MGYC is the identifier for the contig that contains the BGC.</span>
-    </span>
-  </label>
-  <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
-</div>
+      <!-- Contig MGYC -->
+      <div class="vf-form__item">
+        <label for="contig_mgyc" class="vf-form__label">Contig MGYC
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Contig MGYC is the identifier for the contig that contains the BGC.</span>
+          </span>
+        </label>
+        <input type="text" id="contig_mgyc" name="contig_mgyc" class="vf-form__input" value="{{ request.GET.contig_mgyc }}">
+      </div>
 
-<!-- Biome lineage -->
-<div class="vf-form__item">
-  <label for="biome_lineage" class="vf-form__label">Biome
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">The Biome refers to the ecological community where the BGC was found.</span>
-    </span>
-  </label>
-  <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
-</div>
+      <!-- Biome lineage -->
+      <div class="vf-form__item">
+        <label for="biome_lineage" class="vf-form__label">Biome
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">The Biome refers to the ecological community where the BGC was found.</span>
+          </span>
+        </label>
+        <input type="text" id="biome_lineage" name="biome_lineage" class="vf-form__input" value="{{ request.GET.biome_lineage }}">
+      </div>
 
-<!-- Truncation -->
-<div class="vf-form__item">
-  <label for="Edges" class="vf-form__label">BGC Completeness
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">BGC Completeness indicate whether the BGC is full_length, single-truncated, or double-truncated.</span>
-    </span>
-  </label>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true"
-           {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
-    <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
-  </div>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
-           {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
-    <label for="single_truncated" class="vf-checkbox__label">Single</label>
-  </div>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
-           {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
-    <label for="double_truncated" class="vf-checkbox__label">Double</label>
-  </div>
-</div>
+      <!-- Truncation -->
+      <div class="vf-form__item">
+        <label for="Edges" class="vf-form__label">BGC Completeness
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">BGC Completeness indicate whether the BGC is full_length, single-truncated, or double-truncated.</span>
+          </span>
+        </label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="full_length" name="full_length" class="vf-checkbox__input" value="true"
+                 {% if request.GET.full_length == 'true' or request.GET.full_length is None %}checked{% endif %}>
+          <label for="full_length" class="vf-checkbox__label">Full-Length BGC</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="single_truncated" name="single_truncated" class="vf-checkbox__input" value="true"
+                 {% if request.GET.single_truncated == 'true' or request.GET.single_truncated is None %}checked{% endif %}>
+          <label for="single_truncated" class="vf-checkbox__label">Single</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="double_truncated" name="double_truncated" class="vf-checkbox__input" value="true"
+                 {% if request.GET.double_truncated == 'true' or request.GET.double_truncated is None %}checked{% endif %}>
+          <label for="double_truncated" class="vf-checkbox__label">Double</label>
+        </div>
+      </div>
 
-<!-- Pfam -->
-<div class="vf-form__item">
-  <label for="protein_pfam" class="vf-form__label">Pfam
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).</span>
-    </span>
-  </label>
-  <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
-</div>
+      <!-- Pfam -->
+      <div class="vf-form__item">
+        <label for="protein_pfam" class="vf-form__label">Pfam
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).</span>
+          </span>
+        </label>
+        <input type="text" id="protein_pfam" name="protein_pfam" class="vf-form__input" value="{{ request.GET.protein_pfam }}">
+      </div>
 
-<!-- Pfam Strategy -->
-<div class="vf-form__item">
-  <label for="pfam_strategy" class="vf-form__label">Pfam strategy
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Choose "AND" to include BGCs that match all Pfams, or "OR" to include BGCs that match any Pfam.</span>
-    </span>
-  </label>
-  <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
-    <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
-    <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
-  </select>
-</div>
+      <!-- Pfam Strategy -->
+      <div class="vf-form__item">
+        <label for="pfam_strategy" class="vf-form__label">Pfam strategy
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Choose "AND" to include BGCs that match all Pfams, or "OR" to include BGCs that match any Pfam.</span>
+          </span>
+        </label>
+        <select id="pfam_strategy" name="pfam_strategy" class="vf-form__select">
+          <option value="intersection" {% if request.GET.pfam_strategy == "intersection" %}selected{% endif %}>AND</option>
+          <option value="union" {% if request.GET.pfam_strategy == "union" %}selected{% endif %}>OR</option>
+        </select>
+      </div>
 
-<!-- Detectors -->
-<div class="vf-form__item">
-  <label for="detectors" class="vf-form__label">BGC Detectors
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Select the detectors to filter BGCs by the tool used to identify them.</span>
-    </span>
-  </label>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
-           {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
-    <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
-  </div>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
-           {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
-    <label for="gecco" class="vf-checkbox__label">GECCO</label>
-  </div>
-  <div class="vf-checkbox">
-    <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
-           {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
-    <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
-  </div>
-</div>
+      <!-- Detectors -->
+      <div class="vf-form__item">
+        <label for="detectors" class="vf-form__label">BGC Detectors
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Select the detectors to filter BGCs by the tool used to identify them.</span>
+          </span>
+        </label>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="antismash" name="antismash" class="vf-checkbox__input" value="true"
+                 {% if request.GET.antismash == 'true' or request.GET.antismash is None %}checked{% endif %}>
+          <label for="antismash" class="vf-checkbox__label">antiSMASH</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="gecco" name="gecco" class="vf-checkbox__input" value="true"
+                 {% if request.GET.gecco == 'true' or request.GET.gecco is None %}checked{% endif %}>
+          <label for="gecco" class="vf-checkbox__label">GECCO</label>
+        </div>
+        <div class="vf-checkbox">
+          <input type="checkbox" id="sanntis" name="sanntis" class="vf-checkbox__input" value="true"
+                 {% if request.GET.sanntis == 'true' or request.GET.sanntis is None %}checked{% endif %}>
+          <label for="sanntis" class="vf-checkbox__label">SanntiS</label>
+        </div>
+      </div>
 
-<!-- Aggregate Strategy -->
-<div class="vf-form__item">
-  <label for="aggregate_strategy" class="vf-form__label">Aggregate strategy
-    <span class="tooltip-container">
-      <span class="tooltip-icon">?</span>
-      <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
-    </span>
-  </label>
-  <select id="aggregate_strategy" name="aggregate_strategy" class="vf-form__select">
-    <option value="single" {% if request.GET.aggregate_strategy == "single" %}selected{% endif %}>Single</option>
-    <option value="union" {% if request.GET.aggregate_strategy == "union" %}selected{% endif %}>Union</option>
-    <option value="intersection" {% if request.GET.aggregate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
-  </select>
-</div>
+      <!-- Aggregate Strategy -->
+      <div class="vf-form__item">
+        <label for="aggregate_strategy" class="vf-form__label">Aggregate strategy
+          <span class="tooltip-container">
+            <span class="tooltip-icon">?</span>
+            <span class="tooltip-text">Select the aggregate strategy for how results should be combined.</span>
+          </span>
+        </label>
+        <select id="aggregate_strategy" name="aggregate_strategy" class="vf-form__select">
+          <option value="single" {% if request.GET.aggregate_strategy == "single" %}selected{% endif %}>Single</option>
+          <option value="union" {% if request.GET.aggregate_strategy == "union" %}selected{% endif %}>Union</option>
+          <option value="intersection" {% if request.GET.aggregate_strategy == "intersection" %}selected{% endif %}>Intersection</option>
+        </select>
+      </div>
 
       
       <!-- Submit Button -->
@@ -229,33 +305,29 @@
     </form>
   </aside>
 
-{% if plot_html %}
-  <section class="vf-content vf-stack vf-stack--400">
-    <div class="vf-grid vf-grid__col--span-12">
-      <div class="vf-grid__col--span-12">
+  <!-- Plot and Results Section -->
+  <section class="content-section">
+    <!-- Plot Section -->
+    <div class="plot-container">
+      {% if plot_html %}
         {{ plot_html|safe }}
+      {% else %}
+        <p class="default-message">Enter search criteria and click "Apply" to search for metadata.</p>
+      {% endif %}
+    </div>
+
+    <!-- Results Table Section -->
+    <div class="results-container">
+      <div id="results">
+        {% if results %}
+          {% include 'explore_table.html' %}
+        {% else %}
+          <p class="default-message">Enter search criteria and click "Apply" to search for metadata.</p>
+        {% endif %}
       </div>
     </div>
   </section>
-{% else %}
-
-<p>Enter search criteria and click "Apply" to search for metadata.</p>
-
-{% endif %}
-
-  <section class="vf-content vf-stack vf-stack--400">
-    <div class="vf-grid vf-grid__col--span-12">
-      <div class="vf-grid__col--span-12">
-          <div id="results">
-              {% if results %}
-                  {% include 'explore_table.html' %}
-              {% else %}
-                  <p>Enter search criteria and click "Apply" to search for metadata.</p>
-              {% endif %}
-          </div>
-      </div>
-    </div>
-  </section>
+</div>
 
 <script>
  $(document).ready(function() {

@@ -35,7 +35,7 @@ urlpatterns = [
     path('', views.landing_page, name='landing_page'),
     path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern
     path('download/<str:mgyc>/<int:start_position>/<int:end_position>/', views.download_bgc_data, name='download_bgc_data'),  # New download route
-    path('explore/', views.explore_view, name='explore'),
+    path('explore/', views.explore, name='explore'),
 
 
 ]#+ static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

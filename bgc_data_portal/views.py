@@ -1,11 +1,11 @@
 from django.shortcuts import render, redirect
-from django.core.paginator import Paginator
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 import logging
 from collections import Counter
-from bgc_plots.class_distribution_plots import generate_multibar_plot_html
+from bgc_plots.class_distribution_plots import generate_horizontal_bar_plot_html
 
 from api.utils import get_region_features
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
@@ -19,49 +19,10 @@ EXTENDED_NUCLEOTIDE_WINDOW = 7000
 def landing_page(request):
     return render(request, 'landing_page.html')
 
-from django.shortcuts import render
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-from django.shortcuts import render
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from api.models import Metadata
-from .forms import MGYCSearchForm
-
-def metadata_search_view(request):
-    form = MGYCSearchForm()
-    metadata_list = None
-    page = request.GET.get('page', 1)
-    mgyc_value = request.GET.get('mgyc_value', None)
-
-    if mgyc_value:
-        # Query the database for the given MGYC value
-        metadata_list = Metadata.objects.filter(mgyc__mgyc__icontains=mgyc_value)
-        
-        # Paginate the results
-        paginator = Paginator(metadata_list, 10)  # Show 10 items per page
-        try:
-            metadata_list = paginator.page(page)
-        except PageNotAnInteger:
-            metadata_list = paginator.page(1)
-        except EmptyPage:
-            metadata_list = paginator.page(paginator.num_pages)
-
-    context = {
-        'form': form,
-        'metadata_list': metadata_list,
-        'mgyc_value': mgyc_value,
-    }
-
-    if request.is_ajax():
-        return render(request, 'metadata_table.html', context)
-
-    return render(request, 'metadata_search.html', context)
-
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.shortcuts import render
-
-def explore_view(request):
+def explore(request):
     results = None
+    _results = None
     page = request.GET.get('page', 1)
     keyword = request.GET.get('keyword', None)
     plot_html = None
@@ -85,19 +46,21 @@ def explore_view(request):
             )
 
             if keyword:
-                results = perform_keyword_search(keyword)
+                _results = perform_keyword_search(keyword)
             elif request.GET:
-                results = perform_complex_search(complex_query_params)
+                _results = perform_complex_search(complex_query_params)
                 
             # generate class dist plots
-            bgc_class_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in results])
+            bgc_class_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in _results])
             # partials_dist = Counter([str(bgc.bgc_class_names).split(',')[0] for bgc in results])
             counters = [bgc_class_dist,bgc_class_dist]
             titles = ['Class distribution', 'Partials distribution']
-            plot_html = generate_multibar_plot_html(counters, titles)
+
+            if not plot_html:
+                plot_html = generate_horizontal_bar_plot_html(counters, titles)
 
 
-            paginator = Paginator(results, 10)  # Show 10 items per page
+            paginator = Paginator(_results, 10)  # Show 10 items per page
             try:
                 results = paginator.page(page)
             except PageNotAnInteger:
@@ -121,41 +84,6 @@ def explore_view(request):
     
     # Otherwise, return the full page
     return render(request, 'explore_page.html', context)
-
-
-def results_page(request):
-    try:
-        keyword = request.GET.get('keyword')
-        complex_query_params = BgcSearchCallSchema(
-            antismash=request.GET.get('antismash', 'true') == 'true',
-            gecco=request.GET.get('gecco', 'true') == 'true',
-            sanntis=request.GET.get('sanntis', 'true') == 'true',
-            bgc_class_name=request.GET.get('bgc_class_name'),
-            mgyb=request.GET.get('mgyb'),
-            assembly_accession=request.GET.get('assembly_accession'),
-            contig_mgyc=request.GET.get('contig_mgyc'),
-            full_length=request.GET.get('full_length', 'true') == 'true',
-            single_truncated=request.GET.get('single_truncated', 'true') == 'true',
-            double_truncated=request.GET.get('double_truncated', 'true') == 'true',
-            biome_lineage=request.GET.get('biome_lineage'),
-            protein_pfam=request.GET.get('protein_pfam',''),
-            pfam_strategy=PfamStrategy(request.GET.get('pfam_strategy', 'intersection')),
-            aggregate_strategy=Aggregate(request.GET.get('aggregate_strategy', 'single'))
-        )
-
-        if keyword:
-            results = perform_keyword_search(keyword)
-        else:
-            results = perform_complex_search(complex_query_params)
-    except Exception as e:
-        print('error:',e)
-
-    
-    paginator = Paginator(results, 10)  # 10 results per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    return render(request, 'results_page.html', {'results': page_obj})
 
 
 def bgc_page(request, mgyc,start_position,end_position):
