@@ -13,36 +13,65 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     {% load static %}
-    <!-- Your custom CSS, if any -->
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <style>
+        /* Make footer text white */
+        .vf-footer {
+            color: white;
+        }
+
+        .vf-footer a {
+            color: white; /* Ensure links in the footer are white */
+            text-decoration: none; /* Remove underline from links */
+        }
+
+        .vf-footer a:hover {
+            text-decoration: underline; /* Underline links on hover */
+        }
+    </style>
 </head>
 <body class="vf-body | vf-stack vf-stack--200">
-    <header class="vf-header">
-        <div class="vf-header__content">
-            <h1 class="vf-logo">
-                <a href="{% url 'landing_page' %}">Biosynthetic Gene Cluster Portal</a>
-            </h1>
-        </div>
-    </header>
+
 
     <!-- Hero Section (if needed) -->
     {% block hero %}
-    <section class="vf-hero vf-hero--1200 | vf-u-fullbleed" style="--vf-hero--bg-image: url('https://via.placeholder.com/1200x600.png')">
+    <section class="vf-hero vf-hero--1200 | vf-u-fullbleed">
         <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
-            <img class="vf-hero__image" src="https://via.placeholder.com/150x50.png" alt="Placeholder Logo"/>
-            <h2 class="vf-hero__heading">Biosynthetic Gene Cluster Portal</h2>
+            <span class="vf-badge vf-badge--primary">beta</span>
+            <h2 class="vf-hero__heading"> 
+                <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">Biosynthetic Gene Cluster Portal</a> 
+            </h2>
             <p class="vf-hero__text">Explore biosynthetic gene clusters.</p>
             <form action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
-                        <label class="vf-form__label vf-u-sr-only | vf-search__label" for="search-keyword">Search by Keyword</label>
-                        <input type="search" placeholder="Search data and docs" id="search-keyword" name="keyword" class="vf-form__input"/>
+                        <input type="search" placeholder="Search by keyword" id="search-keyword" name="keyword" class="vf-form__input"/>
                     </div>
                     <button type="submit" class="vf-button vf-button--primary">Search</button>
                 </div>
+                <p class="vf-text-body--5">
+                    Example: <a class="vf-link" href="{% url 'explore' %}?keyword=Polyketide">Polyketide</a>
+                </p>
+
             </form>
         </div>
     </section>
+        <!-- Navigation Strip -->
+        <nav class="vf-navigation vf-navigation--main | vf-cluster">
+            <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
+                <li class="vf-navigation__item">
+                    <a href="{% url 'landing_page' %}" class="vf-navigation__link" aria-current="page">Home</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="docs" class="vf-navigation__link">Documents</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="/api/v1/docs" class="vf-navigation__link">API</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="mailto:fragoso@ebi.ac.uk" class="vf-navigation__link">Feedback</a>
+                </li>
+            </ul>
+        </nav>
     {% endblock hero %}
 
     <main class="vf-main">
@@ -51,10 +80,30 @@
 
     <footer class="vf-footer">
         <div class="vf-footer__inner">
-            <p class="vf-footer__notice">
+            <!-- <p class="vf-footer__notice">
                 <a href="https://doi.org/10.0000/zenodo.000000"><img src="https://zenodo.org/badge/DOI/10.0000/zenodo.000000.svg" alt="DOI"/></a>
-            </p>
-            <p class="vf-footer__notice">© 2024 Biosynthetic Gene Cluster Portal</p>
+            </p> -->
+            <div class="vf-grid">
+                <!-- Useful Links Section -->
+                <div class="vf-grid__col--span-4">
+                    <h3>Useful Links</h3>
+                    <ul class="vf-list">
+                        <li><a href="https://www.ebi.ac.uk/metagenomics" target="_blank" style="text-decoration: none; color: None;">MGnify</a></li>
+                        <li><a href="https://www.ebi.ac.uk/metagenomics/proteins" target="_blank" style="text-decoration: none; color: None;">MGnify Proteins</a></li>
+                        <li><a href="https://euremap.eu" target="_blank" style="text-decoration: none; color: None;">EUREMAP Project</a></li>
+                    </ul>
+                </div>
+                <!-- Help Section -->
+                <div class="vf-grid__col--span-4">
+                    <h3>Help</h3>
+                    <ul class="vf-list">
+                        <li><a href="docs" style="text-decoration: none; color: None;">Documentation</a></li>
+                        <li><a href="/api/v1/docs" style="text-decoration: none; color: None;">API</a></li>
+                        <li><a href="mailto:fragoso@ebi.ac.uk" style="text-decoration: none; color: None;">Helpdesk</a></li>
+                    </ul>
+                </div>
+            </div>
+            <p class="vf-footer__notice">© 2024 EMBL-EBI</p>
         </div>
     </footer>
 

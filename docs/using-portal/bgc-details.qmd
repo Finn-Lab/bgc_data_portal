@@ -1,6 +1,6 @@
 ---
 title: "BGC Details"
-author: "Santiago Sanchez"
+# author: "Santiago Sanchez"
 date: "2024-08-20"
 format: html
 ---

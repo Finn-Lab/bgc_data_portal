@@ -5,19 +5,23 @@ project:
 website:
   title: "Biosynthetic Gene Cluster Portal Documentation"
   description: "Guides, examples, and API documentation for using the Biosynthetic Gene Cluster Portal."
+  page-navigation: true
+
   navbar:
-    left:
-      - text: "Home"
+    right: 
+      - href: bgc-portal.mgnify.org
+        text: Data Portal
+      - icon: github
+        href: https://github.com/Finn-Lab/bgc_data_portal 
+        
+  sidebar:
+    style: docked
+    search: true
+    contents:
+      - text: "Introduction"
         href: index.qmd
       - text: "Getting Started"
         href: getting-started.qmd
-    right: 
-      - icon: github
-        href: https://github.com/Finn-Lab/bgc_data_portal 
-  sidebar:
-    style: "docked"
-    search: true
-    contents:
       - text: "Home Page"
         href: using-portal/landing-page-features.qmd
       - text: "Explore BGCs"
@@ -26,34 +30,37 @@ website:
         href: using-portal/bgc-details.qmd
       - text: "API Documentation"
         href: api-documentation.qmd
+
   page-footer:
-    left: "© 2024 Biosynthetic Gene Cluster Portal"
+    left: "© 2024 EBL-EBI"
     right: 
       - icon: github
         href: https://github.com/Finn-Lab/bgc_data_portal 
 
 format:
-  html:
-    theme: default
+  html:        
+    theme:
+      - zephyr
+      - styles.scss
     toc: true
-    toc-location: left
-    toc-depth: 3
+    # toc-location: left
+    # toc-depth: 3
     # toc-active-border: true
-    code-fold: false
+    # code-fold: false
 
-# Sections
-files:
-  - index.qmd
-  - getting-started.qmd
-  - using-portal/landing-page-features.qmd
-  - using-portal/search-results.qmd
-  - using-portal/bgc-details.qmd
-  - api-documentation.qmd
+# # Sections
+# files:
+#   - index.qmd
+#   - getting-started.qmd
+#   - using-portal/landing-page-features.qmd
+#   - using-portal/search-results.qmd
+#   - using-portal/bgc-details.qmd
+#   - api-documentation.qmd
 
 
-# Additional options
-metadata:
-  title: "Biosynthetic Gene Cluster Portal Documentation"
-  # description: "Documentation for the BGC Portal, including user guides, API instructions, and use cases."
-  author: "Microbiome Informatics Team, EMBL-EBI"
-  date: "2024"
+# # Additional options
+# metadata:
+#   title: "Biosynthetic Gene Cluster Portal Documentation"
+#   # description: "Documentation for the BGC Portal, including user guides, API instructions, and use cases."
+#   author: "Microbiome Informatics Team, EMBL-EBI"
+#   date: "2024"
