@@ -28,10 +28,9 @@ handler404 = 'bgc_data_portal.views.custom_404_view'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path("api/v1/", api.urls,name='api'),
-    path('docs/', lambda request: redirect('/docs/index.html', permanent=True)),
-
-    re_path(r'^docs/(?P<path>.*)$', serve, {'document_root': settings.BASE_DIR / 'docs/_site'}, name='docs'),
+    path("api/v1/", api.urls, name='api'),
+    path('docs/', views.DocsView.as_view(), {'path': 'index.html'}, name='docs_index'),
+    path('docs/<path:path>', views.DocsView.as_view(), name='docs'),
     path('', views.landing_page, name='landing_page'),
     path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern
     path('download/<str:mgyc>/<int:start_position>/<int:end_position>/', views.download_bgc_data, name='download_bgc_data'),  # New download route

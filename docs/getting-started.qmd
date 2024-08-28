@@ -2,7 +2,7 @@
 title: "Getting Started"
 # author: "Santiago Sanchez"
 date: "2024-08-20"
-output: html_document
+# output: html_document
 ---
 
 

@@ -96,5 +96,12 @@
     "title": "Getting Started",
     "section": "Glossary of Terms",
     "text": "Glossary of Terms\nBelow are definitions of key terms and concepts used in the BGC Portal:\n\nBiosynthetic Gene Cluster (BGC): A group of genes that collectively are predicted to produce a secondary metabolite by a specific BGC detector, often with ecological or pharmaceutical significance.\nAggregated Region: In the context of the BGC Portal, an aggregated region refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting aggregated region represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.\nMGYB: A specific accession number related to each BGC predictions within the portal.\nAggregate Strategy: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final predicted BGC regions.\n\nFor more detailed instructions, please refer to the specific sections of the documentation."
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "About this site"
   }
 ]

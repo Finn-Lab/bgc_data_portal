@@ -2,6 +2,9 @@
 project:
   type: website
 
+execute:
+    freeze: auto
+    
 website:
   title: "Biosynthetic Gene Cluster Portal Documentation"
   description: "Guides, examples, and API documentation for using the Biosynthetic Gene Cluster Portal."
@@ -49,13 +52,13 @@ format:
     # code-fold: false
 
 # # Sections
-# files:
-#   - index.qmd
-#   - getting-started.qmd
-#   - using-portal/landing-page-features.qmd
-#   - using-portal/search-results.qmd
-#   - using-portal/bgc-details.qmd
-#   - api-documentation.qmd
+files:
+  - index.qmd
+  - getting-started.qmd
+  - using-portal/landing-page-features.qmd
+  - using-portal/search-results.qmd
+  - using-portal/bgc-details.qmd
+  - api-documentation.qmd
 
 
 # # Additional options

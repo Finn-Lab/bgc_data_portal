@@ -1,6 +1,10 @@
 from django.shortcuts import render, redirect
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse
+from django.views.generic import TemplateView
+import os
+from django.http import FileResponse, Http404
+from django.conf import settings
 from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
 from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 import logging
@@ -16,9 +20,25 @@ logger = logging.getLogger(__name__)
 
 EXTENDED_NUCLEOTIDE_WINDOW = 7000
 
+from django.views.generic import TemplateView
+import os
+from django.http import FileResponse, Http404
+from django.conf import settings
+
+class DocsView(TemplateView):
+
+    def get(self, request, path='index.html', *args, **kwargs):
+        # Construct the full path to the file
+
+        file_path = os.path.join(settings.BASE_DIR, 'docs', '_site', path)
+
+        if os.path.exists(file_path):
+            return FileResponse(open(file_path, 'rb'))
+        else:
+            raise Http404("File not found")
+
 def landing_page(request):
     return render(request, 'landing_page.html')
-
 
 def explore(request):
     results = None
