@@ -34,7 +34,7 @@ class BgcAdvancedSearchForm(forms.Form):
         })
 
     )
-    contig_mgyc = forms.CharField(
+    mgyc = forms.CharField(
         max_length=255, 
         required=False, 
         label='Contig MGYC',
@@ -63,9 +63,9 @@ class BgcAdvancedSearchForm(forms.Form):
             'style': 'margin-bottom: 10px;'  # Add inline styles for spacing
         }),
         choices=[
-            ('complete', 'Full-Length BGC'),
-            ('single', 'Single-Truncated'),
-            ('double', 'Double-Truncated')
+            (0, 'Full-Length BGC'),
+            (1, 'Single-Truncated'),
+            (2, 'Double-Truncated')
         ],
         label='Select Detectors',
         help_text='Filter BGCs detected by completeness. Full-Length BGC indicates if the BGC is full-length; Single-Truncated indicates if the BGC is single-truncated; Double-Truncated indicates if the BGC is double-truncated.'

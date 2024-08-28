@@ -42,15 +42,9 @@ def generate_bgc_statistics():
 DB_STATS = generate_bgc_statistics()
 
 def mgyb_converter(mgyb,text_to_int=True):
-    """Function to convert mgyb text to int and viceversa. Match fromat with Bgc.mgyb model """
-
+    """Function to convert mgyb text to int and viceversa. Match format with Bgc.mgyb model """
     mgyb_template = "MGYB{:012}"
-
-    if text_to_int:
-        return int(mgyb[4:])
-    else:
-        return mgyb_template.format(mgyb)
-
+    return int(mgyb[4:]) if text_to_int else mgyb_template.format(mgyb)
 
 
 def search_keyword_in_models(keyword: str):

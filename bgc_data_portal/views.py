@@ -56,6 +56,7 @@ def explore(request):
     else:
         results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
 
+    # print(list(results)[0])
     # generate class dist plots
     result_stats = dict(
         total_regions=len(results),
