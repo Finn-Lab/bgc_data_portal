@@ -5,9 +5,8 @@ from django.views.generic import TemplateView
 import os
 from django.http import FileResponse, Http404
 from django.conf import settings
-from api.api import perform_keyword_search, perform_complex_search,get_contig_region_plot,download_bgcs
+from api.api import get_contig_region
 from api.models import Bgc
-from api.schemas import BgcSearchCallSchema, OutputType, PfamStrategy,Aggregate
 import logging
 from collections import Counter
 from bgc_plots.class_distribution_plots import generate_horizontal_bar_plot_html
@@ -178,7 +177,7 @@ def download_bgc_data(request, mgyc, start_position, end_position, precomuted_da
         output_type = request.GET.get('output_type', 'gbk')  # Default to GenBank if not specified
 
         # Call the API function to get the download data
-        response = download_bgcs(
+        response = get_contig_region(
             request,
             mgyc=mgyc,
             start_position=start_position,

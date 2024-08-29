@@ -56,6 +56,7 @@ class ContigRegionViewer:
         Args:
             pd.DataFrame: DataFrame containing the formatted feature data.
         """
+
         features_df['ID'] = features_df['attrib'].map(lambda x:x['ID'])
         
         legend_rank_dict = {
@@ -234,7 +235,7 @@ class ContigRegionViewer:
             end_position (int): The end position of the region.
 
         Returns:
-            plotly.graph_objs.Figure: The generated plotly figure.
+            HTML string of plotly.graph_objs.Figure: The generated plotly figure.
         """
         features_df = ContigRegionViewer.format_data_for_plot(_features_df)
         fig =  ContigRegionViewer.create_bgc_plot(features_df)

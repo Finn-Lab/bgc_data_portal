@@ -1,23 +1,29 @@
-import re
+# Copyright 2024 EMBL - European Bioinformatics Institute
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 from ninja import NinjaAPI
 from ninja.pagination import paginate
 from ninja.errors import HttpError
-from typing import Any, List, Optional, Union, Tuple
-from enum import Enum
+from typing import  List
 from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
-from django.db.models import Q
 from ninja import Query
-import pandas as pd
-from .models import Bgc, BgcClass, BgcDetector, Contig, Assembly, Biome, Protein, Metadata
-from .schemas import Aggregate, PfamStrategy
-from .schemas import BgcSearchOutputSchema, BgcSearchUserOutputSchema, BgcSearchInputSchema, OutputType, BgcSearchCallSchema
-from .utils import RegionFeatureError, get_region_features, complex_bgc_search, search_keyword_in_models
+from .schemas import AdvancedSearchInput
+from .schemas import BgcSearchOutput, GetContigRegionInput, GetContigRegionVisualisationInput
+from .utils import RegionFeatureError, get_region_features
 from .generate_outputs import WriteRegion
-from .aggregate_bgcs import BgcAggregator
 from django.http import Http404, HttpResponse
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 from bgc_data_portal import __version__, __name__, __description__
-
 
 api = NinjaAPI(
     title="MGnify Biosynthetic Gene Clusters Portal API",
@@ -37,92 +43,8 @@ def custom_error_handler(request, exc):
         status=exc.status_code,
     )
 
-# Constants for BGC completeness and detector names
-_PARTIALS = ['full_length', 'single_truncated', 'double_truncated']
-_DETECTORS = ['antiSMASH', 'GECCO', 'SanntiS']
 
-def perform_keyword_search(keyword: Optional[str] = None):
-    """
-    Searches BGCs by a given keyword. If no keyword is provided, returns all BGCs.
-
-    :param keyword: A keyword to search across BGCs and associated data.
-    :return: A list of BGCs matching the keyword search.
-    """
-    if keyword is None:
-        bgcs = Bgc.objects.all()
-    else:
-        matching_bgcs = search_keyword_in_models(keyword)
-        bgcs = Bgc.objects.filter(mgyb__in=matching_bgcs)
-
-    return ( 
-        [ BgcSearchUserOutputSchema(
-            mgybs=[bgc.mgyb],
-            assembly_accession=bgc.mgyc.assembly.accession,
-            contig_mgyc=bgc.mgyc.mgyc,
-            start_position=bgc.start_position,
-            end_position=bgc.end_position,
-            bgc_detector_names=[bgc.bgc_detector.bgc_detector_name],
-            bgc_class_names=[bgc.bgc_class.bgc_class_name]
-        ) for bgc in bgcs ], 
-        bgcs
-    )
-
-def perform_complex_search(params: BgcSearchCallSchema):
-    """
-    Performs a complex search for BGCs based on multiple criteria.
-
-    :param params: Parameters for complex BGC search, including detector names, BGC class, assembly accession, and others.
-    :return: A list of aggregated BGCs based on the search criteria.
-    """
-    detectors = [name for name, value in zip(_DETECTORS, [params.antismash, params.gecco, params.sanntis]) if value]
-    pfams = re.split(r"[,\s]", params.protein_pfam)
-    
-    bgcs = complex_bgc_search(
-        detectors,
-        params.bgc_class_name,
-        params.mgyb,
-        params.assembly_accession,
-        params.contig_mgyc,
-        params.full_length,
-        params.single_truncated,
-        params.double_truncated,
-        params.biome_lineage,
-        pfams,
-        params.pfam_strategy.value,
-    )
-
-    individual_bgcs = [
-        BgcSearchInputSchema(
-            mgyb=bgc.mgyb,
-            assembly_accession=bgc.mgyc.assembly.accession,
-            contig_mgyc=bgc.mgyc.mgyc,
-            start_position=bgc.start_position,
-            end_position=bgc.end_position,
-            bgc_detector_name=bgc.bgc_detector.bgc_detector_name,
-            bgc_class_name=bgc.bgc_class.bgc_class_name,
-        )
-        for bgc in bgcs
-    ]
-
-    # Aggregate BGC regions according to the selected strategy
-    aggregate_function = getattr(BgcAggregator, params.aggregate_strategy.value)
-    aggregated_bgcs = aggregate_function(individual_bgcs, detectors)
-
-    return ([
-        BgcSearchUserOutputSchema(
-            mgybs=aggregated_bgc.mgybs,
-            assembly_accession=aggregated_bgc.assembly_accession,
-            contig_mgyc=aggregated_bgc.contig_mgyc,
-            start_position=aggregated_bgc.start_position,
-            end_position=aggregated_bgc.end_position,
-            bgc_detector_names=aggregated_bgc.bgc_detector_names,
-            bgc_class_names=aggregated_bgc.bgc_class_names,
-        ) for aggregated_bgc in aggregated_bgcs 
-        ], 
-        bgcs
-    )
-
-@api.get("/search/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Keyword search for BGCs")
+@api.get("/keyword_search/", response=List[BgcSearchOutput], tags=["Search"], summary="Keyword search for BGCs")
 @paginate
 def search_by_keyword(request, keyword: str):
     """
@@ -133,7 +55,8 @@ def search_by_keyword(request, keyword: str):
     """
     search_results = search_bgcs_by_keyword(keyword)
 
-    return [ BgcSearchUserOutputSchema( mgybs=bgc.mgybs,
+
+    return [ BgcSearchOutput( mgybs=bgc.mgybs,
                     assembly_accession=bgc.mgyc.assembly.accession,
                     contig_mgyc=bgc.mgyc.mgyc,
                     start_position=bgc.start_position,
@@ -144,9 +67,9 @@ def search_by_keyword(request, keyword: str):
             for bgc in search_results 
     ]
 
-@api.get("/bgcs/", response=List[BgcSearchUserOutputSchema], tags=["Search"], summary="Advanced search for BGCs")
+@api.get("/advanced_search/", response=List[BgcSearchOutput], tags=["Search"], summary="Advanced search for BGCs")
 @paginate
-def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
+def search_by_advanced(request, params: AdvancedSearchInput = Query(...)):
     """
     Execute a detailed search across the BGC Portal.
 
@@ -154,17 +77,22 @@ def search_bgcs(request, params: BgcSearchCallSchema = Query(...)):
     detector names, biome lineage, Pfam domains, and more. 
     The search results reflect the data shown on the "Explore BGCs" page of the portal.
     """
-    aggregated_result, _ = perform_complex_search(params)
-    return aggregated_result
+    search_results = search_bgcs_by_advanced(params.dict())
+
+    return [ BgcSearchOutput( mgybs=bgc.mgybs,
+                    assembly_accession=bgc.mgyc.assembly.accession,
+                    contig_mgyc=bgc.mgyc.mgyc,
+                    start_position=bgc.start_position,
+                    end_position=bgc.end_position,
+                    bgc_detector_names=bgc.bgc_detector_names,
+                    bgc_class_names=bgc.bgc_class_names
+            ) 
+            for bgc in search_results 
+    ]
+
 
 @api.get("/contig_region/", tags=["Data download"], summary="Download BGC data by contig region")
-def download_bgcs(request, 
-                 mgyc: str = None, 
-                 start_position: int = None, 
-                 end_position: int = None,
-                 output_type: OutputType = OutputType.fasta,
-                 precomuted_data: Optional[Any] = False # Leave as false
-                 ):
+def get_contig_region(request, params: GetContigRegionInput = Query(...)):
     """
     Download data related to a specific BGC region within a contig.
 
@@ -173,30 +101,25 @@ def download_bgcs(request,
     - **precomuted_data**: Should be set as false
     """
 
-    if str(precomuted_data).lower()!='false':
-       contig, assembly_accession, features_df = precomuted_data
+    if params.precomuted_data:
+       contig, assembly_accession, features_df = params.precomuted_data
     else:
         try:
-            contig, assembly_accession, features_df = get_region_features(mgyc, start_position, end_position)
+            contig, assembly_accession, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
         except RegionFeatureError as e:
             raise Http404(str(e))
 
     # Generate the requested output format
-    write_output_function = getattr(WriteRegion, output_type.value)
-    output_content = write_output_function(contig, start_position, end_position, assembly_accession, features_df)
+    write_output_function = getattr(WriteRegion, params.output_type)
+    output_content = write_output_function(contig, params.start_position, params.end_position, assembly_accession, features_df)
 
     # Return the file as an HTTP response
-    response = HttpResponse(output_content, content_type=f'contig_region/{output_type}')
-    response['Content-Disposition'] = f'attachment; filename="{mgyc}_{start_position}_{end_position}.{output_type.value}"'
+    response = HttpResponse(output_content, content_type=f'contig_region/{params.output_type}')
+    response['Content-Disposition'] = f'attachment; filename="{params.mgyc}_{params.start_position}_{params.end_position}.{params.output_type}"'
     return response
 
 @api.get("/contig_region_plot/", tags=["Visualisation"], summary="Visualise a BGC Region")
-def get_contig_region_plot(request, 
-                           mgyc: str = None, 
-                           start_position: int = None, 
-                           end_position: int = None,
-                           precomuted_data: Optional[Any] = False # Leave as false
-                           ):
+def get_contig_region_plot(request, params: GetContigRegionVisualisationInput = Query(...)):
     """
     Generate and return a plot visualizing the BGC region within a contig.
 
@@ -204,10 +127,13 @@ def get_contig_region_plot(request,
     The plot includes coding regions, Pfam annotations, and BGC predictions from various detectors.
     - **precomuted_data**: Should be set as false
     """
-    if str(precomuted_data).lower()!='false':
-        _, _, features_df = precomuted_data
+    if params.precomuted_data:
+       _, _, features_df = params.precomuted_data
     else:
-        _, _, features_df = get_region_features(mgyc, start_position, end_position)
+        try:
+            _, _, features_df = get_region_features(params.mgyc, params.start_position, params.end_position)
+        except RegionFeatureError as e:
+            raise Http404(str(e))
     
-    plot_html,_ = ContigRegionViewer.plot_contig_region(features_df)
+    plot_html = ContigRegionViewer.plot_contig_region(features_df)
     return plot_html
