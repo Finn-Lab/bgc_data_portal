@@ -212,6 +212,25 @@
     font-size: 0.875rem;
     margin-bottom: 0;
   }
+  .vf-loader {
+    border: 4px solid #f3f3f3; /* Light grey */
+    border-top: 4px solid #007cba; /* Blue */
+    border-radius: 50%;
+    width: 140px;
+    height: 140px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+    display: none; /
+  }
+
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
 </style>
 
 <div class="page-container">
@@ -245,6 +264,7 @@
  
     <!-- Results Table Section -->
     <div class="results-container">
+      <div class="vf-loader"></div>
       <div id="results">
         {% if results %}
           {% include 'explore_table.html' %}
@@ -301,35 +321,44 @@
 </div>
 
 <script>
-  $(document).ready(function() {
-    // Handle form submission
-    $('#search-form').on('submit', function(e) {
-      e.preventDefault();
-      loadResults(1);  // Load the first page of results
-    });
-
-    // Handle pagination button clicks
-    $(document).on('click', '.pagination button', function(e) {
-      e.preventDefault();
-      var page = $(this).data('page');  // Get the page number from the button's data attribute
-      loadResults(page);
-    });
-
-    function loadResults(page) {
-      $.ajax({
-        url: "{% url 'explore' %}",
-        type: "GET",
-        data: $('#search-form').serialize() + '&page=' + page,
-        success: function(response) {
-          $('#results').html(response);
-        },
-        error: function(xhr, status, error) {
-          console.error("AJAX Error:", status, error);
-          $('#results').html('<p>An error occurred. Please try again.</p>');
-        }
-      });
-    }
+$(document).ready(function() {
+  // Handle form submission
+  $('#search-form').on('submit', function(e) {
+    e.preventDefault();
+    loadResults(1);  // Load the first page of results
   });
+
+  // Handle pagination button clicks
+  $(document).on('click', '.pagination button', function(e) {
+    e.preventDefault();
+    var page = $(this).data('page');  // Get the page number from the button's data attribute
+    loadResults(page);
+  });
+
+  function loadResults(page) {
+    // Show the loader only during AJAX requests
+    $('.vf-loader').show();
+    $.ajax({
+      url: "{% url 'explore' %}",
+      type: "GET",
+      data: $('#search-form').serialize() + '&page=' + page,
+      success: function(response) {
+        // Replace results and hide the loader
+        $('#results').html(response);
+      },
+      error: function(xhr, status, error) {
+        console.error("AJAX Error:", status, error);
+        $('#results').html('<p>An error occurred. Please try again.</p>');
+      },
+      complete: function() {
+        // Hide the loader after the AJAX request completes
+        $('.vf-loader').hide();
+      }
+    });
+  }
+});
+
+
 </script>
 
 {% endblock %}
