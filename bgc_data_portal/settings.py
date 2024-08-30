@@ -45,6 +45,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'ninja',
     'api',
+    # 'bgc_plots',
+    # 'dash_app',
+    # 'django_plotly_dash',
+    # 'django.contrib.staticfiles',  #
 ]
 
 MIDDLEWARE = [
@@ -55,6 +59,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+# 
+    # 'django_plotly_dash.middleware.BaseMiddleware',
+    # 'django_plotly_dash.middleware.ExternalRedirectionMiddleware',
 ]
 
 ROOT_URLCONF = 'bgc_data_portal.urls'
@@ -85,7 +92,7 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': DATABASE_NAME,
-        #'NAME': BASE_DIR / 'bgc_database.db',
+        # 'NAME': BASE_DIR / 'bgc_database_DUMMY.db',
     }
 }
 
