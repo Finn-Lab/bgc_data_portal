@@ -30,7 +30,25 @@
         .vf-footer a:hover {
             text-decoration: underline; /* Underline links on hover */
         }
- 
+        .vf-loader {
+            border: 4px solid #f3f3f3; /* Light grey */
+            border-top: 4px solid #007cba; /* Blue */
+            border-radius: 50%;
+            width: 140px;
+            height: 140px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none; /
+          }
+
+          @keyframes spin {
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
+          }
     </style>
 </head>
 <body class="vf-body | vf-stack vf-stack--200">
@@ -45,7 +63,7 @@
                 <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">MGnify Biosynthetic Gene Clusters</a> 
             </h2>
             <p class="vf-hero__text">Explore biosynthetic gene clusters.</p>
-            <form action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
+            <form id="keyword-form" action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
                         <input type="search" placeholder="Search by keyword" id="search-keyword" name="keyword" class="vf-form__input"/>
@@ -55,7 +73,6 @@
                 <p class="vf-text-body--5">
                     Example: <a class="vf-link" href="{% url 'explore' %}?keyword=Polyketide">Polyketide</a>
                 </p>
-
             </form>
         </div>
     </section>
@@ -80,6 +97,7 @@
 
     <main class="vf-main">
         <hr class="vf-divider" style="--context-margin--inline: 3rem;">
+        <div class="vf-loader" id="search-loader" style="display: none;"></div>
         {% block content %}{% endblock %}
     </main>
 
@@ -128,6 +146,42 @@
     <!-- Visual Framework JS from CDN -->
     <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
     <!-- Your custom JS, if any -->
-    <script src="{% static 'js/scripts.js' %}"></script>
+    <script>
+        window.onload = function() {
+            // Select the form and loader directly
+            const form = document.getElementById('keyword-form');
+            const loader = document.getElementById('search-loader');
+    
+            // Ensure the elements are found before adding the listener
+            if (form && loader) {
+                form.addEventListener('submit', function(event) {
+                    // Prevent the default form submission
+                    event.preventDefault();
+    
+                    // Get the value of the 'keyword' input
+                    const keyword = form.querySelector('input[name="keyword"]').value;
+                    console.log('Submitted keyword:', keyword); // Verify the keyword value
+    
+                    // Show the loader
+                    $('.vf-loader').show();
+    
+                    // Disable form inputs to prevent multiple submissions
+                    form.querySelectorAll('input, button').forEach(element => element.disabled = true);
+    
+                    // Construct the URL with the query parameters
+                    const actionUrl = form.getAttribute('action'); // Get the form action URL
+                    const queryString = new URLSearchParams(new FormData(form)).toString(); // Serialize form data to query string
+    
+                    // Redirect to the constructed URL
+                    console.log('Submitted keyword:', `${actionUrl}?${keyword}`); // Verify the keyword value
+                    window.location.href = `${actionUrl}?keyword=${keyword}`;
+                });
+            } else {
+                console.error('Form or loader element not found');
+            }
+        };
+    </script>
+    
+    <!-- <script src="{% static 'js/scripts.js' %}"></script> -->
 </body>
 </html>

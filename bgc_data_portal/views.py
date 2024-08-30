@@ -45,13 +45,16 @@ def landing_page(request):
 def explore(request):
 
     advanced_form = BgcAdvancedSearchForm(request.GET or None)
-    
+    print('REQUESTTT  ',request.GET)
     if request.GET.get('keyword'):
+        print('keywor SEARCH')
         results = search_bgcs_by_keyword(request.GET.get('keyword'))
 
     elif advanced_form.is_valid():
+        print('advanced SEARCH')
         results = search_bgcs_by_advanced(advanced_form.cleaned_data)
     else:
+        print('else SEARCH')
         results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
 
     # generate class dist plots
