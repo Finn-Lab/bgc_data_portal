@@ -14,17 +14,4 @@
     </section>
 </div>
 
-<section class="vf-intro">
-    <div class="vf-grid">
-      <div class="vf-grid__col--span-12">
-        <h2 class="vf-intro__heading">Search results</h2>
-        <p class="vf-text">Search the database of biosynthetic gene clusters (BGCs).</p>
-              <form action="{% url 'explore' %}" method="get">
-          <label for="search-keyword" class="vf-form__label">Search by Keyword</label>
-          <input type="text" id="search-keyword" name="keyword" class="vf-form__input" placeholder="Enter a keyword...">
-          <button type="submit" class="vf-button vf-button--primary">Search</button>
-        </form>
-      </div>
-    </div>
-</section>
 {% endblock %}
