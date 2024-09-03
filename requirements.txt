@@ -9,3 +9,4 @@ requests==2.32.3
 plotly==5.23.0
 django-filter==24.3
 django-matomo==0.1.6
+gunicorn==20.1.0
