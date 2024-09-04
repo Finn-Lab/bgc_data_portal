@@ -7,7 +7,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MGnify Biosynthetic Gene Clusters{% endblock %}</title>
-    <!-- Visual Framework CSS from CDN -->
     <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -15,45 +14,11 @@
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     {% load static %}
-    <style>
-        /* Make footer text white */
-        .vf-footer {
-            color: white;
-        }
-
-        .vf-footer a {
-            color: white; /* Ensure links in the footer are white */
-            text-decoration: none; /* Remove underline from links */
-        }
-
-        .vf-footer a:hover {
-            text-decoration: underline; /* Underline links on hover */
-        }
-        .vf-loader {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #007cba; /* Blue */
-            border-radius: 50%;
-            width: 140px;
-            height: 140px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-            display: none; /
-          }
-
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-    </style>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
 <body class="vf-body | vf-stack vf-stack--200">
 
 
-    <!-- Hero Section (if needed) -->
     {% block hero %}
     <section class="vf-hero vf-hero--1200 | vf-u-fullbleed">
         <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
@@ -76,7 +41,6 @@
         </div>
     </section>
     {% endblock hero %}
-        <!-- Navigation Strip -->
         <nav class="vf-navigation vf-navigation--main | vf-cluster">
             <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
                 <li class="vf-navigation__item">
@@ -102,11 +66,7 @@
 
     <footer class="vf-footer">
         <div class="vf-footer__inner">
-            <!-- <p class="vf-footer__notice">
-                <a href="https://doi.org/10.0000/zenodo.000000"><img src="https://zenodo.org/badge/DOI/10.0000/zenodo.000000.svg" alt="DOI"/></a>
-            </p> -->
             <div class="vf-grid">
-                <!-- Useful Links Section -->
                 <div class="vf-grid__col--span-4">
                     <h3>Useful Links</h3>
                     <ul class="vf-list">
@@ -115,7 +75,6 @@
                         <li><a href="https://euremap.eu" target="_blank" style="text-decoration: none; color: None;">EUREMAP Project</a></li>
                     </ul>
                 </div>
-                <!-- Help Section -->
                 <div class="vf-grid__col--span-4">
                     <h3>Help</h3>
                     <ul class="vf-list">
@@ -142,9 +101,8 @@
         </div>
     </footer>
 
-    <!-- Visual Framework JS from CDN -->
     <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
-    <!-- Your custom JS, if any -->
+    
     <script>
     document.getElementById('example-link').addEventListener('click', function(event) {
         event.preventDefault();  // Prevent the default link behavior
