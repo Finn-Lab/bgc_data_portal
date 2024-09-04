@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
-
+import sys
 from pathlib import Path
 import os
 
@@ -20,12 +20,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-^n%q=s*(@&*yhtp2v40k#%=eiby*$*5q9&e&8g#l*ec-j7wjyo'
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", 'django-insecure-^n%q=s*(@&*yhtp2v40k#%=eiby*$*5q9&e&8g#l*ec-j7wjyo')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [os.getenv("ALLOWED_HOST", '*')]
 
 # Application definition
 INSTALLED_APPS = [
@@ -72,14 +72,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'bgc_data_portal.wsgi.application'
 
+DB_PATH = os.getenv("DB_PATH", BASE_DIR / "bgcs_db.sqlite")
+
 # Database
 # https://docs.djangoproject.com/en/3.2/ref/settings/#databases
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        # 'NAME': DATABASE_NAME,
-        'NAME': BASE_DIR / 'bgcs_db.sqlite',
-        # 'NAME': BASE_DIR / 'bgcs_db.sqlite',
+        'NAME': DB_PATH
     },
 }
 
@@ -144,3 +144,36 @@ PLOTLY_DASH = {
 MATOMO_URL = "https://ebi-mgnify.matomo.cloud/"
 MATOMO_SITE_ID = 6
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'stream': sys.stdout,
+            'formatter': 'simple',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

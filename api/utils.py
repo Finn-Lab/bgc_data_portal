@@ -1,11 +1,11 @@
-
+import logging
 from functools import reduce
 import json
 import operator
 from collections import Counter
 from django.http import Http404
 import pandas as pd
-from .models import Bgc, Contig, Protein, Metadata
+from .models import Bgc, Contig, Protein, Metadata, CurrentStats
 from .pfam_annots import pfamToGoSlim,pfam_desc
 from typing import Optional
 from django.db.models import Q,F
@@ -40,7 +40,12 @@ def generate_bgc_statistics():
     
     return result_stats
 
-DB_STATS = generate_bgc_statistics()
+def get_latest_stats():
+    latest_stats = CurrentStats.objects.order_by("-created_at").first()
+    if latest_stats:
+        return latest_stats.stats
+    return {}
+
 
 def mgyb_converter(mgyb,text_to_int=True):
     """Function to convert mgyb text to int and viceversa. Match format with Bgc.mgyb model """

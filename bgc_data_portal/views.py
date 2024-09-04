@@ -13,7 +13,7 @@ from api.models import Bgc
 import logging
 from collections import Counter
 from api.schemas import GetContigRegionInput
-from api.utils import get_region_features, DB_STATS
+from api.utils import get_region_features, get_latest_stats
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 from api.forms import BgcAdvancedSearchForm,BgcKeywordSearchForm
 from urllib.parse import urlencode
@@ -92,7 +92,7 @@ def explore(request):
 
     context = {
         'results': paginated_results,
-        'result_stats': result_stats if results else DB_STATS,
+        'result_stats': result_stats if results else get_latest_stats(),
         'advanced_form': current_advanced_form,
         'serialized_string': str(pageless_query_params),
     }

@@ -115,3 +115,10 @@ class Study(models.Model):
 
     class Meta:
         db_table = 'study'
+
+
+class CurrentStats(models.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    id = models.IntegerField(primary_key=True)
+    stats = models.JSONField(default=dict, blank=True)
