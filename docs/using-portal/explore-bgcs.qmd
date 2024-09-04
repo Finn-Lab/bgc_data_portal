@@ -2,15 +2,16 @@
 title: "Explore BGCs"
 # author: "Santiago Sanchez"
 date: "2024-08-20"
+number-sections: false
 # output: html_document
 ---
 
 
-## Advanced Search
+## Advanced Search {#sec-search_fields}
 
 The Advanced Search bar allows you to perform fine-grained queries to explore BGC Data Portal. Below is a detailed explanation of each search field and examples of complex search queries to help you utilise this feature effectively.
 
-### Search Fields
+### Search Fields  
 
 - **BGC Class Name**:  
   Enter one or more BGC class names (i.e., alkaloid, nrp, other, polyketide, ripp, saccharide, or terpene) separated by spaces or commas. The search will return BGCs that contain at least one of the specified classes (using an OR logic).
@@ -45,17 +46,27 @@ The Advanced Search bar allows you to perform fine-grained queries to explore BG
   
   - **AND Logic**: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter `PF00109 PF00501` and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.
 
-- **Aggregate Strategy**:  
+- **BGC Detectors**:
+  Filter BGCs detected by the supported detectors:
+    - antiSMASH
+    - GECCO
+    - SanntiS
+
+- **Aggregate Strategy**: 
   The **Aggregate Strategy** determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:
 
   - **Single**:  
-    This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar but not identical regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.
+    This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.
 
   - **Union**:  
-    The Union strategy merges regions where at least one gene overlaps across predictions from different tools. The resulting region will be defined by the outermost start and end positions of these overlapping predictions. This strategy creates a broader region that represents all potential BGCs detected by at least one of the selected tools, providing a more inclusive view of the data. It is useful when you want to ensure that you capture all possible BGCs, even if only partially supported by some tools.
+    The Union strategy merges regions where at least one gene overlaps across predictions of all selected *BGC detectors*. The resulting *aggregated region* will be defined by the outermost start and end positions of these overlapping predictions. This strategy creates a broader region that represents all potential BGCs detected by at least one of the selected tools, providing a more inclusive view of the data. It is useful when you want to ensure that you capture all possible BGCs, even if only partially supported by some tools.
+    ![Example of *aggregated region* by `union`](/img/aggregated_union.png)
+    This region was aggregated selecting SanntiS and GECCO *BGC detectors*.
 
   - **Intersection**:  
-    The Intersection strategy is the most stringent. It only includes regions where all the selected detection tools agree. The resulting BGC region will be the longest contiguous sequence that all tools have predicted as a BGC. This strategy is particularly useful when you want high-confidence predictions, as it guarantees that the region is supported by multiple independent tools, reducing the likelihood of false positives.
+    The Intersection strategy is the most stringent. It only includes regions where all the selected *BGC detectors* agree. The resulting BGC region will be the longest contiguous sequence that all tools have predicted as a BGC. This strategy is particularly useful when you want high-confidence predictions, as it guarantees that the region is supported by multiple independent tools, reducing the likelihood of false positives.
+    ![Example of *aggregated region* by `intersection`](/img/aggregated_intersection.png)
+    This region was aggregated selecting antiSMASH and GECCO *BGC detectors*. Note that despite SanntiS BGC being displayed, it was not considered for the *aggregated region*
 
 ## Results Table
 
@@ -63,34 +74,29 @@ After conducting a search, the results will be displayed in a paginated table. B
 
 ### Results Summary
 
-- **Total Number of Aggregated Regions**  
-- **Class Distribution plot**
-- **BGC Completeness Distribution plot** 
+- Number of Aggregated Regions  
+- Number of studies where regions matching the criteria where found
+- Number of assemblies where regions matching the criteria where found
+- Class Distribution. Note that for regions with more than one class predicted only one will be counted. 
 
-### Explanation of Table Columns
+### Table Columns
 
-- **MGYB**:  
-  The BGC accession (or aggregated accession) for the resulting region.
+- **MGYB**: The BGC accession (or aggregated accession) for the resulting region.
 
-- **Assembly Accession**:  
-  The ENA assembly accession number where the BGC was predicted.
+- **Assembly**: The ENA assembly accession number where the BGC was predicted.
 
-- **Contig MGYC**:  
-  The accession of the contig containing the BGC.
+- **MGYC**: The accession of the contig containing the BGC.
 
-- **Start Position**:  
-  The start coordinate of the BGC within the contig.
+- **Start**:  The start coordinate of the BGC within the contig.
 
-- **End Position**:  
-  The end coordinate of the BGC within the contig.
+- **End**:  The end coordinate of the BGC within the contig.
 
-- **Detector Names**:  
-  Lists the BGC detectors that contributed to the aggregated prediction.
+- **Detectors**:  Lists the BGC detectors that contributed to the aggregated prediction.
 
-- **Class Names**:  
-  The predicted BGC classes within the aggregated region.
+- **Classes**:  The predicted BGC classes within the *aggregated region*.
+  
+- **Details**:  Link to the BGC details page.
 
 ### Downloading Search Results
 You can download the search results as a **TSV** file, which can be used in conjunction with the API to retrieve the data locally.
 
-This information will help you explore, interpret, and utilise the data from the BGC Portal effectively.

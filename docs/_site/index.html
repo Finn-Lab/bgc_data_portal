@@ -31,7 +31,7 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./getting-started.html" rel="next">
+<link href="./using-portal/landing-page-features.html" rel="next">
 <script src="site_libs/quarto-html/quarto.js"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
@@ -121,11 +121,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./getting-started.html" class="sidebar-item-text sidebar-link">Getting Started</a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
   </div>
 </li>
@@ -153,7 +148,14 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#overview-of-the-bgc-portal" id="toc-overview-of-the-bgc-portal" class="nav-link active" data-scroll-target="#overview-of-the-bgc-portal">Overview of the BGC Portal</a></li>
+  <li><a href="#overview-of-the-mgnify-biosynthetic-gene-clusters-portal" id="toc-overview-of-the-mgnify-biosynthetic-gene-clusters-portal" class="nav-link active" data-scroll-target="#overview-of-the-mgnify-biosynthetic-gene-clusters-portal">Overview of the <strong>MGnify Biosynthetic Gene Clusters</strong> portal</a></li>
+  <li><a href="#basic-navigation" id="toc-basic-navigation" class="nav-link" data-scroll-target="#basic-navigation">Basic Navigation</a>
+  <ul class="collapse">
+  <li><a href="#home-page" id="toc-home-page" class="nav-link" data-scroll-target="#home-page">1. Home Page</a></li>
+  <li><a href="#explore-bgcs-page" id="toc-explore-bgcs-page" class="nav-link" data-scroll-target="#explore-bgcs-page">2. Explore BGCs page</a></li>
+  <li><a href="#bgc-details-page" id="toc-bgc-details-page" class="nav-link" data-scroll-target="#bgc-details-page">3. BGC Details page</a></li>
+  </ul></li>
+  <li><a href="#glossary-of-terms" id="toc-glossary-of-terms" class="nav-link" data-scroll-target="#glossary-of-terms">Glossary of Terms</a></li>
   </ul>
 </nav>
     </div>
@@ -183,11 +185,60 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<section id="overview-of-the-bgc-portal" class="level2">
-<h2 class="anchored" data-anchor-id="overview-of-the-bgc-portal">Overview of the BGC Portal</h2>
-<p>Biosynthetic gene clusters are important for understanding the production of natural products, including antibiotics and other bioactive compounds. The BGC Portal provides a resource for researchers who need access to predicted biosynthetic gene clusters from a wide range of metagenomic datasets from MGnify.</p>
+<section id="overview-of-the-mgnify-biosynthetic-gene-clusters-portal" class="level2">
+<h2 class="anchored" data-anchor-id="overview-of-the-mgnify-biosynthetic-gene-clusters-portal">Overview of the <strong>MGnify Biosynthetic Gene Clusters</strong> portal</h2>
+<p>Biosynthetic gene clusters are important for understanding the production of natural products, including antibiotics and other bioactive compounds. The <strong>MGnify Biosynthetic Gene Clusters</strong> portal provides a resource for researchers who need access to predicted biosynthetic gene clusters from a wide range of metagenomic datasets from MGnify.</p>
 <p>The <strong>MGnify Biosynthetic Gene Clusters</strong> is a platform designed to facilitate the exploration, analysis, and retrieval of biosynthetic gene cluster predictions from metagenomic assemblies.</p>
 <p>The portal integrates data from multiple prediction tools, enabling users to perform detailed searches, visualise results, and download data in various formats.</p>
+</section>
+<section id="basic-navigation" class="level2">
+<h2 class="anchored" data-anchor-id="basic-navigation">Basic Navigation</h2>
+<p>The <strong>MGnify Biosynthetic Gene Clusters Portal</strong> is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:</p>
+<section id="home-page" class="level3">
+<h3 class="anchored" data-anchor-id="home-page">1. Home Page</h3>
+<p>The Home Page is your entry point to the <strong>MGnify Biosynthetic Gene Clusters</strong> portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:</p>
+<ul>
+<li><strong>Keyword Search</strong>: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the <code>GET /api/v1/keyword_search/</code> endpoint of the API.</li>
+<li><strong>Access and Explore Options</strong>:
+<ul>
+<li><strong>Search BGCs</strong>: Directs you to the Explore BGCs page for more detailed queries.</li>
+<li><strong>API Access</strong>: Provides documentation on how to use the API for programmatic access to BGC data.</li>
+<li><strong>User Documentation</strong>: Guides and examples to help you navigate and utilise the portal effectively.</li>
+<li><strong>Downloads</strong>: Access the FTP site to download the latest data.</li>
+<li><strong>About Us</strong>: Information about the project, including details on the EUREMAP initiative supporting marine bioprospecting research.</li>
+</ul></li>
+</ul>
+</section>
+<section id="explore-bgcs-page" class="level3">
+<h3 class="anchored" data-anchor-id="explore-bgcs-page">2. Explore BGCs page</h3>
+<p>The Explore BGCs page is where users can perform detailed searches and view the results. It includes:</p>
+<ul>
+<li><strong>Advanced Search Sidebar</strong>: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more. This is equivalent to calling the <code>GET /api/v1/advanced_search/</code> endpoint of the API.</li>
+<li><strong>Search results</strong>: Shows summary statistics of the search.</li>
+<li><strong>Results Table</strong>: Displays the outcomes of your search in a paginated format, with options to download the data in TSV. The table includes key details such as BGC accession, assembly accession, contig information, and detector names. This results are equivalent to the results of calling the <code>GET /api/v1/advanced_search/</code> or <code>GET /api/v1/keyword_search/</code> endpoints of the API.</li>
+</ul>
+</section>
+<section id="bgc-details-page" class="level3">
+<h3 class="anchored" data-anchor-id="bgc-details-page">3. BGC Details page</h3>
+<p>The BGC Details Page provides an in-depth view of a specific biosynthetic gene cluster. Key features include:</p>
+<ul>
+<li><strong>Aggregated Region overview</strong>: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.</li>
+<li><strong>BGC Plot</strong>: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors. Hovering and clicking elements display further information.</li>
+<li><strong>CDS Data</strong>: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.</li>
+<li><strong>Download Options</strong>: Allows you to download data related to the BGC in formats GeneBank, JSON, and FASTA. This is equivalent to calling the <code>GET /api/v1/contig_region/</code> endpoint of the API using the MGYC and start/end positions of the <em>aggregated region</em>.</li>
+</ul>
+</section>
+</section>
+<section id="glossary-of-terms" class="level2">
+<h2 class="anchored" data-anchor-id="glossary-of-terms">Glossary of Terms</h2>
+<p>Below are definitions of key terms and concepts used in the <strong>MGnify Biosynthetic Gene Clusters</strong> portal:</p>
+<ul>
+<li><strong>Biosynthetic Gene Cluster (BGC)</strong>: A group of genes that collectively are predicted to produce a secondary metabolite by a specific BGC detector, often with ecological or pharmaceutical significance.</li>
+<li><strong>Aggregated region</strong>: In the context of the <strong>MGnify Biosynthetic Gene Clusters</strong> portal, an <em>aggregated region</em> refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting <em>aggregated region</em> represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.</li>
+<li><strong>MGYB</strong>: A specific accession number related to each BGC predictions within the portal.</li>
+<li><strong>Aggregate strategy</strong>: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final <em>aggregated region</em>. See <a href="./using-portal/explore-bgcs.html###Search Fields"><strong>Search Fields</strong></a> for detailed information.</li>
+</ul>
+<p>For more detailed instructions, please refer to the specific sections of the documentation.</p>
 
 
 </section>
@@ -330,8 +381,8 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   <div class="nav-page nav-page-previous">
   </div>
   <div class="nav-page nav-page-next">
-      <a href="./getting-started.html" class="pagination-link">
-        <span class="nav-page-text">Getting Started</span> <i class="bi bi-arrow-right-short"></i>
+      <a href="./using-portal/landing-page-features.html" class="pagination-link">
+        <span class="nav-page-text">Home Page</span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

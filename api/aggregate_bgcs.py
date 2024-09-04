@@ -2,10 +2,6 @@
 class BgcAggregator:
     """Find union/interection of BGCs from different detectors"""
     @staticmethod
-    def single(individual_bgcs):
-        return individual_bgcs
-
-    @staticmethod
     def aggregate_results(aggregated_bgcs):
         """Create a list of aggregagted regions given results from intersection and union functions"""
         aggregated_results = []
@@ -17,7 +13,11 @@ class BgcAggregator:
         return aggregated_results
 
     @staticmethod
-    def union(individual_bgcs):
+    def single(individual_bgcs,n_detectors=2):
+        return individual_bgcs
+
+    @staticmethod
+    def union(individual_bgcs,n_detectors=2):
         grouped_by_contig = {}
         
         # Step 1: Group by mgyc
@@ -29,7 +29,7 @@ class BgcAggregator:
         # Step 2: Process each group for overlapping regions
         for bgcs in grouped_by_contig.values():
             
-            if len(bgcs)<2:
+            if len(bgcs)<n_detectors:
                 continue
 
             # Sort bgcs by start_position to make it easier to detect overlaps
@@ -48,7 +48,7 @@ class BgcAggregator:
                     current_group.end_position = max(current_group.end_position, bgc.end_position)
                     aggregated_bgcs.append(bgc)
 
-                elif len(aggregated_bgcs)>=2:
+                elif len(aggregated_bgcs)>=n_detectors:
                     
                     # If not overlapping, save the current group and start a new one
                     output_bgcs.append((current_group,aggregated_bgcs))
@@ -57,13 +57,13 @@ class BgcAggregator:
                     aggregated_bgcs = [current_group]
 
             # Don't forget to add the last group
-            if len(aggregated_bgcs)>=2:
+            if len(aggregated_bgcs)>=n_detectors:
                 output_bgcs.append((current_group,aggregated_bgcs))
 
         return BgcAggregator.aggregate_results(output_bgcs)
     
     @staticmethod
-    def intersection(individual_bgcs):
+    def intersection(individual_bgcs,n_detectors=2):
         grouped_by_contig = {}
         # Step 1: Group by mgyc
         for bgc in individual_bgcs:
@@ -73,7 +73,7 @@ class BgcAggregator:
         # Step 2: Process each group for overlapping regions with all specified detector names
         for bgcs in grouped_by_contig.values():
 
-            if len(bgcs)<2:
+            if len(bgcs)<n_detectors:
                 continue
             # Sort bgcs by start_position to make it easier to detect overlaps
             bgcs.sort(key=lambda s: s.start_position)
@@ -92,7 +92,7 @@ class BgcAggregator:
                     # Aggregate the values
                     aggregated_bgcs.append(bgc)
 
-                elif len(aggregated_bgcs)>=2:
+                elif len(aggregated_bgcs)>=n_detectors:
                     # If not overlapping, start a new group, or if it doesn't match all detector names, skip
                     output_bgcs.append((current_group,aggregated_bgcs))
 
@@ -100,7 +100,7 @@ class BgcAggregator:
                     aggregated_bgcs = [current_group]
 
             # Don't forget to add the last group if it meets the criteria
-            if len(aggregated_bgcs)>=2:
+            if len(aggregated_bgcs)>=n_detectors:
                 output_bgcs.append((current_group,aggregated_bgcs))
 
         return BgcAggregator.aggregate_results(output_bgcs) 

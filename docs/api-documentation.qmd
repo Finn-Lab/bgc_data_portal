@@ -2,16 +2,17 @@
 title: "API Documentation"
 # author: "Santiago Sanchez"
 date: "2024-08-20"
+number-sections: false
 # output: html_document
 ---
 
 # API Documentation
 
-## What is an API?
-
-An API (Application Programming Interface) allows different software applications to communicate with each other. In the context of the MGnify Biosynthetic Gene Clusters Portal, the API provides a programmatic way for users to access and interact with the portal's data. This can be especially useful for automating workflows, integrating the portal's data with other bioinformatics tools, or performing large-scale analyses without needing to use the web interface.
-
 ## Accessing the API Documentation
 
 For detailed information on how to use the API, including available endpoints and request formats, please refer to the comprehensive API documentation available on the Portal's Home page under the "API Access" section.
+
+## What is an API?
+
+An API (Application Programming Interface) allows different software applications to communicate with each other. In the context of the MGnify Biosynthetic Gene Clusters Portal, the API provides a programmatic way for users to access and interact with the portal's data. This can be especially useful for automating workflows, integrating the portal's data with other bioinformatics tools, or performing large-scale analyses without needing to use the web interface.
 

@@ -31,8 +31,6 @@ ul.task-list li input[type="checkbox"] {
 <script src="site_libs/quarto-search/fuse.min.js"></script>
 <script src="site_libs/quarto-search/quarto-search.js"></script>
 <meta name="quarto:offset" content="./">
-<link href="./using-portal/landing-page-features.html" rel="next">
-<link href="./index.html" rel="prev">
 <script src="site_libs/quarto-html/quarto.js"></script>
 <script src="site_libs/quarto-html/popper.min.js"></script>
 <script src="site_libs/quarto-html/tippy.umd.min.js"></script>
@@ -122,11 +120,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="./getting-started.html" class="sidebar-item-text sidebar-link active">Getting Started</a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="./using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
   </div>
 </li>
@@ -192,10 +185,10 @@ ul.task-list li input[type="checkbox"] {
 
 <section id="basic-navigation" class="level2">
 <h2 class="anchored" data-anchor-id="basic-navigation">Basic Navigation</h2>
-<p>The <strong>MGnify Biosynthetic Gene Clusters</strong> is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:</p>
+<p>The <strong>MGnify Biosynthetic Gene Clusters Portal</strong> is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:</p>
 <section id="home-page" class="level3">
 <h3 class="anchored" data-anchor-id="home-page">1. Home Page</h3>
-<p>The Home Page is your entry point to the BGC Portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:</p>
+<p>The Home Page is your entry point to the <strong>MGnify Biosynthetic Gene Clusters</strong> portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:</p>
 <ul>
 <li><strong>Keyword Search</strong>: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the <code>GET /api/v1/search/</code> endpoint of the API.</li>
 <li><strong>Access and Explore Options</strong>:
@@ -222,16 +215,16 @@ ul.task-list li input[type="checkbox"] {
 <li><strong>Aggregated Region Basic Information</strong>: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.</li>
 <li><strong>BGC Plot</strong>: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors.</li>
 <li><strong>CDS Data</strong>: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.</li>
-<li><strong>Download Options</strong>: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3. This is equivalent to calling the <code>GET /api/v1/contig_region/</code> endpoint of the API using the MGYC and start/end positions of the aggregated region.</li>
+<li><strong>Download Options</strong>: Allows you to download data related to the BGC in various formats, including GeneBank, JSON, FASTA, and GFF3. This is equivalent to calling the <code>GET /api/v1/contig_region/</code> endpoint of the API using the MGYC and start/end positions of the <em>aggregated region</em>.</li>
 </ul>
 </section>
 </section>
 <section id="glossary-of-terms" class="level2">
 <h2 class="anchored" data-anchor-id="glossary-of-terms">Glossary of Terms</h2>
-<p>Below are definitions of key terms and concepts used in the BGC Portal:</p>
+<p>Below are definitions of key terms and concepts used in the <strong>MGnify Biosynthetic Gene Clusters</strong> portal:</p>
 <ul>
 <li><strong>Biosynthetic Gene Cluster (BGC)</strong>: A group of genes that collectively are predicted to produce a secondary metabolite by a specific BGC detector, often with ecological or pharmaceutical significance.</li>
-<li><strong>Aggregated Region</strong>: In the context of the BGC Portal, an aggregated region refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting aggregated region represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.</li>
+<li><strong>Aggregated Region</strong>: In the context of the <strong>MGnify Biosynthetic Gene Clusters</strong> portal, an <em>aggregated region</em> refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting <em>aggregated region</em> represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.</li>
 <li><strong>MGYB</strong>: A specific accession number related to each BGC predictions within the portal.</li>
 <li><strong>Aggregate Strategy</strong>: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final predicted BGC regions.</li>
 </ul>
@@ -374,18 +367,6 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
   }
 });
 </script>
-<nav class="page-navigation">
-  <div class="nav-page nav-page-previous">
-      <a href="./index.html" class="pagination-link">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text">Introduction</span>
-      </a>          
-  </div>
-  <div class="nav-page nav-page-next">
-      <a href="./using-portal/landing-page-features.html" class="pagination-link">
-        <span class="nav-page-text">Home Page</span> <i class="bi bi-arrow-right-short"></i>
-      </a>
-  </div>
-</nav>
 </div> <!-- /content -->
 <footer class="footer">
   <div class="nav-footer">

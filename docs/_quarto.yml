@@ -23,8 +23,6 @@ website:
     contents:
       - text: "Introduction"
         href: index.qmd
-      - text: "Getting Started"
-        href: getting-started.qmd
       - text: "Home Page"
         href: using-portal/landing-page-features.qmd
       - text: "Explore BGCs"
@@ -50,7 +48,6 @@ format:
 # # Sections
 files:
   - index.qmd
-  - getting-started.qmd
   - using-portal/landing-page-features.qmd
   - using-portal/search-results.qmd
   - using-portal/bgc-details.qmd

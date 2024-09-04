@@ -21,7 +21,7 @@ def generate_bgc_statistics():
 
     # Generate the required statistics
     result_stats = dict(
-        # Total regions is the length of the QuerySet
+        # Regions is the length of the QuerySet
         total_regions=len(results),
 
         # Distribution of BGC classes

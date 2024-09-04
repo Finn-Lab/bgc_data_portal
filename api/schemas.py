@@ -44,7 +44,7 @@ class AdvancedSearchInput(Schema):
     mgyc: Optional[str] = Field(
         None, 
         max_length=255,
-        title='Contig MGYC',
+        title='MGYC',
         description='The Contig MGYC is the identifier for the contig that contains the BGC.'
     )
     biome_lineage: Optional[str] = Field(
@@ -58,7 +58,9 @@ class AdvancedSearchInput(Schema):
         title='Select Completeness',
         description=(
             'Filter BGCs detected by completeness. '
-            '0: Complete BGC, 1: Single-Truncated, 2: Double-Truncated.'
+            '0: `Complete` indicates a BGC prediction fully contained within contig booundaries.'
+            '1: `Single bounded` indicates if the BGC is truncated in one contig edge.'
+            '2: `Double bounded` indicates if the BGC is truncated in both contig edges.'
         ),
         example=[0, 1, 2]
     )
@@ -66,7 +68,7 @@ class AdvancedSearchInput(Schema):
         None, 
         max_length=255,
         title='Pfam',
-        description='Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).'
+        description='Enter one or more Pfam accession separated by comma or space. Pfam is a database of protein families, each represented by multiple sequence alignments and hidden Markov models (HMMs).',
     )
     pfam_strategy: Optional[str] = Field(
         'intersection', 
@@ -76,14 +78,14 @@ class AdvancedSearchInput(Schema):
     )
     detectors: Optional[List[str]] = Field(
         None, 
-        title='Select Detectors',
+        title='BGC Detectors',
         description='Filter BGCs detected by the selected detectors.',
         example=['antiSMASH', 'GECCO', 'SanntiS']
     )
     aggregate_strategy: Optional[str] = Field(
         'single', 
         title='Aggregate Strategy',
-        description='Select the aggregate strategy for how results should be combined.',
+        description='Select the aggregate strategy for how results should be combined. See `Documentation` for detailed information',
         enum=['single', 'union', 'intersection']
     )
 

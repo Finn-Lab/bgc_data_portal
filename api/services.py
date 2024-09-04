@@ -81,9 +81,5 @@ def search_bgcs_by_advanced(criteria):
 
     aggregate_function = getattr(BgcAggregator,criteria.get('aggregate_strategy'))
     
-    return aggregate_function(qs)
-
-
-
-
+    return aggregate_function(qs,n_detectors=len(criteria.get('detectors')))
 

@@ -79,7 +79,7 @@ class BgcAdvancedSearchForm(forms.Form):
             (1, 'Single bounded'),
             (2, 'Double bounded')
         ],
-        label='Select Detectors',
+        label='Select Completeness',
         help_text='Filter BGCs detected by completeness. `Complete` indicates a BGC prediction fully contained within contig booundaries; `Single bounded` indicates if the BGC is truncated in one contig edge; `Double bounded` indicates if the BGC is truncated in both contig edges.',
         initial=[0,1,2]
     )
@@ -118,7 +118,7 @@ class BgcAdvancedSearchForm(forms.Form):
             ('GECCO', 'GECCO'),
             ('SanntiS', 'SanntiS')
         ],
-        label='Select Detectors',
+        label='BGC Detectors',
         help_text='Filter BGCs detected by the selected detectors.',
         initial=['antiSMASH','GECCO','SanntiS']
     )

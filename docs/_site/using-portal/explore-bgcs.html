@@ -122,11 +122,6 @@ ul.task-list li input[type="checkbox"] {
 </li>
         <li class="sidebar-item">
   <div class="sidebar-item-container"> 
-  <a href="../getting-started.html" class="sidebar-item-text sidebar-link">Getting Started</a>
-  </div>
-</li>
-        <li class="sidebar-item">
-  <div class="sidebar-item-container"> 
   <a href="../using-portal/landing-page-features.html" class="sidebar-item-text sidebar-link">Home Page</a>
   </div>
 </li>
@@ -154,14 +149,14 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#advanced-search" id="toc-advanced-search" class="nav-link active" data-scroll-target="#advanced-search">Advanced Search</a>
+  <li><a href="#sec-search_fields" id="toc-sec-search_fields" class="nav-link active" data-scroll-target="#sec-search_fields">Advanced Search</a>
   <ul class="collapse">
   <li><a href="#search-fields" id="toc-search-fields" class="nav-link" data-scroll-target="#search-fields">Search Fields</a></li>
   </ul></li>
   <li><a href="#results-table" id="toc-results-table" class="nav-link" data-scroll-target="#results-table">Results Table</a>
   <ul class="collapse">
   <li><a href="#results-summary" id="toc-results-summary" class="nav-link" data-scroll-target="#results-summary">Results Summary</a></li>
-  <li><a href="#explanation-of-table-columns" id="toc-explanation-of-table-columns" class="nav-link" data-scroll-target="#explanation-of-table-columns">Explanation of Table Columns</a></li>
+  <li><a href="#table-columns" id="toc-table-columns" class="nav-link" data-scroll-target="#table-columns">Table Columns</a></li>
   <li><a href="#downloading-search-results" id="toc-downloading-search-results" class="nav-link" data-scroll-target="#downloading-search-results">Downloading Search Results</a></li>
   </ul></li>
   </ul>
@@ -193,8 +188,8 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<section id="advanced-search" class="level2">
-<h2 class="anchored" data-anchor-id="advanced-search">Advanced Search</h2>
+<section id="sec-search_fields" class="level2">
+<h2 class="anchored" data-anchor-id="sec-search_fields">Advanced Search</h2>
 <p>The Advanced Search bar allows you to perform fine-grained queries to explore BGC Data Portal. Below is a detailed explanation of each search field and examples of complex search queries to help you utilise this feature effectively.</p>
 <section id="search-fields" class="level3">
 <h3 class="anchored" data-anchor-id="search-fields">Search Fields</h3>
@@ -228,15 +223,20 @@ The <strong>Pfam Strategy</strong> field determines how the search will interpre
 <li><p><strong>OR Logic</strong>: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter <code>PF00109 PF00501</code> and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.</p></li>
 <li><p><strong>AND Logic</strong>: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter <code>PF00109 PF00501</code> and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.</p></li>
 </ul></li>
-<li><p><strong>Aggregate Strategy</strong>:<br>
-The <strong>Aggregate Strategy</strong> determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:</p>
+<li><p><strong>BGC Detectors</strong>: Filter BGCs detected by the supported detectors:</p>
+<ul>
+<li>antiSMASH</li>
+<li>GECCO</li>
+<li>SanntiS</li>
+</ul></li>
+<li><p><strong>Aggregate Strategy</strong>: The <strong>Aggregate Strategy</strong> determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:</p>
 <ul>
 <li><p><strong>Single</strong>:<br>
-This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar but not identical regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.</p></li>
+This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.</p></li>
 <li><p><strong>Union</strong>:<br>
-The Union strategy merges regions where at least one gene overlaps across predictions from different tools. The resulting region will be defined by the outermost start and end positions of these overlapping predictions. This strategy creates a broader region that represents all potential BGCs detected by at least one of the selected tools, providing a more inclusive view of the data. It is useful when you want to ensure that you capture all possible BGCs, even if only partially supported by some tools.</p></li>
+The Union strategy merges regions where at least one gene overlaps across predictions of all selected <em>BGC detectors</em>. The resulting <em>aggregated region</em> will be defined by the outermost start and end positions of these overlapping predictions. This strategy creates a broader region that represents all potential BGCs detected by at least one of the selected tools, providing a more inclusive view of the data. It is useful when you want to ensure that you capture all possible BGCs, even if only partially supported by some tools. <img src="../img/aggregated_union.png" class="img-fluid" alt="Example of aggregated region by union"> This region was aggregated selecting SanntiS and GECCO <em>BGC detectors</em>.</p></li>
 <li><p><strong>Intersection</strong>:<br>
-The Intersection strategy is the most stringent. It only includes regions where all the selected detection tools agree. The resulting BGC region will be the longest contiguous sequence that all tools have predicted as a BGC. This strategy is particularly useful when you want high-confidence predictions, as it guarantees that the region is supported by multiple independent tools, reducing the likelihood of false positives.</p></li>
+The Intersection strategy is the most stringent. It only includes regions where all the selected <em>BGC detectors</em> agree. The resulting BGC region will be the longest contiguous sequence that all tools have predicted as a BGC. This strategy is particularly useful when you want high-confidence predictions, as it guarantees that the region is supported by multiple independent tools, reducing the likelihood of false positives. <img src="../img/aggregated_intersection.png" class="img-fluid" alt="Example of aggregated region by intersection"> This region was aggregated selecting antiSMASH and GECCO <em>BGC detectors</em>. Note that despite SanntiS BGC being displayed, it was not considered for the <em>aggregated region</em></p></li>
 </ul></li>
 </ul>
 </section>
@@ -247,35 +247,29 @@ The Intersection strategy is the most stringent. It only includes regions where 
 <section id="results-summary" class="level3">
 <h3 class="anchored" data-anchor-id="results-summary">Results Summary</h3>
 <ul>
-<li><strong>Total Number of Aggregated Regions</strong><br>
+<li>Number of Aggregated Regions<br>
 </li>
-<li><strong>Class Distribution plot</strong></li>
-<li><strong>BGC Completeness Distribution plot</strong></li>
+<li>Number of studies where regions matching the criteria where found</li>
+<li>Number of assemblies where regions matching the criteria where found</li>
+<li>Class Distribution. Note that for regions with more than one class predicted only one will be counted.</li>
 </ul>
 </section>
-<section id="explanation-of-table-columns" class="level3">
-<h3 class="anchored" data-anchor-id="explanation-of-table-columns">Explanation of Table Columns</h3>
+<section id="table-columns" class="level3">
+<h3 class="anchored" data-anchor-id="table-columns">Table Columns</h3>
 <ul>
-<li><p><strong>MGYB</strong>:<br>
-The BGC accession (or aggregated accession) for the resulting region.</p></li>
-<li><p><strong>Assembly Accession</strong>:<br>
-The ENA assembly accession number where the BGC was predicted.</p></li>
-<li><p><strong>Contig MGYC</strong>:<br>
-The accession of the contig containing the BGC.</p></li>
-<li><p><strong>Start Position</strong>:<br>
-The start coordinate of the BGC within the contig.</p></li>
-<li><p><strong>End Position</strong>:<br>
-The end coordinate of the BGC within the contig.</p></li>
-<li><p><strong>Detector Names</strong>:<br>
-Lists the BGC detectors that contributed to the aggregated prediction.</p></li>
-<li><p><strong>Class Names</strong>:<br>
-The predicted BGC classes within the aggregated region.</p></li>
+<li><p><strong>MGYB</strong>: The BGC accession (or aggregated accession) for the resulting region.</p></li>
+<li><p><strong>Assembly</strong>: The ENA assembly accession number where the BGC was predicted.</p></li>
+<li><p><strong>MGYC</strong>: The accession of the contig containing the BGC.</p></li>
+<li><p><strong>Start</strong>: The start coordinate of the BGC within the contig.</p></li>
+<li><p><strong>End</strong>: The end coordinate of the BGC within the contig.</p></li>
+<li><p><strong>Detectors</strong>: Lists the BGC detectors that contributed to the aggregated prediction.</p></li>
+<li><p><strong>Classes</strong>: The predicted BGC classes within the <em>aggregated region</em>.</p></li>
+<li><p><strong>Details</strong>: Link to the BGC details page.</p></li>
 </ul>
 </section>
 <section id="downloading-search-results" class="level3">
 <h3 class="anchored" data-anchor-id="downloading-search-results">Downloading Search Results</h3>
 <p>You can download the search results as a <strong>TSV</strong> file, which can be used in conjunction with the API to retrieve the data locally.</p>
-<p>This information will help you explore, interpret, and utilise the data from the BGC Portal effectively.</p>
 
 
 </section>
