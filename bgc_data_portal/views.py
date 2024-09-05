@@ -1,26 +1,19 @@
-import json
-from django.shortcuts import render, redirect
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import HttpResponse
-from django.views.generic import TemplateView
-import os
-from django.http import FileResponse, Http404
-from urllib.parse import urlencode
-from django.conf import settings
-from ninja import Query
-from api.api import get_contig_region
-from api.models import Bgc
 import logging
 from collections import Counter
-from api.schemas import GetContigRegionInput
-from api.utils import get_region_features, get_latest_stats
-from bgc_plots.contig_region_visualisation import ContigRegionViewer
-from api.forms import BgcAdvancedSearchForm,BgcKeywordSearchForm
 from urllib.parse import urlencode
 
 from django.core.cache import cache
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.http import HttpResponse
+from django.shortcuts import render
 
+from api.api import get_contig_region
+from api.forms import BgcAdvancedSearchForm
+from api.models import Bgc
+from api.schemas import GetContigRegionInput
 from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
+from api.utils import get_region_features, get_latest_stats
+from bgc_plots.contig_region_visualisation import ContigRegionViewer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -13,7 +13,20 @@ class Assembly(models.Model):
         db_table = 'assembly'
 
 
+class BgcManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().select_related('bgc_detector').select_related('bgc_class')
+
+
+class BgcWithContigManager(BgcManager):
+    def get_queryset(self):
+        return super().get_queryset().select_related('mgyc', 'mgyc__assembly')
+
+
 class Bgc(models.Model):
+    objects = BgcManager()
+    objects_with_contigs = BgcWithContigManager()
+
     mgyb = models.IntegerField(primary_key=True)
     mgyc = models.ForeignKey('Contig', models.DO_NOTHING, db_column='mgyc', blank=True, null=True)
     bgc_detector = models.ForeignKey('BgcDetector', models.DO_NOTHING, blank=True, null=True)
@@ -23,6 +36,10 @@ class Bgc(models.Model):
     end_position = models.IntegerField()
     bgc_metadata = models.TextField(blank=True, null=True)  # This field type is a guess.
     partial = models.IntegerField(blank=True, null=True)
+
+    @property
+    def accession(self):
+        return f"MGYB{self.mgyb:012}"
 
     class Meta:
         db_table = 'bgc'
@@ -84,6 +101,7 @@ class GeneCaller(models.Model):
     class Meta:
         db_table = 'gene_caller'
 
+
 class Protein(models.Model):
     mgyp = models.CharField(max_length=255, primary_key=True)
     sequence = models.CharField(max_length=255,blank=True, null=True)
@@ -92,6 +110,7 @@ class Protein(models.Model):
 
     class Meta:
         db_table = 'protein'
+
 
 class Metadata(models.Model):
     bgcdb_id = models.IntegerField(unique=True,primary_key=True)
@@ -108,6 +127,7 @@ class Metadata(models.Model):
 
     class Meta:
         db_table = 'metadata'
+
 
 class Study(models.Model):
     study_id = models.IntegerField(primary_key=True)

@@ -1,23 +1,24 @@
 import operator
 import re
-from django.db.models import Q, F
 from functools import reduce
-from operator import and_, or_
-from .models import Bgc
+
+from django.db.models import Q, F
+
+from .aggregate_bgcs import BgcAggregator
 from .filters import BgcKeywordFilter, MgybConverterFilter
 from .models import Bgc
 from .utils import mgyb_converter
-from .aggregate_bgcs import BgcAggregator
+
 
 def search_bgcs_by_keyword(keyword):
     # Initialize the filter with the keyword
-    bgc_filter = BgcKeywordFilter({'keyword': keyword}, queryset=Bgc.objects.all())
+    bgc_filter = BgcKeywordFilter({'keyword': keyword}, queryset=Bgc.objects_with_contigs.all())
     results = bgc_filter.qs
 
     # Convert the mgyb integers back to the "MGYB{:012}" format for display
     for bgc in results:
-        mgyb_converted= mgyb_converter(bgc.mgyb,text_to_int=False)
-        bgc.mgybs = [mgyb_converted]
+        # TODO move to model properties if really needed as lists
+        bgc.mgybs = [bgc.accession]
         bgc.bgc_detector_names = [bgc.bgc_detector.bgc_detector_name]
         bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
     return results
