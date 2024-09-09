@@ -63,11 +63,13 @@ def explore(request):
     results,result_stats = cache.get(pageless_query_params,(None,None))  # Try to get results from the cache
 
     
+
     if not results:  # If results are not cached, perform the search
         if query_params.get('keyword'):
             current_advanced_form = BgcAdvancedSearchForm()
             results = search_bgcs_by_keyword(query_params.get('keyword'))
         elif current_advanced_form.is_valid():
+            print(current_advanced_form.cleaned_data)
             results = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
         else:
             results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()

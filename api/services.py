@@ -49,7 +49,7 @@ def search_bgcs_by_advanced(criteria):
 
     # TODO
     """
-    if criteria.get('completeness'):
+    # if criteria.get('completeness'):
         qs = qs.filter(Q(partial__partial_name__in=criteria.get('completeness')))
     """
 
@@ -80,6 +80,7 @@ def search_bgcs_by_advanced(criteria):
         bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
 
     aggregate_function = getattr(BgcAggregator,criteria.get('aggregate_strategy'))
+    print('AGGREGATED ',len(aggregate_function))
     
     return aggregate_function(qs,n_detectors=len(criteria.get('detectors')))
 
