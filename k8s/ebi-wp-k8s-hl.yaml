@@ -48,7 +48,8 @@ items:
               persistentVolumeClaim:
                 claimName: bgc-data-portal-local-volume-claim-1
           containers:
-            - image: quay.io/microbiome-informatics/bgc-data-portal_site:ebi-wp-k8s-hl
+            # - image: quay.io/microbiome-informatics/bgc-data-portal_site:ebi-wp-k8s-hl
+            - image: quay.io/microbiome-informatics/bgc-data-portal_site:latest
               imagePullPolicy: Always
               name: bgc-data-portal-site
               envFrom:
