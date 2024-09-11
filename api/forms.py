@@ -12,7 +12,6 @@ class BgcKeywordSearchForm(forms.Form):
         # }
         )
 
-
 class BgcAdvancedSearchForm(forms.Form):
     bgc_class_name = forms.CharField(
         max_length=255, 

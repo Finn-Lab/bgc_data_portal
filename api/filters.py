@@ -57,9 +57,8 @@ class BgcKeywordFilter(django_filters.FilterSet):
         # If query looks like Pfam, do lookup only from protein side for efficiency
         if type(value) is str and value.lower().strip().startswith('pf') and len(value.strip()) == 7:
             logging.warning(f"Using protein-metadata ONLY lookup for keyword {value}")
-            metadata = Metadata.objects.filter(mgyp__pfam__icontains=value)
             # TODO: metadata should have an FK to MGC so that this doesn't use an expensive string lookup
-            return queryset.filter(mgyb__in=metadata.values_list("bgcdb_id", flat=True))
+            return queryset.filter(mgyc__metadata__mgyp__pfam__icontains=value)
 
         # If query looks like MGYP, do lookup from protein side for efficiency
         if type(value) is str and value.lower().strip().startswith('mgyp'):

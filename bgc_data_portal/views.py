@@ -6,6 +6,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpResponse
 from django.shortcuts import render
+import pandas as pd
 
 from api.api import get_contig_region
 from api.forms import BgcAdvancedSearchForm
@@ -52,17 +53,16 @@ def explore(request):
     
     pageless_query_params = urlencode(query_params if query_params.get('keyword') else current_advanced_form.cleaned_data if current_advanced_form.is_valid() else {}, doseq=True)
 
-    results_df,result_stats = cache.get(pageless_query_params,(None,None))  # Try to get results from the cache
+    results_df,result_stats = cache.get(pageless_query_params,(pd.DataFrame([]),None))  # Try to get results from the cache
 
-    if not result_stats:  # If results are not cached, perform the search
+    if not result_stats and len(query_params):  # If results are not cached, perform the search
         if query_params.get('keyword')!=None:
             current_advanced_form = BgcAdvancedSearchForm()
             results_df = search_bgcs_by_keyword(query_params.get('keyword'))
         elif current_advanced_form.is_valid():
-            results = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
+            results_df = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
         else:
-            # TODO
-            results = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').none()
+            results_df = pd.DataFrame([])
             current_advanced_form = BgcAdvancedSearchForm()
 
         result_stats = dict(
@@ -104,8 +104,6 @@ def bgc_page(request, mgyc,start_position,end_position):
         start_position = int(start_position)
         end_position = int(end_position)
 
-
-
         contig, assembly_accession,features_df = get_region_features(
             mgyc,
             start_position,
@@ -139,7 +137,6 @@ def bgc_page(request, mgyc,start_position,end_position):
                 col_name+='_next'
             functional_annotation_dict.setdefault(col_name,[]).append(f"- {term}")
 
-
         # cds_info_dict
         cds_info_dict = {attrib.get('mgyp'):attrib for attrib in features_df[features_df['type']=='CDS']['attrib']} 
         pfam_info_dict = {attrib.get('ID'):attrib for attrib in features_df[features_df['type']=='ANNOT']['attrib']} 
@@ -155,7 +152,6 @@ def bgc_page(request, mgyc,start_position,end_position):
                     'go_slim':";".join(go_slim) if go_slim[0] else "",
                     'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
                 })
-
 
         # format fetures for download
         download_features = features_df[(features_df['start']<=end_position)&(features_df['end']>=start_position)]

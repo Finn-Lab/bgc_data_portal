@@ -1,5 +1,6 @@
 
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Search Results{% endblock %}
 
 {% block content %}
@@ -57,19 +58,19 @@
               <article class="vf-summary">
                 <h3 class="vf-summary__title">Regions</h3>
                 <div class="vf-summary__text predictor-class-grid">
-                  <strong>{{result_stats.total_regions}}</strong>
+                  <strong>{{ result_stats.total_regions|intcomma }}</strong>
                 </div>
               </article>
               <article class="vf-summary">
                 <h3 class="vf-summary__title">Studies</h3>
                 <div class="vf-summary__text predictor-class-grid">
-                  <strong>{{result_stats.n_studies}}</strong>
+                  <strong>{{ result_stats.n_studies|intcomma }}</strong>
                 </div>
               </article>
               <article class="vf-summary">
                 <h3 class="vf-summary__title">Assemblies</h3>
                 <div class="vf-summary__text predictor-class-grid">
-                  <strong>{{result_stats.n_assemblies}}</strong>
+                  <strong>{{ result_stats.n_assemblies|intcomma }}</strong>
                 </div>
               </article>
               <article class="vf-summary">
@@ -77,7 +78,7 @@
                 <div class="vf-summary__text predictor-class-grid">
                   {% for clss, counts in result_stats.bgc_class_dist.items %}
                     <div>
-                      <strong>{{clss}}</strong>: {{counts}}
+                      <strong>{{clss}}</strong>: {{ counts|intcomma }}
                     </div>
                   {% endfor %}
                 </div>

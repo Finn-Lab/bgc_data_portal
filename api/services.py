@@ -29,60 +29,49 @@ def search_bgcs_by_advanced(criteria):
     """
     Get BGC queryset based on advanced search criteria.
     """
+    
+    queryset = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
 
-
-    qs = Bgc.objects.select_related('bgc_detector', 'bgc_class', 'mgyc__assembly__biome').all()
-
-    qs = qs.filter(Q(bgc_detector__bgc_detector_name__in=criteria.get('detectors')))
+    queryset = queryset.filter(Q(bgc_detector__bgc_detector_name__in=criteria.get('detectors')))
     
     if criteria.get('bgc_class_name'):
-        qs = qs.filter(bgc_class__bgc_class_name__icontains=criteria.get('bgc_class_name'))
+        queryset = queryset.filter(bgc_class__bgc_class_name__icontains=criteria.get('bgc_class_name'))
     
     if criteria.get('mgyb'):
-        qs = MgybConverterFilter(field_name='mgyb').filter(qs, criteria.get('mgyb')) 
+        queryset = MgybConverterFilter(field_name='mgyb').filter(queryset, criteria.get('mgyb')) 
     
     if criteria.get('assembly_accession'):
-        qs = qs.filter(mgyc__assembly__accession=criteria.get('assembly_accession'))
+        queryset = queryset.filter(mgyc__assembly__accession=criteria.get('assembly_accession'))
     
     if criteria.get('mgyc'):
-        qs = qs.filter(mgyc__mgyc=criteria.get('mgyc'))
+        queryset = queryset.filter(mgyc__mgyc=criteria.get('mgyc'))
     
     if criteria.get('biome_lineage'):
-        qs = qs.filter(mgyc__assembly__biome__lineage__icontains=criteria.get('biome_lineage'))
+        queryset = queryset.filter(mgyc__assembly__biome__lineage__icontains=criteria.get('biome_lineage'))
 
-    # TODO
-    """
-    # if criteria.get('completeness'):
-        qs = qs.filter(Q(partial__partial_name__in=criteria.get('completeness')))
-    """
-
+    if criteria.get('completeness'):
+        queryset = queryset.filter(Q(partial__in=map(int,criteria.get('completeness'))))
     
-    if criteria.get('pfam'):
+    if criteria.get('protein_pfam'):
         # Define the Pfam queries
         pfam_queries = [
             Q(
-                mgyc__metadata__protein__pfam__icontains=pfam,
+                mgyc__metadata__mgyp__pfam__icontains=pfam,
                 mgyc__metadata__start_position__lte=F('end_position'),  # Metadata start is before or at BGC end
                 mgyc__metadata__end_position__gte=F('start_position')   # Metadata end is after or at BGC start
             )
-            for pfam in [_pfam.strip() for _pfam in re.split("[, ]",criteria.get('pfam'))]
+            for pfam in [_pfam.strip() for _pfam in re.split("[, ]",criteria.get('protein_pfam'))]
         ]
 
         # Combine the queries using the specified strategy
         if criteria.get('pfam_strategy') =='intersection':
-            qs = qs.filter(reduce(operator.and_, pfam_queries))
+            for _query in pfam_queries:
+                queryset = queryset.filter(_query)
         elif criteria.get('pfam_strategy') == 'union':
-            qs = qs.filter(reduce(operator.or_, pfam_queries))
-            
-    # Transform mgyb field
-        # Convert the mgyb integers back to the "MGYB{:012}" format for display
-    for bgc in qs:
-        mgyb_converted= mgyb_converter(bgc.mgyb,text_to_int=False)
-        bgc.mgybs = [mgyb_converted]
-        bgc.bgc_detector_names = [bgc.bgc_detector.bgc_detector_name]
-        bgc.bgc_class_names = bgc.bgc_class.bgc_class_name.split(',')
-
+            queryset = queryset.filter(reduce(operator.or_, pfam_queries))
+    
+    query_df = process_bgc_results(queryset)
+    
     aggregate_function = getattr(BgcAggregator,criteria.get('aggregate_strategy'))
     
-    return aggregate_function(qs,n_detectors=len(criteria.get('detectors')))
-
+    return aggregate_function(query_df,n_detectors=len(criteria.get('detectors')))
