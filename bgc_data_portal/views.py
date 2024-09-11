@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 EXTENDED_NUCLEOTIDE_WINDOW = 7000
+CACHE_TIMEOUT = 600
 
 from django.views.generic import TemplateView
 import os
@@ -47,7 +48,15 @@ def about(request):
 def explore(request):
 
     query_params = request.GET.copy()
+
+    # extract pagination/table view params
     query_params.pop('page', None)
+    query_params.pop('sort_column', None)
+    query_params.pop('sort_order', None)
+
+    # Extract sorting parameters
+    sort_column = request.GET.get('sort_column', None)
+    sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
 
     current_advanced_form = BgcAdvancedSearchForm(request.GET or None)
     
@@ -72,7 +81,13 @@ def explore(request):
             n_assemblies=results_df.assembly_accession.nunique() if results_df.shape[0] else 0,
             n_studies=results_df.study_accession.nunique() if results_df.shape[0] else 0,
         )
-        cache.set(pageless_query_params, (results_df,result_stats), timeout=300)  # Cache the results for 5 minutes
+        cache.set(pageless_query_params, (results_df,result_stats), timeout=CACHE_TIMEOUT)  
+
+    # Sort the DataFrame based on the column and order
+    if sort_column:
+        ascending = sort_order == 'asc'
+        results_df = results_df.sort_values(by=sort_column, ascending=ascending)
+        cache.set(pageless_query_params, (results_df,result_stats), timeout=CACHE_TIMEOUT) 
 
     page = request.GET.get('page', 1)
     paginator = Paginator(list(results_df.to_dict(orient='records')), 10)  
@@ -88,8 +103,19 @@ def explore(request):
         'result_stats': result_stats if result_stats else get_latest_stats(),
         'advanced_form': current_advanced_form,
         'serialized_string': str(pageless_query_params),
+        'sort_column': sort_column,
+        'sort_order': sort_order,
+        'columns' : [
+            {'name': 'MGYB', 'slug': 'mgyb'},
+            {'name': 'Assembly', 'slug': 'assembly_accession'},
+            {'name': 'MGYC', 'slug': 'mgyc_id'},
+            {'name': 'Start', 'slug': 'start_position'},
+            {'name': 'End', 'slug': 'end_position'},
+            {'name': 'Detectors', 'slug': 'bgc_detector_names'},
+            {'name': 'Classes', 'slug': 'bgc_class_names'},
+            {'name': 'Details', 'slug': ''}  
+        ]
     }
-
 
     # If it's an AJAX request, return the partial table
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':

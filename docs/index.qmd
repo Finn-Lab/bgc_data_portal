@@ -7,8 +7,6 @@ number-sections: false
 ---
 
 
-## Overview of the **MGnify Biosynthetic Gene Clusters** portal
-
 Biosynthetic gene clusters are important for understanding the production of natural products, including antibiotics and other bioactive compounds. The **MGnify Biosynthetic Gene Clusters** portal provides a resource for researchers who need access to predicted biosynthetic gene clusters from a wide range of metagenomic datasets from MGnify.
 
 The **MGnify Biosynthetic Gene Clusters** is a platform designed to facilitate the exploration, analysis, and retrieval of biosynthetic gene cluster predictions from metagenomic assemblies. 
@@ -16,16 +14,16 @@ The **MGnify Biosynthetic Gene Clusters** is a platform designed to facilitate t
 The portal integrates data from multiple prediction tools, enabling users to perform detailed searches, visualise results, and download data in various formats. 
 
 
-## Basic Navigation
+## Basic navigation
 
 The **MGnify Biosynthetic Gene Clusters Portal** is designed with three primary components that help users navigate and utilise its features effectively. Below is an overview of these components:
 
-### 1. Home Page
+### 1. Home page
 
 The Home Page is your entry point to the **MGnify Biosynthetic Gene Clusters** portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:
 
-- **Keyword Search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/keyword_search/` endpoint of the API.
-- **Access and Explore Options**: 
+- **Keyword search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/keyword_search/` endpoint of the API.
+- **Access and explore options**: 
   - **Search BGCs**: Directs you to the Explore BGCs page for more detailed queries.
   - **API Access**: Provides documentation on how to use the API for programmatic access to BGC data.
   - **User Documentation**: Guides and examples to help you navigate and utilise the portal effectively.
@@ -36,26 +34,26 @@ The Home Page is your entry point to the **MGnify Biosynthetic Gene Clusters** p
 
 The Explore BGCs page is where users can perform detailed searches and view the results. It includes:
 
-- **Advanced Search Sidebar**: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more. This is equivalent to calling the `GET /api/v1/advanced_search/` endpoint of the API.
+- **Advanced search sidebar**: This allows for complex queries using various criteria, including BGC class names, specific accessions, biome data, and more. This is equivalent to calling the `GET /api/v1/advanced_search/` endpoint of the API.
 - **Search results**: Shows summary statistics of the search.
-- **Results Table**: Displays the outcomes of your search in a paginated format, with options to download the data in TSV. The table includes key details such as BGC accession, assembly accession, contig information, and detector names. This results are equivalent to the results of calling the `GET /api/v1/advanced_search/` or `GET /api/v1/keyword_search/`  endpoints of the API.
+- **Results table**: Displays the outcomes of your search in a paginated format, with options to download the data in TSV. The table includes key details such as BGC accession, assembly accession, contig information, and detector names. This results are equivalent to the results of calling the `GET /api/v1/advanced_search/` or `GET /api/v1/keyword_search/`  endpoints of the API.
 
 ### 3. BGC Details page
 
 The BGC Details Page provides an in-depth view of a specific biosynthetic gene cluster. Key features include:
 
-- **Aggregated Region overview**: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.
+- **Aggregated region overview**: Displays essential details such as assembly accession, contig information, biome data, and the BGC classes predicted.
 - **BGC Plot**: A visual representation of the BGC, including coding regions, Pfam annotations, and predictions from various detectors. Hovering and clicking elements display further information.
 - **CDS Data**: Detailed information about coding sequences, including protein sequences, Pfam descriptions, and links to external resources.
-- **Download Options**: Allows you to download data related to the BGC in formats GeneBank, JSON, and FASTA. This is equivalent to calling the `GET /api/v1/contig_region/` endpoint of the API using the MGYC and start/end positions of the *aggregated region*.
+- **Download options**: Allows you to download data related to the BGC in formats GeneBank, JSON, and FASTA. This is equivalent to calling the `GET /api/v1/contig_region/` endpoint of the API using the MGYC and start/end positions of the *aggregated region*.
 
-## Glossary of Terms
+## Glossary of terms
 
 Below are definitions of key terms and concepts used in the **MGnify Biosynthetic Gene Clusters** portal:
 
 - **Biosynthetic Gene Cluster (BGC)**: A group of genes that collectively are predicted to produce a secondary metabolite by a specific BGC detector, often with ecological or pharmaceutical significance.
 - **Aggregated region**: In the context of the **MGnify Biosynthetic Gene Clusters** portal, an *aggregated region* refers to a genomic region that is identified as a BGC through the combined predictions of multiple BGC detection tools. The aggregation process involves comparing the predictions from different detectors and merging them based on specific strategies (i.e., single, union, intersection). The resulting *aggregated region* represents the consensus prediction, which may span across overlapping regions identified by the different tools, ensuring a comprehensive and reliable identification of the BGC.
 - **MGYB**: A specific accession number related to each BGC predictions within the portal.
-- **Aggregate strategy**: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final *aggregated region*. See [**Search Fields**](using-portal/explore-bgcs.qmd###Search Fields) for detailed information.  
+- **Aggregate strategy**: The method used to combine predictions from multiple BGC detectors. This can be done using single, union, or intersection strategies to determine the final *aggregated region*. See [**Search fields**](using-portal/explore-bgcs.qmd###Search Fields) for detailed information.  
 
 For more detailed instructions, please refer to the specific sections of the documentation.

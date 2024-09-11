@@ -6,8 +6,6 @@ number-sections: false
 # output: html_document
 ---
 
-# API Documentation
-
 ## Accessing the API Documentation
 
 For detailed information on how to use the API, including available endpoints and request formats, please refer to the comprehensive API documentation available on the Portal's Home page under the "API Access" section.

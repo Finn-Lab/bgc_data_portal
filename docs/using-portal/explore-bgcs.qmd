@@ -7,11 +7,11 @@ number-sections: false
 ---
 
 
-## Advanced Search {#sec-search_fields}
+## Advanced search {#sec-search_fields}
 
 The Advanced Search bar allows you to perform fine-grained queries to explore BGC Data Portal. Below is a detailed explanation of each search field and examples of complex search queries to help you utilise this feature effectively.
 
-### Search Fields  
+### Search fields  
 
 - **BGC Class Name**:  
   Enter one or more BGC class names (i.e., alkaloid, nrp, other, polyketide, ripp, saccharide, or terpene) separated by spaces or commas. The search will return BGCs that contain at least one of the specified classes (using an OR logic).
@@ -39,12 +39,12 @@ The Advanced Search bar allows you to perform fine-grained queries to explore BG
   - **OR**: The resulting BGCs have at least one of the specified Pfams.
   - **AND**: The resulting BGCs must include all specified Pfams.
 
-- **Pfam Strategy**:  
-  The **Pfam Strategy** field determines how the search will interpret multiple Pfam entries. You have two options:
+- **Pfam strategy**:  
+  The **Pfam strategy** field determines how the search will interpret multiple Pfam entries. You have two options:
   
-  - **OR Logic**: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter `PF00109 PF00501` and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.
+  - **OR logic**: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter `PF00109 PF00501` and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.
   
-  - **AND Logic**: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter `PF00109 PF00501` and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.
+  - **AND logic**: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter `PF00109 PF00501` and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.
 
 - **BGC Detectors**:
   Filter BGCs detected by the supported detectors:
@@ -52,7 +52,7 @@ The Advanced Search bar allows you to perform fine-grained queries to explore BG
     - GECCO
     - SanntiS
 
-- **Aggregate Strategy**: 
+- **Aggregate strategy**: 
   The **Aggregate Strategy** determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:
 
   - **Single**:  
@@ -68,18 +68,18 @@ The Advanced Search bar allows you to perform fine-grained queries to explore BG
     ![Example of *aggregated region* by `intersection`](/img/aggregated_intersection.png)
     This region was aggregated selecting antiSMASH and GECCO *BGC detectors*. Note that despite SanntiS BGC being displayed, it was not considered for the *aggregated region*
 
-## Results Table
+## Results table
 
 After conducting a search, the results will be displayed in a paginated table. Below are key components of the results summary and table, along with instructions for downloading and interpreting the data.
 
-### Results Summary
+### Results summary
 
 - Number of Aggregated Regions  
 - Number of studies where regions matching the criteria where found
 - Number of assemblies where regions matching the criteria where found
 - Class Distribution. Note that for regions with more than one class predicted only one will be counted. 
 
-### Table Columns
+### Table columns
 
 - **MGYB**: The BGC accession (or aggregated accession) for the resulting region.
 
@@ -97,6 +97,6 @@ After conducting a search, the results will be displayed in a paginated table. B
   
 - **Details**:  Link to the BGC details page.
 
-### Downloading Search Results
+### Downloading search results
 You can download the search results as a **TSV** file, which can be used in conjunction with the API to retrieve the data locally.
 

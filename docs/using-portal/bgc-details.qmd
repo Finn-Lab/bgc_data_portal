@@ -52,13 +52,13 @@ Hovering the cursor over the elements will display accession and other informati
 
 When users click on a coding sequence (CDS) in the plot, detailed information about the CDS is displayed:
 
-- **Protein Sequence**: The amino acid sequence of the protein encoded by the CDS. This sequence is crucial for further functional analysis or comparisons with other sequences.
+- **Protein sequence**: The amino acid sequence of the protein encoded by the CDS. This sequence is crucial for further functional analysis or comparisons with other sequences.
 
 - **Pfam details**: Information about the Pfam domain(s) within the CDS, including descriptions and associated GO terms. This helps in understanding the potential function of the protein.
 
-- **Representative Protein**: A link to the representative protein in the MGnify proteins database. This link provides additional information about the protein, including its structure, biome distribution, and other relevant annotations.
+- **Representative protein**: A link to the representative protein in the MGnify proteins database. This link provides additional information about the protein, including its structure, biome distribution, and other relevant annotations.
 
-## Download Options
+## Download options
 
 The BGC details page offers download options for users who wish to retrieve data for further analysis:
 

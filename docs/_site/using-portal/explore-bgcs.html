@@ -154,15 +154,15 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">On this page</h2>
    
   <ul>
-  <li><a href="#sec-search_fields" id="toc-sec-search_fields" class="nav-link active" data-scroll-target="#sec-search_fields">Advanced Search</a>
+  <li><a href="#sec-search_fields" id="toc-sec-search_fields" class="nav-link active" data-scroll-target="#sec-search_fields">Advanced search</a>
   <ul class="collapse">
-  <li><a href="#search-fields" id="toc-search-fields" class="nav-link" data-scroll-target="#search-fields">Search Fields</a></li>
+  <li><a href="#search-fields" id="toc-search-fields" class="nav-link" data-scroll-target="#search-fields">Search fields</a></li>
   </ul></li>
-  <li><a href="#results-table" id="toc-results-table" class="nav-link" data-scroll-target="#results-table">Results Table</a>
+  <li><a href="#results-table" id="toc-results-table" class="nav-link" data-scroll-target="#results-table">Results table</a>
   <ul class="collapse">
-  <li><a href="#results-summary" id="toc-results-summary" class="nav-link" data-scroll-target="#results-summary">Results Summary</a></li>
-  <li><a href="#table-columns" id="toc-table-columns" class="nav-link" data-scroll-target="#table-columns">Table Columns</a></li>
-  <li><a href="#downloading-search-results" id="toc-downloading-search-results" class="nav-link" data-scroll-target="#downloading-search-results">Downloading Search Results</a></li>
+  <li><a href="#results-summary" id="toc-results-summary" class="nav-link" data-scroll-target="#results-summary">Results summary</a></li>
+  <li><a href="#table-columns" id="toc-table-columns" class="nav-link" data-scroll-target="#table-columns">Table columns</a></li>
+  <li><a href="#downloading-search-results" id="toc-downloading-search-results" class="nav-link" data-scroll-target="#downloading-search-results">Downloading search results</a></li>
   </ul></li>
   </ul>
 </nav>
@@ -194,10 +194,10 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 <section id="sec-search_fields" class="level2">
-<h2 class="anchored" data-anchor-id="sec-search_fields">Advanced Search</h2>
+<h2 class="anchored" data-anchor-id="sec-search_fields">Advanced search</h2>
 <p>The Advanced Search bar allows you to perform fine-grained queries to explore BGC Data Portal. Below is a detailed explanation of each search field and examples of complex search queries to help you utilise this feature effectively.</p>
 <section id="search-fields" class="level3">
-<h3 class="anchored" data-anchor-id="search-fields">Search Fields</h3>
+<h3 class="anchored" data-anchor-id="search-fields">Search fields</h3>
 <ul>
 <li><p><strong>BGC Class Name</strong>:<br>
 Enter one or more BGC class names (i.e., alkaloid, nrp, other, polyketide, ripp, saccharide, or terpene) separated by spaces or commas. The search will return BGCs that contain at least one of the specified classes (using an OR logic).</p></li>
@@ -222,11 +222,11 @@ Enter one or more Pfam accessions (e.g., PF00109, PF00501) separated by spaces o
 <li><strong>OR</strong>: The resulting BGCs have at least one of the specified Pfams.</li>
 <li><strong>AND</strong>: The resulting BGCs must include all specified Pfams.</li>
 </ul></li>
-<li><p><strong>Pfam Strategy</strong>:<br>
-The <strong>Pfam Strategy</strong> field determines how the search will interpret multiple Pfam entries. You have two options:</p>
+<li><p><strong>Pfam strategy</strong>:<br>
+The <strong>Pfam strategy</strong> field determines how the search will interpret multiple Pfam entries. You have two options:</p>
 <ul>
-<li><p><strong>OR Logic</strong>: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter <code>PF00109 PF00501</code> and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.</p></li>
-<li><p><strong>AND Logic</strong>: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter <code>PF00109 PF00501</code> and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.</p></li>
+<li><p><strong>OR logic</strong>: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter <code>PF00109 PF00501</code> and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.</p></li>
+<li><p><strong>AND logic</strong>: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter <code>PF00109 PF00501</code> and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.</p></li>
 </ul></li>
 <li><p><strong>BGC Detectors</strong>: Filter BGCs detected by the supported detectors:</p>
 <ul>
@@ -234,7 +234,7 @@ The <strong>Pfam Strategy</strong> field determines how the search will interpre
 <li>GECCO</li>
 <li>SanntiS</li>
 </ul></li>
-<li><p><strong>Aggregate Strategy</strong>: The <strong>Aggregate Strategy</strong> determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:</p>
+<li><p><strong>Aggregate strategy</strong>: The <strong>Aggregate Strategy</strong> determines how BGC regions predicted by different detection tools are combined in the final results. This field is important when you want to either view individual predictions or identify consensus regions supported by multiple tools. There are three strategies to choose from:</p>
 <ul>
 <li><p><strong>Single</strong>:<br>
 This strategy displays the predictions from each tool separately, even if they overlap. When using this option, you might see multiple entries for the same region if different tools predicted similar regions. This strategy is useful for comparing how different tools view the same region but does not combine their outputs into a single prediction.</p></li>
@@ -247,10 +247,10 @@ The Intersection strategy is the most stringent. It only includes regions where 
 </section>
 </section>
 <section id="results-table" class="level2">
-<h2 class="anchored" data-anchor-id="results-table">Results Table</h2>
+<h2 class="anchored" data-anchor-id="results-table">Results table</h2>
 <p>After conducting a search, the results will be displayed in a paginated table. Below are key components of the results summary and table, along with instructions for downloading and interpreting the data.</p>
 <section id="results-summary" class="level3">
-<h3 class="anchored" data-anchor-id="results-summary">Results Summary</h3>
+<h3 class="anchored" data-anchor-id="results-summary">Results summary</h3>
 <ul>
 <li>Number of Aggregated Regions<br>
 </li>
@@ -260,7 +260,7 @@ The Intersection strategy is the most stringent. It only includes regions where 
 </ul>
 </section>
 <section id="table-columns" class="level3">
-<h3 class="anchored" data-anchor-id="table-columns">Table Columns</h3>
+<h3 class="anchored" data-anchor-id="table-columns">Table columns</h3>
 <ul>
 <li><p><strong>MGYB</strong>: The BGC accession (or aggregated accession) for the resulting region.</p></li>
 <li><p><strong>Assembly</strong>: The ENA assembly accession number where the BGC was predicted.</p></li>
@@ -273,7 +273,7 @@ The Intersection strategy is the most stringent. It only includes regions where 
 </ul>
 </section>
 <section id="downloading-search-results" class="level3">
-<h3 class="anchored" data-anchor-id="downloading-search-results">Downloading Search Results</h3>
+<h3 class="anchored" data-anchor-id="downloading-search-results">Downloading search results</h3>
 <p>You can download the search results as a <strong>TSV</strong> file, which can be used in conjunction with the API to retrieve the data locally.</p>
 
 

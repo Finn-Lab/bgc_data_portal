@@ -9,32 +9,34 @@
 
 <div class="vf-grid vf-grid__col--span-12">
     <section class="vf-content">
-        <section id="about-mgnify-biosynthetic-gene-clusters" class="level1">
-        <h1 class="vf-text vf-text-heading--1">About MGnify Biosynthetic Gene Clusters</h1>
+        <h1 class="vf-text vf-text-heading--1">About</h1>
         <section id="introduction" class="level2">
-        <h2 class="vf-text vf-text-heading--2" data-anchor-id="introduction">Introduction</h2>
-        <p><strong>MGnify Biosynthetic Gene Clusters</strong> is a platform developed to support the exploration, analysis, and retrieval of biosynthetic gene cluster (BGC) predictions from metagenomic assemblies. This resource is designed to advance natural product research by making standardised BGC predictions accessible to the scientific community without requiring extensive computational resources. The platform integrates multiple detection tools, including antiSMASH, GECCO, and SanntiS, into a standardised pipeline that ensures comparability of results across studies. By offering multi-tool analyses, users can easily identify consensus predictions, enhancing the reliability and insight gained from the data. The platform is intended for both technical and non-technical users, providing analytics features for general use and an API for more advanced data interactions.</p>
-        <p>MGnify Biosynthetic Gene Clusters aims to make this valuable dataset widely accessible, promoting advances in natural product science across research, industry, and the broader community. The portal is part of <a href="https://www.ebi.ac.uk/metagenomics">MGnify</a>, which offers automated pipelines for the analysis and archiving of microbiome data. MGnify helps determine the taxonomic diversity and functional and metabolic potential of environmental samples. Users can submit their data for analysis or browse the publicly available datasets within the repository. Additionally, MGnify can analyse datasets from the European Nucleotide Archive (ENA) upon request.</p>
+            <h2 class="anchored" data-anchor-id="introduction">Introduction</h2>
+            <p><strong>MGnify Biosynthetic Gene Clusters</strong> is a platform developed to support the exploration, analysis, and retrieval of biosynthetic gene cluster (BGC) predictions from metagenomic assemblies. This resource is designed to advance natural product research by making standardised BGC predictions accessible to the scientific community without requiring extensive computational resources. The platform integrates multiple detection tools, including antiSMASH, GECCO, and SanntiS, into a standardised pipeline that ensures comparability of results across studies. By offering multi-tool analyses, users can easily identify consensus predictions, enhancing the reliability and insight gained from the data. The platform is intended for both technical and non-technical users, providing analytics features for general use and an API for more advanced data interactions.</p>
+            <p>MGnify Biosynthetic Gene Clusters aims to make this valuable dataset widely accessible, promoting advances in natural product science across research, industry, and the broader community. The portal is part of <a href="https://www.ebi.ac.uk/metagenomics">MGnify</a>, which offers automated pipelines for the analysis and archiving of microbiome data. MGnify helps determine the taxonomic diversity and functional and metabolic potential of environmental samples. Users can submit their data for analysis or browse the publicly available datasets within the repository. Additionally, MGnify can analyse datasets from the European Nucleotide Archive (ENA) upon request.</p>
+            </section>
+            <section id="dataset-overview" class="level2">
+            <h2 class="anchored" data-anchor-id="dataset-overview">Dataset overview</h2>
+            <p>This dataset offers a comprehensive collection of biosynthetic gene cluster (BGC) predictions derived from MGnify metagenomic assemblies, utilising tools such as antiSMASH [1], GECCO [2], and SanntiS [3]. The data is organised within an SQLite database, containing details on BGCs, including associated contigs, assemblies, proteins, and relevant metadata.</p>
+            <p>The dataset is generated through a pipeline that integrates these detection tools, providing BGC predictions from metagenomic assemblies. The <a href="https://github.com/Finn-Lab/BGCdetection_pipeline">pipeline</a> is openly available.</p>
+            </section>
+            <section id="funding-and-support" class="level2">
+            <h2 class="anchored" data-anchor-id="funding-and-support">Funding and support</h2>
+            <p>This portal has been developed at EMBL-EBI by the MGnify team as part of the <a href="https://euremap.eu">EUREMAP</a> project. EUREMAP is a European initiative designed to create an integrated pipeline of marine bioprospecting services to discover novel bioactive natural products from marine organisms. This project connects research infrastructures, industry, and academia strengthening the blue economy.</p>
+            <p>EUREMAP project is funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No.&nbsp;101131663).</p>
+            </section>
+            <section id="contact" class="level2">
+            <h2 class="anchored" data-anchor-id="contact">Contact</h2>
+            <p>MGnify Biosynthetic Gene Clusters is currently in beta and under active development. We value feedback and encourage users to share any issues or suggestions via our <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics">contact form</a>.</p>
+            </section>
+            <section id="references" class="level2">
+            <h2 class="anchored" data-anchor-id="references">References</h2>
+            <p>[1] Blin, Kai, Simon Shaw, Hannah E. Augustijn, Zachary L. Reitz, Friederike Biermann, Mohammad Alanjary, Artem Fetter et al.&nbsp;“antiSMASH 7.0: new and improved predictions for detection, regulation, chemical structures and visualisation.” Nucleic acids research 51, no. W1 (2023): W46-W50.</p>
+            <p>[2] Carroll, Laura M., Martin Larralde, Jonas Simon Fleck, Ruby Ponnudurai, Alessio Milanese, Elisa Cappio, and Georg Zeller. “Accurate de novo identification of biosynthetic gene clusters with GECCO.” BioRxiv (2021): 2021-05.</p>
+            <p>[3] Sanchez, Santiago, Joel D. Rogers, Alexander B. Rogers, Maaly Nassar, Johanna McEntyre, Martin Welch, Florian Hollfelder, and Robert D. Finn. “Expansion of novel biosynthetic gene clusters from diverse environments using SanntiS.” bioRxiv (2023): 2023-05.</p>
+            
+            
         </section>
-        <section id="dataset-overview" class="level2">
-        <h2 class="vf-text vf-text-heading--2" data-anchor-id="dataset-overview">Dataset Overview</h2>
-        <p>This dataset offers a comprehensive collection of biosynthetic gene cluster (BGC) predictions derived from MGnify metagenomic assemblies, utilising tools such as antiSMASH [1], GECCO [2], and SanntiS [3]. The data is organised within an SQLite database, containing details on BGCs, including associated contigs, assemblies, proteins, and relevant metadata.</p>
-        <p>The dataset is generated through a pipeline that integrates these detection tools, providing BGC predictions from metagenomic assemblies. The <a href="https://github.com/Finn-Lab/BGCdetection_pipeline">pipeline</a> is openly available.</p>
-        </section>
-        <section id="funding-and-support" class="level2">
-        <h2 class="vf-text vf-text-heading--2" data-anchor-id="funding-and-support">Funding and Support</h2>
-        <p>This portal has been developed at EMBL-EBI by the MGnify team as part of the <a href="https://euremap.eu">EUREMAP</a> project. EUREMAP aims to create a pipeline of research services in marine bioprospecting, supporting the discovery of novel bioactive natural products from marine organisms.</p>
-        <p>EUREMAP project is funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No.&nbsp;101131663).</p>
-        </section>
-        <section id="contact-information" class="level2">
-        <h2 class="vf-text vf-text-heading--2" data-anchor-id="contact-information">Contact Information</h2>
-        <p>MGnify Biosynthetic Gene Clusters is currently in beta and under active development. We value feedback and encourage users to share any issues or suggestions via our <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics">contact form</a>.</p>
-        </section>
-        <section id="references" class="level2">
-        <h2 class="vf-text vf-text-heading--2" data-anchor-id="references">References</h2>
-        <p>[1] Blin, Kai, Simon Shaw, Hannah E. Augustijn, Zachary L. Reitz, Friederike Biermann, Mohammad Alanjary, Artem Fetter et al.&nbsp;“antiSMASH 7.0: new and improved predictions for detection, regulation, chemical structures and visualisation.” Nucleic acids research 51, no. W1 (2023): W46-W50.</p>
-        <p>[2] Carroll, Laura M., Martin Larralde, Jonas Simon Fleck, Ruby Ponnudurai, Alessio Milanese, Elisa Cappio, and Georg Zeller. “Accurate de novo identification of biosynthetic gene clusters with GECCO.” BioRxiv (2021): 2021-05.</p>
-        <p>[3] Sanchez, Santiago, Joel D. Rogers, Alexander B. Rogers, Maaly Nassar, Johanna McEntyre, Martin Welch, Florian Hollfelder, and Robert D. Finn. “Expansion of novel biosynthetic gene clusters from diverse environments using SanntiS.” bioRxiv (2023): 2023-05.</p>
     </section>
 </div>
 

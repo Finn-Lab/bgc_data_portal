@@ -48,14 +48,24 @@
 <table id="explore-table" class="vf-table">
   <thead class="vf-table__header">
     <tr class="vf-table__row">
-      <th class="vf-table__heading" scope="col">MGYB</th>
-      <th class="vf-table__heading" scope="col">Assembly</th>
-      <th class="vf-table__heading" scope="col">MGYC</th>
-      <th class="vf-table__heading" scope="col">Start</th>
-      <th class="vf-table__heading" scope="col">End</th>
-      <th class="vf-table__heading" scope="col">Detectors</th>
-      <th class="vf-table__heading" scope="col">Classes </th>
-      <th class="vf-table__heading" scope="col">Details</th>
+      {% for column in columns %}
+      <th class="vf-table__heading" scope="col">
+        {{ column.name }}
+        {% if column.slug %}
+        <a href="?{{ serialized_string }}&sort_column={{ column.slug }}&sort_order={% if sort_column == column.slug and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+          {% if sort_column == column.slug %}
+            {% if sort_order == 'asc' %}
+            <span class="sort-icon-style">▲</span>
+            {% else %}
+            <span class="sort-icon-style">▼</span>
+            {% endif %}
+          {% else %}
+          <span class="sort-icon-style">↕</span>
+          {% endif %}
+        </a>
+        {% endif %}
+      </th>
+      {% endfor %}
     </tr>
   </thead>
   <tbody class="vf-table__body">
@@ -77,9 +87,6 @@
     {% endfor %}
   </tbody>
 </table>
-
-
-
 
 <div class="pagination" style="text-align: center; margin-top: 20px;">
     <button id="pag_button_p" class="vf-button vf-button--primary" data-page="1">First</button>
