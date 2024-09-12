@@ -32,6 +32,8 @@ urlpatterns = [
     path('bgc/<str:mgyc>/<int:start_position>/<int:end_position>/', views.bgc_page, name='bgc_page'),  # Updated URL pattern
     path('download/<str:mgyc>/<int:start_position>/<int:end_position>/', views.download_bgc_data, name='download_bgc_data'),  # New download route
     path('explore/', views.explore, name='explore'),
+    path('explore/download-tsv/', views.download_results_tsv, name='download_results_tsv'),
+
 
 ]#+ debug_toolbar_urls()
 

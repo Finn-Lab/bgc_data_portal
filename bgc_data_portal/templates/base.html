@@ -11,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
     {% load static %}
@@ -27,7 +28,7 @@
             <h2 class="vf-hero__heading"> 
                 <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">MGnify Biosynthetic Gene Clusters</a> 
             </h2>
-            <p class="vf-hero__text">Explore biosynthetic gene clusters.</p>
+            <p class="vf-hero__text">Explore, analyse, and download metagenomic biosynthetic gene clusters.</p>
             <form id="keyword-form" action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
@@ -46,6 +47,9 @@
             <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
                 <li class="vf-navigation__item">
                     <a href="{% url 'landing_page' %}" class="vf-navigation__link" aria-current="page">Home</a>
+                </li>
+                <li class="vf-navigation__item">
+                    <a href="{% url 'explore' %}" class="vf-navigation__link">Search</a>
                 </li>
                 <li class="vf-navigation__item">
                     <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
@@ -70,6 +74,35 @@
 
     <footer class="vf-footer">
         <div class="vf-footer__inner">
+            <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
+                <div class="vf-flag__media">
+                    <img src="{% static 'img/Euremap_logo_white.png' %}"
+                         width="100px"
+                         alt="euremap_logo"
+                         height="52px"/>
+                </div>
+                <div class="vf-flag__body">
+                    <p class="vf-footer__notice">
+                        This portal has been developed at EMBL-EBI by the MGnify team as part of the EUREMAP project. 
+                        EUREMAP is an initiative designed to integrate a pipeline of marine bioprospecting services.
+                    </p>
+                </div>
+            </div>
+            <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
+                <div class="vf-flag__media">
+                    <img src="{% static 'img/eu-flag.svg' %}"
+                         width="100px"
+                         alt="EU Flag"
+                         height="67px"/>
+                </div>
+                <div class="vf-flag__body">
+                    <p class="vf-footer__notice">
+                        EUREMAP project is funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663).
+                    </p>
+                </div>
+            </div>
+            <hr class="vf-divider" style="--context-margin--inline: 4rem; margin-top: 20px;">
+
             <div class="vf-grid">
                 <div class="vf-grid__col--span-4">
                     <h3>Useful Links</h3>

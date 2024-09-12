@@ -27,10 +27,9 @@
       {% endfor %}
 
       <div class="vf-form__item">
-          <button id="pag_button_as" type="submit" class="vf-button vf-button--primary">Apply</button>
+          <button id="pag_button_as" type="submit" class="vf-button vf-button--primary" style="margin-top: 10px;">Apply</button>
       </div>
     </form>
-
 
   </aside>
 
@@ -42,9 +41,10 @@
         {% if results %}
           {% include 'explore_table.html' %}
         {% else %}
+        <article class="vf-card vf-card--brand vf-card--bordered" style="margin-bottom: 30px;">
         <div class="content-section">
           <!-- Summary Section -->
-          <div id="results_summary" class="vf-summary-container">
+          <div id="results_summary" class="vf-summary-container" style="background-color: #ffffff;">
             {% if not results %}
               <div class="vf-section-header">
                 <h2 class="vf-section-header__heading">Explore the data</h2>
@@ -85,6 +85,7 @@
               </article>
             </div>
           </div>
+          </article>
         
           <p class="default-message">Enter search criteria and click "Apply" to search the database.</p>
         {% endif %}

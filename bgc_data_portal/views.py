@@ -1,6 +1,8 @@
 import logging
 from collections import Counter
 from urllib.parse import urlencode
+import pandas as pd
+from django.http import HttpResponse
 
 from django.core.cache import cache
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -12,15 +14,15 @@ from api.api import get_contig_region
 from api.forms import BgcAdvancedSearchForm
 from api.models import Bgc
 from api.schemas import GetContigRegionInput
-from api.services import search_bgcs_by_keyword, search_bgcs_by_advanced
+from api.services import get_results_and_stats
 from api.utils import get_region_features, get_latest_stats, class_counter
+
 from bgc_plots.contig_region_visualisation import ContigRegionViewer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 EXTENDED_NUCLEOTIDE_WINDOW = 7000
-CACHE_TIMEOUT = 600
 
 from django.views.generic import TemplateView
 import os
@@ -45,52 +47,32 @@ def landing_page(request):
 def about(request):
     return render(request, 'about.html')
 
-def explore(request):
 
+def explore(request):
     query_params = request.GET.copy()
 
-    # extract pagination/table view params
+    # Extract pagination and sorting parameters
     query_params.pop('page', None)
     query_params.pop('sort_column', None)
     query_params.pop('sort_order', None)
 
-    # Extract sorting parameters
     sort_column = request.GET.get('sort_column', None)
     sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
 
-    current_advanced_form = BgcAdvancedSearchForm(request.GET or None)
-    
-    pageless_query_params = urlencode(query_params if query_params.get('keyword') else current_advanced_form.cleaned_data if current_advanced_form.is_valid() else {}, doseq=True)
+    # Prepare parameters for the search query
+    current_advanced_form = BgcAdvancedSearchForm(query_params or None)
+    pageless_query_params = urlencode(
+        query_params if query_params.get('keyword')
+        else current_advanced_form.cleaned_data if current_advanced_form.is_valid()
+        else {}, doseq=True
+    )
 
-    results_df,result_stats = cache.get(pageless_query_params,(pd.DataFrame([]),None))  # Try to get results from the cache
+    # Get results and stats from services.py function
+    results_df, result_stats,current_advanced_form = get_results_and_stats(pageless_query_params,sort_column, sort_order)
 
-    if not result_stats and len(query_params):  # If results are not cached, perform the search
-        if query_params.get('keyword')!=None:
-            current_advanced_form = BgcAdvancedSearchForm()
-            results_df = search_bgcs_by_keyword(query_params.get('keyword'))
-        elif current_advanced_form.is_valid():
-            results_df = search_bgcs_by_advanced(current_advanced_form.cleaned_data)
-        else:
-            results_df = pd.DataFrame([])
-            current_advanced_form = BgcAdvancedSearchForm()
-
-        result_stats = dict(
-            total_regions=results_df.shape[0],
-            # bgc_class_dist=dict(results_df['bgc_class_names'].value_counts()),
-            bgc_class_dist=class_counter(results_df['bgc_class_names']) if results_df.shape[0] else {},
-            n_assemblies=results_df.assembly_accession.nunique() if results_df.shape[0] else 0,
-            n_studies=results_df.study_accession.nunique() if results_df.shape[0] else 0,
-        )
-        cache.set(pageless_query_params, (results_df,result_stats), timeout=CACHE_TIMEOUT)  
-
-    # Sort the DataFrame based on the column and order
-    if sort_column:
-        ascending = sort_order == 'asc'
-        results_df = results_df.sort_values(by=sort_column, ascending=ascending)
-        cache.set(pageless_query_params, (results_df,result_stats), timeout=CACHE_TIMEOUT) 
-
+    # Pagination
     page = request.GET.get('page', 1)
-    paginator = Paginator(list(results_df.to_dict(orient='records')), 10)  
+    paginator = Paginator(list(results_df.to_dict(orient='records')), 10)
     try:
         paginated_results = paginator.page(page)
     except PageNotAnInteger:
@@ -105,7 +87,7 @@ def explore(request):
         'serialized_string': str(pageless_query_params),
         'sort_column': sort_column,
         'sort_order': sort_order,
-        'columns' : [
+        'columns': [
             {'name': 'MGYB', 'slug': 'mgyb'},
             {'name': 'Assembly', 'slug': 'assembly_accession'},
             {'name': 'MGYC', 'slug': 'mgyc_id'},
@@ -113,15 +95,15 @@ def explore(request):
             {'name': 'End', 'slug': 'end_position'},
             {'name': 'Detectors', 'slug': 'bgc_detector_names'},
             {'name': 'Classes', 'slug': 'bgc_class_names'},
-            {'name': 'Details', 'slug': ''}  
+            {'name': 'Details', 'slug': ''},
         ]
     }
 
-    # If it's an AJAX request, return the partial table
+    # Return the appropriate template
     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
         return render(request, 'explore_table.html', context)
-    # Otherwise, return the full page
     return render(request, 'explore_page.html', context)
+
 
 def bgc_page(request, mgyc,start_position,end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
@@ -210,6 +192,36 @@ def download_bgc_data(request, mgyc, start_position, end_position):
     )
 
     return get_contig_region( request, params_instance)
+
+
+def download_results_tsv(request):
+    query_params = request.GET.copy()
+
+    # Extract pagination and sorting parameters
+    query_params.pop('page', None)
+    query_params.pop('sort_column', None)
+    query_params.pop('sort_order', None)
+
+    sort_column = request.GET.get('sort_column', None)
+    sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
+
+    # Prepare parameters for the search query
+    current_advanced_form = BgcAdvancedSearchForm(query_params or None)
+    pageless_query_params = urlencode(
+        query_params if query_params.get('keyword')
+        else current_advanced_form.cleaned_data if current_advanced_form.is_valid()
+        else {}, doseq=True
+    )
+
+    # Get results and stats from services.py function
+    results_df, _,_ = get_results_and_stats(pageless_query_params,sort_column, sort_order)
+
+    # Convert DataFrame to TSV format
+    response = HttpResponse(content_type='text/tab-separated-values')
+    response['Content-Disposition'] = 'attachment; filename="explore_results.tsv"'
+    results_df.to_csv(response, sep='\t', index=False)
+
+    return response
 
 def custom_404_view(request, exception):
     return render(request, '404.html', status=404)

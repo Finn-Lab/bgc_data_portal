@@ -1,15 +1,25 @@
 {% load humanize %}
+
+
+<style>
+  .material-icons {
+    vertical-align: middle; /* Aligns the icon vertically with the text */
+    font-size: 20px; /* Adjust the size to match the text, you can tweak this value */
+    line-height: 1; /* Ensures the line height matches the surrounding text */
+  }
+</style>
+<article class="vf-card vf-card--brand vf-card--bordered" style="margin-bottom: 30px;">
 <div class="content-section">
   <!-- Summary Section -->
-  <div id="results_summary" class="vf-summary-container">
+  <div id="results_summary" class="vf-summary-container" style="background-color: #ffffff;">
     {% if not results %}
-      <div class="vf-section-header">
-        <h2 class="vf-section-header__heading">Explore the data</h2>
-      </div>
+    <div class="vf-section-header">
+      <h2 class="vf-section-header__heading">Explore the data</h2>
+    </div>
     {% else %}
-      <div class="vf-section-header">
-        <h2 class="vf-section-header__heading">Search results</h2>
-      </div>
+    <div class="vf-section-header">
+      <h2 class="vf-section-header__heading">Results summary</h2>
+    </div>
     {% endif %}
     <div class="vf-section-content | vf-grid vf-grid__col-4">
       <article class="vf-summary">
@@ -34,77 +44,85 @@
         <h3 class="vf-summary__title">Class distribution</h3>
         <div class="vf-summary__text predictor-class-grid">
           {% for clss, counts in result_stats.bgc_class_dist.items %}
-            <div>
-              <strong>{{clss}}</strong>: {{counts|intcomma }}
-            </div>
+          <div>
+            <strong>{{clss}}</strong>: {{counts|intcomma }}
+          </div>
           {% endfor %}
         </div>
       </article>
     </div>
   </div>
+</article>
 
-
-<h3 class="vf-section-header__heading">Results</h3>
-<table id="explore-table" class="vf-table">
-  <thead class="vf-table__header">
-    <tr class="vf-table__row">
-      {% for column in columns %}
-      <th class="vf-table__heading" scope="col">
-        {{ column.name }}
-        {% if column.slug %}
-        <a href="?{{ serialized_string }}&sort_column={{ column.slug }}&sort_order={% if sort_column == column.slug and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
-          {% if sort_column == column.slug %}
+  <!-- <h3 class="vf-section-header__heading">Results</h3> -->
+  <p >Each row represent an "aggregated region" based on the selected strategy</p>
+  <a class="vf-button vf-button--link vf-button--sm"
+  href="{% url 'download_results_tsv' %}?{{ serialized_string }}&sort_column={{ sort_column }}&sort_order={{ sort_order }}">
+  <i class="material-icons">download</i>&nbsp;Download results as TSV
+  </a>
+  <table id="explore-table" class="vf-table">
+    <thead class="vf-table__header">
+      <tr class="vf-table__row">
+        {% for column in columns %}
+        <th class="vf-table__heading" scope="col">
+          {{ column.name }}
+          {% if column.slug %}
+          <a
+            href="?{{ serialized_string }}&sort_column={{ column.slug }}&sort_order={% if sort_column == column.slug and sort_order == 'asc' %}desc{% else %}asc{% endif %}">
+            {% if sort_column == column.slug %}
             {% if sort_order == 'asc' %}
             <span class="sort-icon-style">▲</span>
             {% else %}
             <span class="sort-icon-style">▼</span>
             {% endif %}
-          {% else %}
-          <span class="sort-icon-style">↕</span>
+            {% else %}
+            <span class="sort-icon-style">↕</span>
+            {% endif %}
+          </a>
           {% endif %}
-        </a>
-        {% endif %}
-      </th>
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody class="vf-table__body">
+      {% for bgc in results %}
+      <tr class="vf-table__row">
+        <td class="vf-table__cell">{{ bgc.mgybs|join:', ' }}</td>
+        <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
+        <td class="vf-table__cell">{{ bgc.mgyc_id }}</td>
+        <td class="vf-table__cell">{{ bgc.start_position }}</td>
+        <td class="vf-table__cell">{{ bgc.end_position }}</td>
+        <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
+        <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
+        <td class="vf-table__cell">
+          <a href="{% url 'bgc_page' bgc.mgyc_id bgc.start_position bgc.end_position %}" target="_blank"
+            onclick="window.open(this.href, '_blank'); return false;">
+            View
+          </a>
+        </td>
+      </tr>
       {% endfor %}
-    </tr>
-  </thead>
-  <tbody class="vf-table__body">
-    {% for bgc in results %}
-    <tr class="vf-table__row">
-      <td class="vf-table__cell">{{ bgc.mgybs|join:', ' }}</td>
-      <td class="vf-table__cell">{{ bgc.assembly_accession }}</td>
-      <td class="vf-table__cell">{{ bgc.mgyc_id }}</td>
-      <td class="vf-table__cell">{{ bgc.start_position }}</td>
-      <td class="vf-table__cell">{{ bgc.end_position }}</td>
-      <td class="vf-table__cell">{{ bgc.bgc_detector_names|join:', ' }}</td>
-      <td class="vf-table__cell">{{ bgc.bgc_class_names|join:', ' }}</td>
-      <td class="vf-table__cell">
-        <a href="{% url 'bgc_page' bgc.mgyc_id bgc.start_position bgc.end_position %}" target="_blank" onclick="window.open(this.href, '_blank'); return false;">
-          View
-        </a>
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+    </tbody>
+  </table>
 
-<div class="pagination" style="text-align: center; margin-top: 20px;">
+  <div class="pagination" style="text-align: center; margin-top: 20px;">
     <button id="pag_button_p" class="vf-button vf-button--primary" data-page="1">First</button>
     {% if results.has_previous %}
-      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.previous_page_number }}">Previous</button>
+    <button id="pag_button_s" class="vf-button vf-button--secondary"
+      data-page="{{ results.previous_page_number }}">Previous</button>
     {% else %}
-      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Previous</button>
+    <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Previous</button>
     {% endif %}
     <span class="vf-pagination__info">
-        Page {{ results.number }} of {{ results.paginator.num_pages }}
+      Page {{ results.number }} of {{ results.paginator.num_pages }}
     </span>
 
     {% if results.has_next %}
-      <button id="pag_button_s" class="vf-button vf-button--secondary" data-page="{{ results.next_page_number }}">Next</button>
+    <button id="pag_button_s" class="vf-button vf-button--secondary"
+      data-page="{{ results.next_page_number }}">Next</button>
     {% else %}
-      <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Next</button>
+    <button id="pag_button_s" class="vf-button vf-button--secondary" disabled>Next</button>
     {% endif %}
-    <button id="pag_button_p" class="vf-button vf-button--primary" data-page="{{ results.paginator.num_pages }}">Last</button>
+    <button id="pag_button_p" class="vf-button vf-button--primary"
+      data-page="{{ results.paginator.num_pages }}">Last</button>
   </div>
-
-

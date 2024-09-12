@@ -42,7 +42,7 @@
     
     .download-form {
         display: flex;
-        align-items: flex-end; /* Align the dropdown and button at the bottom */
+        align-items: end; /* Align the dropdown and button at the bottom */
         justify-content: flex-end; /* Align the form to the right */
         max-width: 33%; /* Make the form take up about a third of the page width */
         margin-left: auto; /* Push the form to the right side */
@@ -82,18 +82,18 @@
 
 <div class="vf-grid vf-grid__col--span-12">
     <section class="vf-content">
-        <h1 class="vf-text vf-text-heading--2">Overview</h1>
+        <h1 class="vf-text vf-text-heading--2">Aggregated Region</h1>
 
         <!-- Summary Section -->
         <section class="vf-summary-container | embl-grid">
             <!-- Sample Information -->
             <!-- Aggregated Region -->
             <div class="vf-section-header">
-                <h2 class="vf-section-header__heading">Aggregated Region</h2>
+                <h2 class="vf-section-header__heading">Summary</h2>
             </div>
             <div class="vf-section-content | vf-grid vf-grid__col-2">
                 <article class="vf-summary">
-                    <h3 class="vf-summary__title">Predicted Classes</h3>
+                    <h3 class="vf-summary__title">Predicted classes</h3>
                     <div class="vf-summary__text predictor-class-grid">
                         {% for predictor, classes in predicted_classes_dict.items %}
                             <div>
@@ -106,7 +106,7 @@
                     </div>
                 </article>
                 <article class="vf-summary">
-                    <h3 class="vf-summary__title">Functional annotation</h3>
+                    <h3 class="vf-summary__title">Functional annotations</h3>
                     <div class="vf-summary__text predictor-class-grid">
                         {% for predictor, classes in functional_annotation_dict.items %}
                             <div>
@@ -125,7 +125,7 @@
                 </article>
             </div>
             <div class="vf-section-header">
-                <h2 class="vf-section-header__heading">Sample Information</h2>
+                <h2 class="vf-section-header__heading">Sample information</h2>
             </div>
             <div class="vf-section-content | vf-grid vf-grid__col-5">
                 <article class="vf-summary">

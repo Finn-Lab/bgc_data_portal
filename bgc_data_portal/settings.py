@@ -144,13 +144,9 @@ STATICFILES_DIRS = [
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Configure Django Plotly Dash
-PLOTLY_DASH = {
-    "ws_route": "ws/channel",
-    "http_route": "http/dpda/",
-    "cache_timeout_initial_arguments": 60,
-    "serve_locally": True,
-}
+# CACHE
+CACHE_TIMEOUT = 600
+
 
 # MATOMO
 MATOMO_URL = "https://ebi-mgnify.matomo.cloud/"
