@@ -36,7 +36,7 @@
 
   <!-- Results Table Section -->
   <div class="results-container">
-    <!-- <div class="vf-loader"></div> -->
+    <!-- <div class="bgcs-portal-spinner"></div> -->
     <div id="results">
       {% if results %}
       {% include 'explore_table.html' %}
@@ -99,7 +99,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     // Select the form and loader directly
     const advancedForm = document.getElementById('search-form'); // Correct the form selector
-    const loader = document.querySelector('.vf-loader'); // Select the loader using the class
+    const loader = document.querySelector('.bgcs-portal-spinner'); // Select the loader using the class
 
     // Ensure the elements are found before adding the listener
     if (advancedForm && loader) {
@@ -108,7 +108,7 @@
 
         // Prevent the default form submission
         event.preventDefault();
-        $('.vf-loader').show();
+        $('.bgcs-portal-spinner').show();
         // Disable form inputs to prevent multiple submissions
         // advancedForm.querySelectorAll('input, button').forEach(element => element.disabled = true);
         const formData = new FormData(advancedForm);
@@ -141,7 +141,7 @@
 
     e.preventDefault();
     var page = $(this).data('page');  // Get the page number from the button's data attribute
-    // $('.vf-loader').show();
+    // $('.bgcs-portal-spinner').show();
     $.ajax({
       url: "{% url 'explore' %}",
       type: "GET",
@@ -156,7 +156,7 @@
       },
       complete: function () {
         // Hide the loader after the AJAX request completes
-        // $('.vf-loader').hide();
+        // $('.bgcs-portal-spinner').hide();
       }
     });
   });
