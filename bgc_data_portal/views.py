@@ -66,7 +66,6 @@ def explore(request):
         else current_advanced_form.cleaned_data if current_advanced_form.is_valid()
         else {}, doseq=True
     )
-
     # Get results and stats from services.py function
     results_df, result_stats,current_advanced_form = get_results_and_stats(pageless_query_params,sort_column, sort_order)
 

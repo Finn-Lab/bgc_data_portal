@@ -110,13 +110,23 @@
         event.preventDefault();
         $('.vf-loader').show();
         // Disable form inputs to prevent multiple submissions
-        advancedForm.querySelectorAll('input, button').forEach(element => element.disabled = true);
+        // advancedForm.querySelectorAll('input, button').forEach(element => element.disabled = true);
+        const formData = new FormData(advancedForm);
 
+        // Check and log form data to ensure it's capturing the expected fields
+        for (let [name, value] of formData.entries()) {
+          console.log(name, value); // Log form data to inspect what is captured
+        }
+        const serializedData = new URLSearchParams(formData).toString();
         // Construct the URL with the query parameters and navigate
         const actionUrl = advancedForm.getAttribute('action'); // Get the form action URL
+        // const serializedData = $(advancedForm)
+        // .find('input, select, textarea')
+        // .serialize();
 
         // Redirect to the constructed URL
-        console.log(`${actionUrl}?${$('#search-form').serialize()}`); // Log message to confirm the event is triggered
+        console.log(`${actionUrl}?${serializedData}`); // Log message to confirm the event is triggered
+        console.log(advancedForm); // Log message to confirm the event is triggered
         window.location.href = `${actionUrl}?${$('#search-form').serialize()}`;
       });
     } else {
