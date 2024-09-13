@@ -1,16 +1,17 @@
 {% if use_matomo %}
-    {% load matomo_tags %}
+{% load matomo_tags %}
 {% endif %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MGnify BGCs{% endblock %}</title>
     <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com"/>
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
@@ -18,59 +19,65 @@
     {% load humanize %}
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
+
 <body class="vf-body | vf-stack vf-stack--200">
 
 
     {% block hero %}
     <section class="vf-hero vf-hero--1200 | vf-u-fullbleed">
-    <!-- <section class="vf-hero vf-hero--1200 | vf-u-fullbleed" style="--vf-hero--bg-image: url('http://www.ebi.ac.uk/metagenomics/proteins/static/img/banner.94dfddd7aebb.jpg');"> -->
-        
+        <!-- <section class="vf-hero vf-hero--1200 | vf-u-fullbleed" style="--vf-hero--bg-image: url('http://www.ebi.ac.uk/metagenomics/proteins/static/img/banner.94dfddd7aebb.jpg');"> -->
+
         <div class="vf-hero__content | vf-box | vf-stack vf-stack--400">
             <span class="vf-badge vf-badge--primary">beta</span>
-            <h2 class="vf-hero__heading"> 
-                <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">MGnify Biosynthetic Gene Clusters</a> 
+            <h2 class="vf-hero__heading">
+                <a href="{% url 'landing_page' %}" style="text-decoration: none; color: inherit;">MGnify Biosynthetic
+                    Gene Clusters</a>
             </h2>
             <p class="vf-hero__text">Explore, analyse, and download metagenomic biosynthetic gene clusters.</p>
-            <form id="keyword-form" action="{% url 'explore' %}" method="get" class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
+            <form id="keyword-form" action="{% url 'explore' %}" method="get"
+                class="vf-form vf-form--search vf-form--search--mini | vf-sidebar vf-sidebar--end">
                 <div class="vf-sidebar__inner">
                     <div class="vf-form__item">
-                        <input type="search" placeholder="Search by keyword" id="search-keyword" name="keyword" class="vf-form__input"/>
+                        <input type="search" placeholder="Search by keyword" id="search-keyword" name="keyword"
+                            class="vf-form__input" />
                     </div>
                     <button type="submit" class="vf-button vf-button--primary">Search</button>
                 </div>
                 <p class="vf-text-body--5">
-                    Example:  <a href="#" class="vf-link" id="example-link">Polyketide</a>
+                    Example: <a href="#" class="vf-link" id="example-link">Polyketide</a>
                 </p>
             </form>
         </div>
     </section>
     {% endblock hero %}
-        <nav class="vf-navigation vf-navigation--main | vf-cluster">
-            <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
-                <li class="vf-navigation__item">
-                    <a href="{% url 'landing_page' %}" class="vf-navigation__link" aria-current="page">Home</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'explore' %}" class="vf-navigation__link">Search</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="/api/v1/docs" class="vf-navigation__link">API</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
-                </li>
-                <li class="vf-navigation__item">
-                    <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics" class="vf-navigation__link">Contact</a>
-                </li>
-            </ul>
-        </nav>
+    <nav class="vf-navigation vf-navigation--main | vf-cluster">
+        <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
+            <li class="vf-navigation__item">
+                <a href="{% url 'landing_page' %}" class="vf-navigation__link" aria-current="page">Home</a>
+            </li>
+            <li class="vf-navigation__item">
+                <a href="{% url 'explore' %}" class="vf-navigation__link">Search</a>
+            </li>
+            <li class="vf-navigation__item">
+                <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>
+            </li>
+            <li class="vf-navigation__item">
+                <a href="/api/v1/docs" class="vf-navigation__link">API</a>
+            </li>
+            <li class="vf-navigation__item">
+                <a href="{% url 'about' %}" class="vf-navigation__link">About</a>
+            </li>
+            <li class="vf-navigation__item">
+                <a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
+                    class="vf-navigation__link">Contact</a>
+            </li>
+        </ul>
+    </nav>
 
     <main class="vf-main">
         <hr class="vf-divider" style="--context-margin--inline: 3rem;">
-        <div class="vf-loader" id="search-loader" style="display: none;"></div>
+        <!-- <div class="vf-loader" id="search-loader" style="display: none;"></div> -->
+        <div class="vf-loader" id="loader"></div>
         {% block content %}{% endblock %}
     </main>
 
@@ -78,28 +85,24 @@
         <div class="vf-footer__inner">
             <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
                 <div class="vf-flag__media">
-                    <img src="{% static 'img/Euremap_logo_white.png' %}"
-                         width="100px"
-                         alt="euremap_logo"
-                         height="52px"/>
+                    <img src="{% static 'img/Euremap_logo_white.png' %}" width="100px" alt="euremap_logo"
+                        height="52px" />
                 </div>
                 <div class="vf-flag__body">
                     <p class="vf-footer__notice">
-                        This portal has been developed at EMBL-EBI by the MGnify team as part of the EUREMAP project. 
+                        This portal has been developed at EMBL-EBI by the MGnify team as part of the EUREMAP project.
                         EUREMAP is an initiative designed to integrate a pipeline of marine bioprospecting services.
                     </p>
                 </div>
             </div>
             <div class="vf-flag vf-flag--middle vf-flag--400 space-below-20">
                 <div class="vf-flag__media">
-                    <img src="{% static 'img/eu-flag.svg' %}"
-                         width="100px"
-                         alt="EU Flag"
-                         height="67px"/>
+                    <img src="{% static 'img/eu-flag.svg' %}" width="100px" alt="EU Flag" height="67px" />
                 </div>
                 <div class="vf-flag__body">
                     <p class="vf-footer__notice">
-                        EUREMAP project is funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663).
+                        EUREMAP project is funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No.
+                        101131663).
                     </p>
                 </div>
             </div>
@@ -109,9 +112,12 @@
                 <div class="vf-grid__col--span-4">
                     <h3>Useful Links</h3>
                     <ul class="vf-list">
-                        <li><a href="https://www.ebi.ac.uk/metagenomics" target="_blank" style="text-decoration: none; color: None;">MGnify</a></li>
-                        <li><a href="https://www.ebi.ac.uk/metagenomics/proteins" target="_blank" style="text-decoration: none; color: None;">MGnify Proteins</a></li>
-                        <li><a href="https://euremap.eu" target="_blank" style="text-decoration: none; color: None;">EUREMAP Project</a></li>
+                        <li><a href="https://www.ebi.ac.uk/metagenomics" target="_blank"
+                                style="text-decoration: none; color: None;">MGnify</a></li>
+                        <li><a href="https://www.ebi.ac.uk/metagenomics/proteins" target="_blank"
+                                style="text-decoration: none; color: None;">MGnify Proteins</a></li>
+                        <li><a href="https://euremap.eu" target="_blank"
+                                style="text-decoration: none; color: None;">EUREMAP Project</a></li>
                     </ul>
                 </div>
                 <div class="vf-grid__col--span-4">
@@ -119,17 +125,16 @@
                     <ul class="vf-list">
                         <li><a href="docs_index" style="text-decoration: none; color: None;">Documentation</a></li>
                         <li><a href="/api/v1/docs" style="text-decoration: none; color: None;">API</a></li>
-                        <li><a href="https://www.ebi.ac.uk/about/contact/support/metagenomics" style="text-decoration: none; color: None;">Contact</a></li>
+                        <li><a href="https://www.ebi.ac.uk/about/contact/support/metagenomics"
+                                style="text-decoration: none; color: None;">Contact</a></li>
                     </ul>
                 </div>
             </div>
             <p class="vf-footer__notice">© 2024 EMBL-EBI</p>
             <div data-vf-js-banner-cookie-name="emblContentHub27360"
-                 class="vf-banner vf-banner--fixed vf-banner--bottom vf-banner--notice"
-                 data-vf-js-banner="true"
-                 data-vf-js-banner-cookie-version="224467"
-                 data-vf-js-banner-state="dismissible"
-                 data-vf-js-banner-button-text="I agree">
+                class="vf-banner vf-banner--fixed vf-banner--bottom vf-banner--notice" data-vf-js-banner="true"
+                data-vf-js-banner-cookie-version="224467" data-vf-js-banner-state="dismissible"
+                data-vf-js-banner-button-text="I agree">
                 <div class="vf-banner__content | vf-grid" data-vf-js-banner-text="">
                     <p class="vf-text vf-text-body--2"> This website uses cookies to function.
                         By using the site you are agreeing to this as outlined in our
@@ -141,41 +146,41 @@
     </footer>
 
     <script src="https://assets.emblstatic.net/vf/v2.5.17/scripts/scripts.js"></script>
-    
+
     <script>
-    document.getElementById('example-link').addEventListener('click', function(event) {
-        event.preventDefault();  // Prevent the default link behavior
-        const searchInput = document.getElementById('search-keyword');
-        searchInput.value = 'Polyketide';  // Set the value of the input field
+        document.getElementById('example-link').addEventListener('click', function (event) {
+            event.preventDefault();  // Prevent the default link behavior
+            const searchInput = document.getElementById('search-keyword');
+            searchInput.value = 'Polyketide';  // Set the value of the input field
 
-        // Optionally, submit the form automatically
-        // document.getElementById('keyword-form').submit();
-    });
+            // Optionally, submit the form automatically
+            // document.getElementById('keyword-form').submit();
+        });
 
-        window.onload = function() {
+        window.onload = function () {
             // Select the form and loader directly
             const form = document.getElementById('keyword-form');
             const loader = document.getElementById('search-loader');
-    
+
             // Ensure the elements are found before adding the listener
             if (form) {
-                form.addEventListener('submit', function(event) {
+                form.addEventListener('submit', function (event) {
                     // Prevent the default form submission
                     event.preventDefault();
-    
+
                     // Get the value of the 'keyword' input
                     const keyword = form.querySelector('input[name="keyword"]').value;
-    
+
                     // Show the loader
                     $('.vf-loader').show();
-    
+
                     // Disable form inputs to prevent multiple submissions
                     form.querySelectorAll('input, button').forEach(element => element.disabled = true);
-    
+
                     // Construct the URL with the query parameters
                     const actionUrl = form.getAttribute('action'); // Get the form action URL
                     // const queryString = new URLSearchParams(new FormData(form)).toString(); // Serialize form data to query string
-    
+
                     // Redirect to the constructed URL
                     window.location.href = `${actionUrl}?keyword=${keyword}`;
                 });
@@ -183,7 +188,8 @@
             }
         };
     </script>
-    
+
     <!-- <script src="{% static 'js/scripts.js' %}"></script> -->
 </body>
+
 </html>

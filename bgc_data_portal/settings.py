@@ -61,6 +61,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     # "debug_toolbar.middleware.DebugToolbarMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    'bgc_data_portal.middleware.LoaderMiddleware'
 ]
 
 ROOT_URLCONF = 'bgc_data_portal.urls'
