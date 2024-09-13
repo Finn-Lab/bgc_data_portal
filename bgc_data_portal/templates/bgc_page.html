@@ -124,12 +124,18 @@
     var plot = document.getElementById('bgc-plot');
     var cdsInfoDict = {{ cds_info_dict|safe }};  // Pass the dictionary as a JSON object to JavaScript
 
+    var spinner = document.querySelector('.bgcs-portal-spinner'); // Select the spinner element
+
     plot.on('plotly_click', function(data){
 
 
         var point = data.points[0];
 
         var traceIndex = point.curveNumber;
+
+        spinner.style.display = 'block';
+
+
 
         // Reset previously highlighted traces by setting line width to 1 and keeping their original color
         plot.data.forEach((trace, index) => {
@@ -142,6 +148,7 @@
         // Highlight the clicked trace by increasing its line width while preserving the original color
         Plotly.restyle(plot, { line: { width: 5, color: plot.data[traceIndex].line.color } }, [traceIndex]);
 
+        
 
         if (point.data.customdata.length) {
             var cds_id = point.data.customdata[1]; // Assume this is the CDS ID or key
@@ -259,6 +266,7 @@
 
                     // Show the content with a fade-in effect
                     setTimeout(function() {
+
                         cdsInfoContainer.classList.add('show');
                     }, 10); // Slight delay to trigger the CSS transition
                 } else {
@@ -270,6 +278,8 @@
                     `;
                     cdsInfoContainer.classList.add('show');
                 }
+
+                spinner.style.display = 'none';
             }, 500); // Wait for the hide transition to complete
         }
     });
