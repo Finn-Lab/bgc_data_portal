@@ -29,53 +29,68 @@ import os
 from django.http import FileResponse, Http404
 from django.conf import settings
 
+
 class DocsView(TemplateView):
 
-    def get(self, request, path='index.html', *args, **kwargs):
+    def get(self, request, path="index.html", *args, **kwargs):
         # Construct the full path to the file
 
-        file_path = os.path.join(settings.BASE_DIR, 'docs', '_site', path)
+        file_path = os.path.join(settings.BASE_DIR, "docs", "_site", path)
 
         if os.path.exists(file_path):
-            return FileResponse(open(file_path, 'rb'))
+            return FileResponse(open(file_path, "rb"))
         else:
             raise Http404("File not found")
 
+
 def landing_page(request):
-    return render(request, 'landing_page.html')
+    return render(request, "landing_page.html")
+
 
 def about(request):
-    return render(request, 'about.html')
+    return render(request, "about.html")
 
 
 def explore(request):
     query_params = request.GET.copy()
 
     # Extract pagination and sorting parameters
-    query_params.pop('page', None)
-    query_params.pop('sort_column', None)
-    query_params.pop('sort_order', None)
+    query_params.pop("page", None)
+    query_params.pop("sort_column", None)
+    query_params.pop("sort_order", None)
 
-    sort_column = request.GET.get('sort_column', None)
-    sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
+    sort_column = request.GET.get("sort_column", None)
+    sort_order = request.GET.get("sort_order", "asc")  # Default to ascending
 
     # Prepare parameters for the search query
     current_advanced_form = BgcAdvancedSearchForm(query_params or None)
     pageless_query_params = urlencode(
-        query_params if query_params.get('keyword')
-        else current_advanced_form.cleaned_data if current_advanced_form.is_valid()
-        else {}, doseq=True
+        (
+            query_params
+            if query_params.get("keyword")
+            else (
+                current_advanced_form.cleaned_data
+                if current_advanced_form.is_valid()
+                else {}
+            )
+        ),
+        doseq=True,
     )
 
-    print('\nHERREE\n',query_params,pageless_query_params,current_advanced_form.is_valid())
-    if query_params:
+    print(
+        "\nHERREE\n",
+        query_params,
+        pageless_query_params,
+        current_advanced_form.is_valid(),
+    )
     # Get results and stats from services.py function
-        results_df, result_stats,current_advanced_form = get_results_and_stats(pageless_query_params,sort_column, sort_order)
-
+    results_df, result_stats, current_advanced_form = get_results_and_stats(
+        pageless_query_params, sort_column, sort_order
+    )
 
     # Pagination
-    page = request.GET.get('page', 1)
-    paginator = Paginator(list(results_df.to_dict(orient='records')), 10)
+    page = request.GET.get("page", 1)
+    paginator = Paginator(list(results_df.to_dict(orient="records")), 10)
     try:
         paginated_results = paginator.page(page)
     except PageNotAnInteger:
@@ -84,147 +99,219 @@ def explore(request):
         paginated_results = paginator.page(paginator.num_pages)
 
     context = {
-        'results': paginated_results,
-        'result_stats': result_stats if result_stats else get_latest_stats(),
-        'advanced_form': current_advanced_form,
-        'serialized_string': str(pageless_query_params),
-        'sort_column': sort_column,
-        'sort_order': sort_order,
-        'columns': [
-            {'name': 'MGYB', 'slug': 'mgyb'},
-            {'name': 'Assembly', 'slug': 'assembly_accession'},
-            {'name': 'MGYC', 'slug': 'mgyc_id'},
-            {'name': 'Start', 'slug': 'start_position'},
-            {'name': 'End', 'slug': 'end_position'},
-            {'name': 'Detectors', 'slug': 'bgc_detector_names'},
-            {'name': 'Classes', 'slug': 'bgc_class_names'},
-            {'name': 'Details', 'slug': ''},
-        ]
+        "results": paginated_results,
+        "result_stats": result_stats if result_stats else get_latest_stats(),
+        "advanced_form": current_advanced_form,
+        "serialized_string": str(pageless_query_params),
+        "sort_column": sort_column,
+        "sort_order": sort_order,
+        "columns": [
+            {"name": "MGYB", "slug": "mgyb"},
+            {"name": "Assembly", "slug": "assembly_accession"},
+            {"name": "MGYC", "slug": "mgyc_id"},
+            {"name": "Start", "slug": "start_position"},
+            {"name": "End", "slug": "end_position"},
+            {"name": "Detectors", "slug": "bgc_detector_names"},
+            {"name": "Classes", "slug": "bgc_class_names"},
+            {"name": "Details", "slug": ""},
+        ],
     }
 
     # Return the appropriate template
-    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-        return render(request, 'explore_table.html', context)
-    return render(request, 'explore_page.html', context)
+    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return render(request, "explore_table.html", context)
+    return render(request, "explore_page.html", context)
 
 
-def bgc_page(request, mgyc,start_position,end_position):
+def bgc_page(request, mgyc, start_position, end_position):
     # Extract the relevant parameters for the plot from the request or use defaults
 
     try:
         start_position = int(start_position)
         end_position = int(end_position)
 
-        contig, assembly_accession,features_df = get_region_features(
+        contig, assembly_accession, features_df = get_region_features(
             mgyc,
             start_position,
             end_position,
-            extended_window=EXTENDED_NUCLEOTIDE_WINDOW
-            )
+            extended_window=EXTENDED_NUCLEOTIDE_WINDOW,
+        )
         # remove tails to avoid ploting more that the desired EXTENDED_NUCLEOTIDE_WINDOW
-        features_df['start'] = features_df['start'].map(lambda x:max(start_position-EXTENDED_NUCLEOTIDE_WINDOW,x))
-        features_df['end'] = features_df['end'].map(lambda x:min(end_position+EXTENDED_NUCLEOTIDE_WINDOW,x))
+        features_df["start"] = features_df["start"].map(
+            lambda x: max(start_position - EXTENDED_NUCLEOTIDE_WINDOW, x)
+        )
+        features_df["end"] = features_df["end"].map(
+            lambda x: min(end_position + EXTENDED_NUCLEOTIDE_WINDOW, x)
+        )
         # Call the API function to get the plot HTML
         plot_html = ContigRegionViewer.plot_contig_region(features_df)
         # Get summary details regarding
-        cds_attribs = dict(features_df[features_df['type']=='CDS'].iloc[0]['attrib'])
-        assembly_accession = cds_attribs.get('assembly_accession')
-        assembly_url = f"https://www.ebi.ac.uk/metagenomics/assemblies/{assembly_accession}"
-        biome_lineage=cds_attribs.get('biome_lineage','').replace('root:','')
-        
-        aggr_df = features_df[ (features_df.start>=start_position) & (features_df.end<=end_position)]
+        cds_attribs = dict(features_df[features_df["type"] == "CDS"].iloc[0]["attrib"])
+        assembly_accession = cds_attribs.get("assembly_accession")
+        assembly_url = (
+            f"https://www.ebi.ac.uk/metagenomics/assemblies/{assembly_accession}"
+        )
+        biome_lineage = cds_attribs.get("biome_lineage", "").replace("root:", "")
+
+        aggr_df = features_df[
+            (features_df.start >= start_position) & (features_df.end <= end_position)
+        ]
 
         # predicted classes
-        _predicted_classes_dict = {detector:sorted({individual_class for attrib in gr['attrib'] for individual_class in attrib['BGC_CLASS'].split(',') }) for detector,gr in aggr_df[(aggr_df['type']=='CLUSTER')&(aggr_df['source']!="Aggregated region")].sort_values('source').groupby('source')}
-        predicted_classes_dict = {k:_predicted_classes_dict[k] for k in sorted(_predicted_classes_dict,key=lambda x:x.lower())}
+        _predicted_classes_dict = {
+            detector: sorted(
+                {
+                    individual_class
+                    for attrib in gr["attrib"]
+                    for individual_class in attrib["BGC_CLASS"].split(",")
+                }
+            )
+            for detector, gr in aggr_df[
+                (aggr_df["type"] == "CLUSTER")
+                & (aggr_df["source"] != "Aggregated region")
+            ]
+            .sort_values("source")
+            .groupby("source")
+        }
+        predicted_classes_dict = {
+            k: _predicted_classes_dict[k]
+            for k in sorted(_predicted_classes_dict, key=lambda x: x.lower())
+        }
 
         # functional_annotation_dict
-        MAX_GOSLIM_COLUM=7
+        MAX_GOSLIM_COLUM = 7
         functional_annotation_dict = {}
-        aggr_go_slims = sorted({term for attrib in aggr_df[aggr_df['type']=='ANNOT']['attrib'] for term in attrib.get('GOslim',[])} - {None})
-        col_name = 'GOslim description'
-        for i,term in enumerate(aggr_go_slims):
-            if i!=0 and i%MAX_GOSLIM_COLUM==0:
-                col_name+='_next'
-            functional_annotation_dict.setdefault(col_name,[]).append(f"- {term}")
+        aggr_go_slims = sorted(
+            {
+                term
+                for attrib in aggr_df[aggr_df["type"] == "ANNOT"]["attrib"]
+                for term in attrib.get("GOslim", [])
+            }
+            - {None}
+        )
+        col_name = "GOslim description"
+        for i, term in enumerate(aggr_go_slims):
+            if i != 0 and i % MAX_GOSLIM_COLUM == 0:
+                col_name += "_next"
+            functional_annotation_dict.setdefault(col_name, []).append(f"- {term}")
 
         # cds_info_dict
-        cds_info_dict = {attrib.get('mgyp'):attrib for attrib in features_df[features_df['type']=='CDS']['attrib']} 
-        pfam_info_dict = {attrib.get('ID'):attrib for attrib in features_df[features_df['type']=='ANNOT']['attrib']} 
+        cds_info_dict = {
+            attrib.get("mgyp"): attrib
+            for attrib in features_df[features_df["type"] == "CDS"]["attrib"]
+        }
+        pfam_info_dict = {
+            attrib.get("ID"): attrib
+            for attrib in features_df[features_df["type"] == "ANNOT"]["attrib"]
+        }
         # add cluster_representative_url
         for p in cds_info_dict:
-            cds_info_dict[p].update({
-                'cluster_representative_url':f"https://www.ebi.ac.uk/metagenomics/proteins/{cds_info_dict[p]['cluster_representative']}/" if cds_info_dict[p]['cluster_representative'] else None,
-                'protein_length':len(cds_info_dict[p]['sequence']),
-            })
-            for _pfam_dct in cds_info_dict[p]['pfam']:
-                go_slim = pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('GOslim',[None])
-                _pfam_dct.update({
-                    'go_slim':";".join(go_slim) if go_slim[0] else "",
-                    'description':pfam_info_dict.get(_pfam_dct['PFAM'],{}).get('description',''),
-                })
+            cds_info_dict[p].update(
+                {
+                    "cluster_representative_url": (
+                        f"https://www.ebi.ac.uk/metagenomics/proteins/{cds_info_dict[p]['cluster_representative']}/"
+                        if cds_info_dict[p]["cluster_representative"]
+                        else None
+                    ),
+                    "protein_length": len(cds_info_dict[p]["sequence"]),
+                }
+            )
+            for _pfam_dct in cds_info_dict[p]["pfam"]:
+                go_slim = pfam_info_dict.get(_pfam_dct["PFAM"], {}).get(
+                    "GOslim", [None]
+                )
+                _pfam_dct.update(
+                    {
+                        "go_slim": ";".join(go_slim) if go_slim[0] else "",
+                        "description": pfam_info_dict.get(_pfam_dct["PFAM"], {}).get(
+                            "description", ""
+                        ),
+                    }
+                )
 
         # format fetures for download
-        download_features = features_df[(features_df['start']<=end_position)&(features_df['end']>=start_position)]
-        download_features['start'] = download_features['start'].map(lambda x:max(start_position,x))
-        download_features['end'] = download_features['end'].map(lambda x:min(end_position,x))
+        download_features = features_df[
+            (features_df["start"] <= end_position)
+            & (features_df["end"] >= start_position)
+        ]
+        download_features["start"] = download_features["start"].map(
+            lambda x: max(start_position, x)
+        )
+        download_features["end"] = download_features["end"].map(
+            lambda x: min(end_position, x)
+        )
         # cds_info_dict = {attrib.get('mgyp') for attrib in aggr_df[aggr_df['type']!='CLUSTER']['attrib']}
         # Render the BGC page with the plot
-        return render(request, 'bgc_page.html', {
-            'plot_html': plot_html,
-            'assembly_accession': assembly_accession,
-            'assembly_url': assembly_url,
-            'biome_lineage':biome_lineage,
-            'predicted_classes_dict': predicted_classes_dict,
-            'functional_annotation_dict':functional_annotation_dict,
-            'cds_info_dict': cds_info_dict,
-            'mgyc': mgyc,
-            'start_position': start_position,
-            'end_position': end_position,
-        })
+        return render(
+            request,
+            "bgc_page.html",
+            {
+                "plot_html": plot_html,
+                "assembly_accession": assembly_accession,
+                "assembly_url": assembly_url,
+                "biome_lineage": biome_lineage,
+                "predicted_classes_dict": predicted_classes_dict,
+                "functional_annotation_dict": functional_annotation_dict,
+                "cds_info_dict": cds_info_dict,
+                "mgyc": mgyc,
+                "start_position": start_position,
+                "end_position": end_position,
+            },
+        )
     except Exception as e:
         logging.error(f"Error in bgc_page view: {e}")
         return HttpResponse(f"An error occurred: {e}", status=500)
+
 
 def download_bgc_data(request, mgyc, start_position, end_position):
     params_instance = GetContigRegionInput(
         mgyc=mgyc,
         start_position=start_position,
         end_position=end_position,
-        output_type=request.GET.get('output_type'),
+        output_type=request.GET.get("output_type"),
     )
 
-    return get_contig_region( request, params_instance)
+    return get_contig_region(request, params_instance)
 
 
 def download_results_tsv(request):
     query_params = request.GET.copy()
 
     # Extract pagination and sorting parameters
-    query_params.pop('page', None)
-    query_params.pop('sort_column', None)
-    query_params.pop('sort_order', None)
+    query_params.pop("page", None)
+    query_params.pop("sort_column", None)
+    query_params.pop("sort_order", None)
 
-    sort_column = request.GET.get('sort_column', None)
-    sort_order = request.GET.get('sort_order', 'asc')  # Default to ascending
+    sort_column = request.GET.get("sort_column", None)
+    sort_order = request.GET.get("sort_order", "asc")  # Default to ascending
 
     # Prepare parameters for the search query
     current_advanced_form = BgcAdvancedSearchForm(query_params or None)
     pageless_query_params = urlencode(
-        query_params if query_params.get('keyword')
-        else current_advanced_form.cleaned_data if current_advanced_form.is_valid()
-        else {}, doseq=True
+        (
+            query_params
+            if query_params.get("keyword")
+            else (
+                current_advanced_form.cleaned_data
+                if current_advanced_form.is_valid()
+                else {}
+            )
+        ),
+        doseq=True,
     )
 
     # Get results and stats from services.py function
-    results_df, _,_ = get_results_and_stats(pageless_query_params,sort_column, sort_order)
+    results_df, _, _ = get_results_and_stats(
+        pageless_query_params, sort_column, sort_order
+    )
 
     # Convert DataFrame to TSV format
-    response = HttpResponse(content_type='text/tab-separated-values')
-    response['Content-Disposition'] = 'attachment; filename="explore_results.tsv"'
-    results_df.to_csv(response, sep='\t', index=False)
+    response = HttpResponse(content_type="text/tab-separated-values")
+    response["Content-Disposition"] = 'attachment; filename="explore_results.tsv"'
+    results_df.to_csv(response, sep="\t", index=False)
 
     return response
 
+
 def custom_404_view(request, exception):
-    return render(request, '404.html', status=404)
+    return render(request, "404.html", status=404)
