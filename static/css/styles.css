@@ -393,3 +393,85 @@
   opacity: 1;
   /* Fade in the content */
 }
+
+  .material-icons {
+    vertical-align: middle; /* Aligns the icon vertically with the text */
+    font-size: 20px; /* Adjust the size to match the text, you can tweak this value */
+    line-height: 1; /* Ensures the line height matches the surrounding text */
+  }
+
+
+   /* Custom styles to make vf-summary smaller */
+    .vf-summary {
+        font-size: 0.875rem; /* Smaller font size */
+        padding: 0.1rem; /* Reduce padding */
+        margin: 0.1rem 0; /* Reduce margin */
+    }
+    .vf-summary__title {
+        font-size: 1rem; /* Smaller title size */
+        margin-bottom: 0.5rem; /* Reduce spacing below title */
+    }
+    .vf-summary__text {
+        font-size: 0.875rem; /* Smaller text size */
+        margin-bottom: 0; /* Remove bottom margin */
+    }
+    .predictor-class-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr; /* Two columns */
+        gap: 1rem; /* Space between columns */
+    }
+    .protein-sequence-container {
+      word-wrap: break-word;
+      overflow-y: scroll;
+      height: 10em;
+      padding: 10px;
+      background-color: #e1fae8;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      letter-spacing: 2px;
+    }
+    .sequenceViewerDiv {
+        overflow: auto !important;
+    }
+    
+    .download-form {
+        display: flex;
+        align-items: end; /* Align the dropdown and button at the bottom */
+        justify-content: flex-end; /* Align the form to the right */
+        max-width: 33%; /* Make the form take up about a third of the page width */
+        margin-left: auto; /* Push the form to the right side */
+    }
+    .vf-form__item--inline.stacked-item {
+        display: flex;
+        flex-direction: column; /* Stack the label on top of the select */
+        margin-right: 10px; /* Space between the dropdown and the button */
+        flex: 1; /* Allow the select to take up more space */
+    }
+    .vf-form__label {
+        margin-bottom: 5px; /* Space between the label and the select */
+        font-size: 0.875rem; /* Make the label slightly smaller */
+    }
+    .wider-select {
+        width: 100%; /* Make the select take up the full width of its container */
+        min-width: 150px; /* Ensure it's wide enough to show the options properly */
+        padding: 5px 10px; /* Adjust padding to align with the button */
+        height: 42px; /* Set a fixed height to match the button */
+        line-height: 1.5; /* Align text vertically */
+    }
+    .vf-button--compact {
+        padding: 5px 15px; /* Compact padding for the button */
+        font-size: 0.875rem; /* Slightly smaller font size */
+        height: 38px; /* Set a fixed height to match the select */
+        line-height: 1; /* Align text vertically */
+    }
+    #cds-info {
+    opacity: 0; /* Start with the content hidden */
+    transition: opacity 0.5s ease-in-out; /* Smooth transition for opacity */
+    }
+
+    #cds-info.show {
+        opacity: 1; /* Fade in the content */
+    }
