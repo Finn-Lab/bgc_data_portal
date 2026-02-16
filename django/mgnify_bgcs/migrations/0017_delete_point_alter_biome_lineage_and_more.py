@@ -6,20 +6,30 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('mgnify_bgcs', '0016_alter_protein_cluster_representative'),
+        ("mgnify_bgcs", "0016_alter_protein_cluster_representative"),
     ]
 
     operations = [
         migrations.DeleteModel(
-            name='Point',
+            name="Point",
         ),
         migrations.AlterField(
-            model_name='biome',
-            name='lineage',
+            model_name="biome",
+            name="lineage",
             field=models.CharField(blank=True, max_length=255, null=True, unique=True),
         ),
         migrations.AddConstraint(
-            model_name='cds',
-            constraint=models.UniqueConstraint(fields=('contig', 'start_position', 'end_position', 'strand', 'protein', 'gene_caller'), name='uniq_cds_location_caller_pipeline'),
+            model_name="cds",
+            constraint=models.UniqueConstraint(
+                fields=(
+                    "contig",
+                    "start_position",
+                    "end_position",
+                    "strand",
+                    "protein",
+                    "gene_caller",
+                ),
+                name="uniq_cds_location_caller_pipeline",
+            ),
         ),
     ]

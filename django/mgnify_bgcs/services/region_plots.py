@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 from typing import Dict, List, Tuple
 
 import plotly.graph_objects as go
@@ -19,7 +18,8 @@ except Exception:  # pragma: no cover
 
 from .pfam_to_slim.pfam_annots import pfamToGoSlim
 
-import colorsys, hashlib
+import colorsys
+import hashlib
 
 
 def _rgb_str_from_unit_rgb(r, g, b):

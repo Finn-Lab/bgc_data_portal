@@ -3,4 +3,4 @@ pandas
 umap-learn
 scikit-learn
 joblib
-pyarrow    
+pyarrow

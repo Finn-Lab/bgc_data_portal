@@ -127,7 +127,7 @@
 	line-height: normal;
 }
 
-.jsa-resetTable tr { 
+.jsa-resetTable tr {
 	/*border-collapse: separate;*/
 	border-color: transparent;
 	border-style: none;
@@ -168,7 +168,7 @@
 	vertical-align: baseline;
 	line-height: normal;
 
-	
+
 }
 
 svg text {
@@ -180,4 +180,3 @@ svg text {
 svg text::selection {
 	background: none;
 }
-

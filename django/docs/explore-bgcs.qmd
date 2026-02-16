@@ -25,22 +25,22 @@ The Advanced Search form allows you to perform fine-grained queries to explore t
 
 ### Search fields (Advanced tab)
 
-- **BGC Class Name**:  
+- **BGC Class Name**:
   Enter one or more BGC class names (i.e., alkaloid, nrp, other, polyketide, ripp, saccharide, or terpene) separated by spaces or commas. The search will return BGCs that contain at least one of the specified classes (using an OR logic).
 
-- **MGYB**:  
+- **MGYB**:
   Specify a particular MGYB (BGC accession of portal) to directly retrieve data associated with that BGC.
 
-- **Assembly Accession**:  
+- **Assembly Accession**:
   Input an ENA assembly accession to find predicted BGCs within that specific assembly.
 
-- **Contig MGYC**:  
+- **Contig MGYC**:
   Provide a specific MGYC (contig accession) to locate BGCs within that contig.
 
-- **Biome**:  
+- **Biome**:
   Enter terms related to the biome lineage (e.g., sediment, hydrothermal vent) to filter BGCs that originate from assemblies associated with those biomes.
 
-- **BGC Completeness**:  
+- **BGC Completeness**:
   Select from the following options to refine your search based on the BGCs' contig boundaries:
   - **Full-Length BGC**: The BGC is entirely within the contig, meaning both start and end positions are within the boundaries of the contig, indicating a complete prediction.
   - **Single**: Partial BGC (Single edge). The BGC extends to one end of the contig, suggesting that the prediction may be truncated at one side because the contig ends there.
@@ -48,11 +48,11 @@ The Advanced Search form allows you to perform fine-grained queries to explore t
 
 - **Pfam**:  Enter one or more domain accessions (e.g., PF00109 PF00501). Use OR to be inclusive; AND to demand all domains together.
 
-- **Pfam strategy**:  
+- **Pfam strategy**:
   The **Pfam strategy** field determines how the search will interpret multiple Pfam entries. You have two options:
-  
+
   - **OR logic**: When you select the OR strategy, the search will return BGCs that contain at least one of the Pfams you specified. This is useful when you are interested in BGCs that have any of a list of potential Pfams, allowing for a broader search. For example, if you enter `PF00109 PF00501` and select OR, the search will return BGCs that contain either PF00109, PF00501, or both.
-  
+
   - **AND logic**: Selecting the AND strategy will narrow the search results to BGCs that must contain all the Pfams you listed. This is ideal when you are looking for BGCs with a specific combination of Pfams. For example, if you enter `PF00109 PF00501` and choose AND, only those BGCs that contain both PF00109 and PF00501 will be returned.
 
 - **BGC Detectors**:
@@ -74,10 +74,10 @@ Sortable table; click a column header to flip the order. Your chosen sort carrie
 
 ### Results summary
 
-- Number of Regions  
+- Number of Regions
 - Number of studies where regions matching the criteria where found
 - Number of assemblies where regions matching the criteria where found
-- Class Distribution. Note that for regions with more than one class predicted only one will be counted. 
+- Class Distribution. Note that for regions with more than one class predicted only one will be counted.
 
 ### Table columns
 
@@ -94,7 +94,7 @@ Sortable table; click a column header to flip the order. Your chosen sort carrie
 - **Detectors**:  Lists the BGC detectors that contributed to the aggregated prediction.
 
 - **Classes**:  The predicted BGC classes within the *aggregated region*.
-  
+
 - **Details**:  Link to the BGC details page.
 
 ### Card view
@@ -114,4 +114,3 @@ Click “Download results TSV” to save the current hit list.
 - Start broad (one class + a biome word) then refine.
 - Combine Pfam AND logic sparingly—over‑restricting often yields zero hits.
 - Large result sets: prioritise using the UMAP to spot outliers or class clusters before downloading.
-

@@ -6,26 +6,36 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('mgnify_bgcs', '0017_delete_point_alter_biome_lineage_and_more'),
+        ("mgnify_bgcs", "0017_delete_point_alter_biome_lineage_and_more"),
     ]
 
     operations = [
         migrations.RemoveConstraint(
-            model_name='cds',
-            name='uniq_cds_location_caller_pipeline',
+            model_name="cds",
+            name="uniq_cds_location_caller_pipeline",
         ),
         migrations.AlterField(
-            model_name='biome',
-            name='lineage',
-            field=models.CharField(default='root', max_length=255, unique=True),
+            model_name="biome",
+            name="lineage",
+            field=models.CharField(default="root", max_length=255, unique=True),
         ),
         migrations.AlterField(
-            model_name='cds',
-            name='pipeline_version',
+            model_name="cds",
+            name="pipeline_version",
             field=models.CharField(blank=True, max_length=50, null=True),
         ),
         migrations.AddConstraint(
-            model_name='cds',
-            constraint=models.UniqueConstraint(fields=('contig', 'start_position', 'end_position', 'strand', 'protein', 'gene_caller'), name='uniq_cds_location_protein_caller'),
+            model_name="cds",
+            constraint=models.UniqueConstraint(
+                fields=(
+                    "contig",
+                    "start_position",
+                    "end_position",
+                    "strand",
+                    "protein",
+                    "gene_caller",
+                ),
+                name="uniq_cds_location_protein_caller",
+            ),
         ),
     ]

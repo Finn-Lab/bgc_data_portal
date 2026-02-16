@@ -19,7 +19,7 @@ At the top of the BGC details page, users will find summary information and rela
 - **Assembly accession**: The ENA (European Nucleotide Archive) assembly accession associated with the predicted BGC region. This is a unique identifier for the assembly from which the BGC was predicted. The assembly accession is linked to the MGnify assembly page, where users can explore the assembly in more detail.
 
 - **Biome**: Information about the biome from which the assembly originates. Biome data provides context on the environmental source of the DNA sequence, which can be important for understanding the ecological relevance of the BGC.
-  
+
 - **Contig information**: This includes contig accession (MGYC) where the BGC was predicted, as well as the start and end positions of the *aggregated region*.
 
 - **Predicted classes**: Each detector’s class call—agreement increases confidence.
@@ -69,4 +69,3 @@ Choose the format that fits your next step—GenBank for genome browsers, JSON (
 - Many tailoring/modification domains (e.g. glycosyltransferase, methyltransferase) can point to structural novelty.
 - “Double” completeness in search results usually means partial edges—treat with caution for cloning or heterologous expression planning.
 - Compare span differences between tools: wide disagreement may indicate fragmented assembly or borderline confidence.
-

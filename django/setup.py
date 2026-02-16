@@ -1,5 +1,4 @@
 from setuptools import setup, find_packages
-from bgc_data_portal import __version__, __name__, __description__
 
 # Read the contents of your README file
 from pathlib import Path

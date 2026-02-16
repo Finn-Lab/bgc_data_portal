@@ -174,21 +174,27 @@ def ingest_package(package_path: str) -> dict:
         contig_rows.append(
             Contig(
                 sequence_sha256=h,
-                sequence=c_obj.get("sequence")
-                if isinstance(c_obj, dict)
-                else getattr(c, "sequence"),
-                name=c_obj.get("name")
-                if isinstance(c_obj, dict)
-                else getattr(c, "name"),
-                length=c_obj.get("length")
-                if isinstance(c_obj, dict)
-                else getattr(c, "length"),
-                source_organism=c_obj.get("source_organism")
-                if isinstance(c_obj, dict)
-                else getattr(c, "source_organism"),
-                mgyc=c_obj.get("mgyc")
-                if isinstance(c_obj, dict)
-                else getattr(c, "mgyc"),
+                sequence=(
+                    c_obj.get("sequence")
+                    if isinstance(c_obj, dict)
+                    else getattr(c, "sequence")
+                ),
+                name=(
+                    c_obj.get("name") if isinstance(c_obj, dict) else getattr(c, "name")
+                ),
+                length=(
+                    c_obj.get("length")
+                    if isinstance(c_obj, dict)
+                    else getattr(c, "length")
+                ),
+                source_organism=(
+                    c_obj.get("source_organism")
+                    if isinstance(c_obj, dict)
+                    else getattr(c, "source_organism")
+                ),
+                mgyc=(
+                    c_obj.get("mgyc") if isinstance(c_obj, dict) else getattr(c, "mgyc")
+                ),
                 assembly=assemblies.get(
                     c_obj.get("assembly_accession")
                     if isinstance(c_obj, dict)
@@ -214,14 +220,18 @@ def ingest_package(package_path: str) -> dict:
         embedding = p_obj.get("embedding")
         protein_rows.append(
             Protein(
-                sequence=p_obj.get("sequence")
-                if isinstance(p_obj, dict)
-                else getattr(p, "sequence"),
+                sequence=(
+                    p_obj.get("sequence")
+                    if isinstance(p_obj, dict)
+                    else getattr(p, "sequence")
+                ),
                 sequence_sha256=h,
                 embedding=Vector(embedding) if embedding is not None else None,
-                cluster_representative=p_obj.get("cluster_representative")
-                if isinstance(p_obj, dict)
-                else getattr(p, "cluster_representative", None),
+                cluster_representative=(
+                    p_obj.get("cluster_representative")
+                    if isinstance(p_obj, dict)
+                    else getattr(p, "cluster_representative", None)
+                ),
             )
         )
     Protein.objects.bulk_create(

@@ -13,19 +13,14 @@ Down-stream components can stream-produce it; we stream-consume it so that
 The task is fully idempotent: hashes are unique, we upsert on conflicts,
 and all inserts are surrounded by `atomic()` transactions.
 """
+
 from __future__ import annotations
 
-import base64
-import gzip
-import io
 
-import pandas as pd
 from mgnify_bgcs.utils.seqrecord_utils import build_bgc_record
 from mgnify_bgcs.utils.helpers import (
-    normalize_class_distribution_dict,
     from_queryset_to_website_results,
 )
-from mgnify_bgcs.cache_utils import generate_job_key_from_dict
 
 # prefer orjson for speed but fall back to stdlib for environments without it
 try:
@@ -33,16 +28,11 @@ try:
 except Exception:  # pragma: no cover - env-specific
     import json  # type: ignore
 import logging
-from collections import defaultdict
 from pathlib import Path
-from pydantic import BaseModel
-from typing import Any, Dict, Iterable, cast
+from typing import Any, cast
 
 from celery import shared_task
 from django.conf import settings
-from django.db.models import Q
-from django.core.exceptions import ObjectDoesNotExist
-from django.core.cache import cache
 
 # from pgvector.django import VectorField
 # pgvector is an optional runtime dependency; provide a tiny stub for static checks
@@ -69,41 +59,8 @@ from .services.db_operations import (
     register_umap_transform as svc_register_umap_transform,
 )
 
-from .models import (
-    Assembly,
-    Biome,
-    Bgc,
-    BgcBgcClass,
-    BgcClass,
-    BgcDetector,
-    Contig,
-    GeneCaller,
-    Cds,
-    Domain,
-    Protein,
-    ProteinDomain,
-    Study,
-    UMAPTransform,
-)
-
-from .ingestion_schemas import (
-    StudyRow,
-    BiomeRow,
-    AssemblyRow,
-    ContigRow,
-    BgcRow,
-    ProteinRow,
-    DomainRow,
-    CdsRow,
-    BgcClassRow,
-    BgcDetectorRow,
-    ProteinDomainRow,
-    GeneCallerRow,
-    UMAPManifest,
-)
 
 import json
-import time
 
 from mgnify_bgcs.searches import (
     search_bgcs_by_keyword,
@@ -111,14 +68,12 @@ from mgnify_bgcs.searches import (
     search_bgcs_by_record,
     sequence_bgcs_by_smiles,
 )
-from .cache_utils import get_job_status, set_job_cache, generate_job_key_from_dict
+from .cache_utils import set_job_cache
 
 log = logging.getLogger(__name__)
 numeric_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 log.setLevel(numeric_level)
 
-
-from .services.db_operations.helpers import _bulk_get_or_create, BULK_INSERT_SIZE
 
 N_EMBEDDING_SAMPLE = 100_000  # max number of embedding to export
 
@@ -483,9 +438,11 @@ def collect_bgc_data(self, search_key: str, clean_params: dict) -> Any:
         "plot_html": plot_html,
         "bgc_id": bgc_id,
         "assembly_accession": record_source.get("assembly_accession", ""),
-        "assembly_url": f"https://www.ebi.ac.uk/metagenomics/assemblies/{record_source.get('assembly_accession')}"
-        if record_source.get("assembly_accession", None)
-        else "",
+        "assembly_url": (
+            f"https://www.ebi.ac.uk/metagenomics/assemblies/{record_source.get('assembly_accession')}"
+            if record_source.get("assembly_accession", None)
+            else ""
+        ),
         "biome_lineage": record_source.get("biome_lineage", ""),
         "predicted_classes_dict": predicted_classes_dict,
         "functional_annotation_dict": functional_annotation_dict,

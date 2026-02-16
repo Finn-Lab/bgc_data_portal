@@ -197,7 +197,7 @@ function drawScatter(){
   // split into traces by class_tag for automatic colour-by-class
   const tracesByClass = {};
 data.forEach(pt => {
-  if(!tracesByClass[pt.class_tag]) 
+  if(!tracesByClass[pt.class_tag])
     tracesByClass[pt.class_tag] = {
       x:[], y:[], text:[], customdata:[], marker: { size: [] },
       mode:'markers', type:'scatter',

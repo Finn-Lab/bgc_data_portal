@@ -2,7 +2,7 @@ import logging
 import re
 import operator
 from functools import reduce
-from typing import List, Optional, Any
+from typing import Optional, Any
 
 from django.conf import settings
 from django.http import HttpResponseBadRequest
@@ -14,7 +14,6 @@ from Bio.SeqRecord import SeqRecord
 from rdkit import Chem
 from rdkit.Chem import DataStructs, rdFingerprintGenerator
 
-from mgnify_bgcs.services.compound_search_utils import smiles_to_svg
 from mgnify_bgcs.utils.helpers import annotate_queryset, find_doppelganger_bgcs
 from mgnify_bgcs.utils.lazy_loaders import get_highest_versions_by_tool
 from mgnify_bgcs.filters import BgcKeywordFilter

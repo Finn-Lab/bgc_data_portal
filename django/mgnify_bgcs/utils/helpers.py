@@ -8,14 +8,11 @@ import pandas as pd
 from ..models import Bgc, CurrentStats
 import logging
 import numpy as np
-from typing import Collection, Sequence
 from django.db.models import Count
 from django.db.models import OuterRef, Exists
-from django.db.models import Count
 
-from ..models import Bgc
 
-from django.db.models import F, Value, OuterRef
+from django.db.models import F, Value
 from django.db.models.functions import Coalesce
 from django.contrib.postgres.aggregates import ArrayAgg
 
@@ -297,9 +294,11 @@ def from_queryset_to_website_results(queryset):
             "accession": bgc.get("accession"),
             "x": metadata.get("umap_x_coord"),
             "y": metadata.get("umap_y_coord"),
-            "class_tag": class_names[0]
-            if isinstance(class_names, (list, tuple)) and class_names
-            else None,
+            "class_tag": (
+                class_names[0]
+                if isinstance(class_names, (list, tuple)) and class_names
+                else None
+            ),
             "is_mibig_tag": "mibig" in "".join(map(str, detector_names)).lower(),
         }
         for col in display_columns:

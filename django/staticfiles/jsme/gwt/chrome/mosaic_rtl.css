@@ -9,7 +9,7 @@
  *    * html .gwt-Widget {
  *      Rule applied to IE6 only (not to IE7)
  *    }
- * 
+ *
  * Specifically, IE6 does not support images with multiple transparent colors,
  * so we need to use the AlphaImageLoader in IE6 only.
  */
@@ -23,7 +23,7 @@
 .mosaic-Reference-chrome-rtl {
   height: 5px;
   width: 5px;
-  
+
 }
 
 /*
@@ -38,7 +38,7 @@ div,td {
 a:link {
 	color:#0000cc;
 }
-     
+
 a:visited {
 	color:#551a8b;
 }
@@ -198,11 +198,11 @@ a:active {
 }
 
 .mosaic-ToolButton .mosaic-Split-Button-disabled {
-    background-image: url(images/button/split-button-arrow-disabled.png);    
+    background-image: url(images/button/split-button-arrow-disabled.png);
 }
 
 .mosaic-ToolButton .mosaic-Checkbox-Button-checked[disabled] {
-    border: 1px inset #ccc;  
+    border: 1px inset #ccc;
 }
 
 /*** Caption ***/
@@ -228,7 +228,7 @@ a:active {
 /*** DropDownPanel ***/
 
 .mosaic-DropDownPanel {
-	
+
 }
 
 .mosaic-DropDownPanel .mosaic-ComboBoxList {
@@ -284,7 +284,7 @@ a:active {
 .mosaic-DropDownPanel .mosaic-ScrollTreeTable .footerTable td {
 	color: #fff;
 }
-    
+
 .mosaic-DropDownPanel .gwt-ScrollTable .dataTable tr.hovering,
 .mosaic-DropDownPanel .gwt-ScrollTable .dataTable tr.highlighted,
 .mosaic-DropDownPanel .mosaic-ColumnWidget .dataTable tr.hovering,
@@ -321,10 +321,10 @@ a:active {
 	-khtml-user-select: none;
 	-moz-user-select: none;
 }
-.mosaic-WindowPanel .mosaic-CaptionLayoutPanel {	
+.mosaic-WindowPanel .mosaic-CaptionLayoutPanel {
 	padding: 0px;
 	margin: 0px;
-	
+
 	/* debug */
 	/*border: 1px solid #00f;*/
 }
@@ -389,7 +389,7 @@ a:active {
 	/* Override glass panel color to be `green` */
 	background-color: #000 !important;
 	background-repeat: repeat;
-	
+
 	/* Override glass panel to 0% opacity (= 100% transparency) */
 	filter: alpha(opacity = 0) !important; /* IE */
 	opacity: 0.0 !important; /* non-IE */
@@ -464,7 +464,7 @@ a:active {
 
 .mosaic-ImageButton img {
 	display: block;
-	
+
 	/*
 	 * Unfortunately, in IE, border-color: transparent is rendered as black.
 	 * We get around the border on hover displacement of content by adjusting
@@ -481,7 +481,7 @@ a:active {
 	 */
 	border: 1px solid #4d4d4d;
 	margin: 0px;
-	
+
 	background-color: #ccc;
 }
 .mosaic-ImageButton img:active {
@@ -520,7 +520,7 @@ a:active {
 }
 
 .mosaic-ScrollTabBar .mosaic-ScrollTabBar-NavBar {
-  margin: 0px 2px !important;	
+  margin: 0px 2px !important;
 }
 
 .mosaic-ScrollTabBar button {
@@ -640,7 +640,7 @@ a:active {
 	/*border: 1px dotted #00f;*/
 }
 .mosaic-CaptionLayoutPanel .Body {
-	
+
 	/* debug */
 	/*border: 1px dotted #0f0;*/
 }
@@ -659,7 +659,7 @@ a:active {
 }
 .mosaic-DisclosureLayoutPanel .mosaic-Caption-text a {
   text-decoration: none;  /* Remove underline from header */
-  color: black; 
+  color: black;
   cursor: pointer;
   cursor: hand;
   padding: 1px;
@@ -675,7 +675,7 @@ a:active {
 .mosaic-LayoutPanel {
 	padding: 5px;
 	margin: 0px;
-	
+
 	/* debug */
 	/*
 	margin: 1px;
@@ -683,7 +683,7 @@ a:active {
 	*/
 }
 .mosaic-LayoutPanel-FormLayout .mosaic-LayoutPanel {
-	/* required by Safari to handle the 'width' attribute */ 
+	/* required by Safari to handle the 'width' attribute */
 	position: absolute !important;
 }
 .mosaic-LayoutPanel-FillLayout {
@@ -718,18 +718,18 @@ html>body .mosaic-LayoutPanel-BorderLayout .SouthCollapsedImageButton img {
 .mosaic-LayoutPanel-BorderLayout .WestCollapsedImageButton {
 	border: 1px solid #d0e4f6;
 	border-left: none;
-	
+
 	/* required by Safari to handle the 'width' attribute */
 	position: absolute !important;
 	width: 18px !important;
-	
+
 	padding: 1px 1px 1px 0px;
 	overflow: hidden;
 }
 .mosaic-LayoutPanel-BorderLayout .EastCollapsedImageButton {
 	border: 1px solid #d0e4f6;
 	border-right: none;
-	
+
 	/* required by Safari to handle the 'width' attribute */
 	position: absolute !important;
 	width: 18px !important;
@@ -799,11 +799,11 @@ html>body .mosaic-LayoutPanel-BorderLayout .SouthCollapsedImageButton img {
 .mosaic-ToolBar .mosaic-ToolBarSeparator {
 	border-left: 1px solid #ccc;
 	background: white;
-	
+
 	/* required by Safari to handle the 'width' attribute */
 	position: absolute !important;
 	width: 1px;
-	
+
 	padding: 0px;
 	margin: 5px 3px;
 }
@@ -812,7 +812,7 @@ html>body .mosaic-LayoutPanel-BorderLayout .SouthCollapsedImageButton img {
 
 .mosaic-WidgetWrapper {
 	/* debug */
-	/*border: 1px solid;*/	
+	/*border: 1px solid;*/
 }
 
 /*** DateTimePicker ***/
@@ -827,7 +827,7 @@ html>body .mosaic-LayoutPanel-BorderLayout .SouthCollapsedImageButton img {
 
 /*** mosaic-DecoratedBottomTabBar ***/
 
-.mosaic-DecoratedBottomTabBar {	
+.mosaic-DecoratedBottomTabBar {
 }
 .mosaic-DecoratedBottomTabBar .gwt-TabBarFirst {
 	width: 5px;  /* first tab distance from the left */
@@ -845,7 +845,7 @@ html>body .mosaic-LayoutPanel-BorderLayout .SouthCollapsedImageButton img {
 .mosaic-DecoratedBottomTabBar .tabBottomLeft,
 .mosaic-DecoratedBottomTabBar .tabBottomRight {
 	padding: 0px;
-	
+
 }
 .mosaic-DecoratedBottomTabBar .tabBottomLeftInner,
 .mosaic-DecoratedBottomTabBar .tabBottomRightInner {
@@ -997,7 +997,7 @@ html>body .mosaic-DecoratedBottomTabBar .gwt-TabBarItem-selected .tabBottomRight
 .gwt-FastTreeItem-loading .open {
 	background: url('images/fasttree/treeLoading.gif') no-repeat center left;
 }
-.gwt-FastTreeItem-leaf { 
+.gwt-FastTreeItem-leaf {
 }
 .gwt-FastTree .treeItemContent {
 	padding: 2px;
@@ -1078,7 +1078,7 @@ html>body .mosaic-DecoratedBottomTabBar .gwt-TabBarItem-selected .tabBottomRight
 	cursor: default;
 	background: none;
 	opacity: .5;
-	
+
 	filter: alpha(opacity=40);
 }
 
@@ -1115,7 +1115,7 @@ html>body .mosaic-DecoratedBottomTabBar .gwt-TabBarItem-selected .tabBottomRight
 .gwt-Button[disabled] table,
 .gwt-Button[disabled] img {
 	opacity: .5;
-	
+
 	filter: alpha(opacity=40);
 }
 
@@ -1168,7 +1168,7 @@ html>body .mosaic-DecoratedBottomTabBar .gwt-TabBarItem-selected .tabBottomRight
 }
 
 .gwt-SliderBar-shell-focused {
-	
+
 }
 
 .gwt-SliderBar-shell .gwt-SliderBar-line-sliding {

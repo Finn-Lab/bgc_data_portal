@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import io
-from typing import Dict, Any, Optional, Union
+from typing import Optional
 
 import pandas as pd
 from django.db.models import Q

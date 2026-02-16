@@ -34,9 +34,7 @@ class Assembly(models.Model):
 
 
 class Contig(models.Model):
-    id = models.AutoField(
-        primary_key=True
-    )  
+    id = models.AutoField(primary_key=True)
     sequence_sha256 = models.CharField(max_length=64, unique=True, db_index=True)
     mgyc = models.CharField(max_length=255, blank=True, null=True)
     accession = models.CharField(max_length=255, blank=True, null=True)
@@ -137,7 +135,7 @@ class BgcBgcClass(models.Model):
         ]
 
 
-class Domain(models.Model):  
+class Domain(models.Model):
     id = models.AutoField(primary_key=True)
     acc = models.CharField(max_length=50, unique=True, db_index=True)
     name = models.CharField(max_length=255, db_index=True)
@@ -238,7 +236,14 @@ class Cds(models.Model):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["contig", "start_position", "end_position", "strand", "protein", "gene_caller"],
+                fields=[
+                    "contig",
+                    "start_position",
+                    "end_position",
+                    "strand",
+                    "protein",
+                    "gene_caller",
+                ],
                 name="uniq_cds_location_protein_caller",
             )
         ]
@@ -262,8 +267,7 @@ class UMAPTransform(models.Model):
     umap_version = models.CharField(max_length=50)
     model_blob = models.BinaryField()
 
-    sha256 = models.CharField(max_length=64, unique=True)  
+    sha256 = models.CharField(max_length=64, unique=True)
 
     class Meta:
         ordering = ["-created_at"]
-

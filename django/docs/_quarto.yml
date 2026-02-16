@@ -59,9 +59,9 @@ format:
 # files:
 #   - index.qmd
 #   - landing-page-features.qmd
-#   - explore-bgcs.qmd  
+#   - explore-bgcs.qmd
 #   - bgc-details.qmd
 #   - use-cases/index.qmd
 #   - use-cases/ripp-glycosyltransferase-toxin-antitoxin.ipynb
 #   - api-documentation.qmd
-#   - about.qmd  
+#   - about.qmd

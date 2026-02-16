@@ -15,7 +15,7 @@ import hashlib
 import json
 import logging
 import os
-from urllib.parse import urlencode, parse_qs
+from urllib.parse import urlencode
 from typing import Any, cast, List, Dict
 from io import StringIO
 
@@ -26,21 +26,15 @@ from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.generic import TemplateView
-from django.views import View
 
 from django.http import JsonResponse, HttpResponseBadRequest
 from django.utils.safestring import mark_safe
 from django.views.decorators.cache import never_cache
-import plotly.io as pio
-from plotly.graph_objs import Figure as PlotlyFigure
 
-from celery.result import AsyncResult
 
 # Biopython / record helpers for downloads
-from Bio import SeqIO
-from Bio.Seq import Seq
 
-from mgnify_bgcs.utils.seqrecord_utils import EnhancedSeqRecord, build_bgc_record
+from mgnify_bgcs.utils.seqrecord_utils import EnhancedSeqRecord
 
 from bgc_data_portal.forms import (
     BgcKeywordSearchForm,
@@ -52,9 +46,7 @@ from bgc_data_portal.forms import (
 from mgnify_bgcs import tasks as bgc_tasks
 from mgnify_bgcs.utils.helpers import get_latest_stats
 from mgnify_bgcs.cache_utils import (
-    generate_job_key_from_dict,
     get_job_status,
-    set_job_cache,
 )
 
 log = logging.getLogger(__name__)

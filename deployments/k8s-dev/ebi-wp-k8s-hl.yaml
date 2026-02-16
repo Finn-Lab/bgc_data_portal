@@ -348,7 +348,7 @@ items:
                 claimName: bgc-static-volume-claim-v2
           containers:
             - name: celery
-              securityContext: 
+              securityContext:
                 runAsUser: 7123
                 runAsGroup: 1347
               image: quay.io/microbiome-informatics/bgc_dp_web_site:dev

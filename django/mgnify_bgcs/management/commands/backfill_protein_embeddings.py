@@ -46,12 +46,14 @@ def decode_vector(blob: bytes, dtype_name: Optional[str]) -> np.ndarray:
 
 def ensure_stage_table() -> None:
     with connection.cursor() as cur:
-        cur.execute(f"""
+        cur.execute(
+            f"""
             CREATE UNLOGGED TABLE IF NOT EXISTS {STAGE_TABLE} (
                 sequence_sha256 text PRIMARY KEY,
                 embedding vector({DIM}) NOT NULL
             );
-        """)
+        """
+        )
 
 
 def drop_hnsw_index() -> None:
@@ -67,12 +69,14 @@ def create_hnsw_index() -> None:
     connection.set_autocommit(True)
     try:
         with connection.cursor() as cur:
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 CREATE INDEX CONCURRENTLY {INDEX_NAME}
                 ON {TABLE_NAME}
                 USING hnsw (embedding vector_cosine_ops)
                 WITH (m = 16, ef_construction = 512);
-            """)
+            """
+            )
     finally:
         connection.set_autocommit(False)
 
@@ -100,20 +104,24 @@ def load_stage_rows(rows: List[Tuple[str, str]]) -> None:
 def apply_stage_update(only_null: bool) -> None:
     with connection.cursor() as cur:
         if only_null:
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 UPDATE {TABLE_NAME} p
                 SET embedding = s.embedding
                 FROM {STAGE_TABLE} s
                 WHERE p.sequence_sha256 = s.sequence_sha256
                   AND p.embedding IS NULL;
-            """)
+            """
+            )
         else:
-            cur.execute(f"""
+            cur.execute(
+                f"""
                 UPDATE {TABLE_NAME} p
                 SET embedding = s.embedding
                 FROM {STAGE_TABLE} s
                 WHERE p.sequence_sha256 = s.sequence_sha256;
-            """)
+            """
+            )
 
 
 class Command(BaseCommand):
@@ -161,7 +169,7 @@ class Command(BaseCommand):
             if not pending:
                 return
             with transaction.atomic():
-                load_stage_rows(pending)     # TRUNCATE + INSERT VALUES (...)
+                load_stage_rows(pending)  # TRUNCATE + INSERT VALUES (...)
                 apply_stage_update(only_null)
             staged_total += len(pending)
             pending = []
@@ -203,7 +211,9 @@ class Command(BaseCommand):
             self.stdout.write("Rebuilding HNSW index (CONCURRENTLY)...")
             create_hnsw_index()
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Completed embedding backfill from {len(parquet_files)} parquet files. "
-            f"staged={staged_total} skipped_bad_dim={skipped_bad_dim}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Completed embedding backfill from {len(parquet_files)} parquet files. "
+                f"staged={staged_total} skipped_bad_dim={skipped_bad_dim}"
+            )
+        )

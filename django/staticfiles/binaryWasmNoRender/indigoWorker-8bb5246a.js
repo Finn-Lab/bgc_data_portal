@@ -19,7 +19,7 @@ import { C as Command } from './indigoWorker.types-944da651.js';
 
 var Module = (() => {
   var _scriptName = import.meta.url;
-  
+
   return (
 async function(moduleArg = {}) {
   var moduleRtn;

@@ -1,13 +1,10 @@
-import re
 from dataclasses import dataclass
-from pathlib import Path
 from typing import List
 
 
 # Implement a local pure-Python copy of `merge_overlaps` so tests are fast,
 # isolated and avoid importing Django models.
-from dataclasses import dataclass
-from typing import List, Sequence
+from typing import Sequence
 
 
 @dataclass

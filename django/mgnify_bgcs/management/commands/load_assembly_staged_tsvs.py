@@ -8,9 +8,8 @@ from typing import Any, Iterable, Optional, Sequence
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
-from django.db.models import Q
 
-from mgnify_bgcs.models import ( 
+from mgnify_bgcs.models import (
     Assembly,
     Biome,
     Bgc,
@@ -130,7 +129,9 @@ def _preload_map(
     key_list = list({k for k in keys if k is not None and str(k).strip() != ""})
     if not key_list:
         return {}
-    return model.objects.filter(**{f"{field_name}__in": key_list}).in_bulk(field_name=field_name)
+    return model.objects.filter(**{f"{field_name}__in": key_list}).in_bulk(
+        field_name=field_name
+    )
 
 
 def _ensure_dir_has_files(genome_dir: Path) -> None:
@@ -139,7 +140,9 @@ def _ensure_dir_has_files(genome_dir: Path) -> None:
         raise CommandError(f"Missing files in {genome_dir}: {', '.join(missing)}")
 
 
-def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) -> dict[str, int]:
+def _load_one_genome_dir(
+    genome_dir: Path, *, batch_size: int, dry_run: bool
+) -> dict[str, int]:
     """
     Loads one genome subdirectory in a single transaction.
     Sequences are immutable -> we do NOT update large sequence text fields on conflict.
@@ -183,10 +186,24 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
     with transaction.atomic():
         # ---- Dimension tables (no FKs) ----
         studies = [Study(accession=r["accession"].strip()) for r in studies_rows]
-        _bulk_upsert(Study, studies, unique_fields=["accession"], update_fields=[], batch_size=batch_size)
+        _bulk_upsert(
+            Study,
+            studies,
+            unique_fields=["accession"],
+            update_fields=[],
+            batch_size=batch_size,
+        )
 
-        biomes = [Biome(lineage=(r.get("lineage") or "root").strip()) for r in biomes_rows]
-        _bulk_upsert(Biome, biomes, unique_fields=["lineage"], update_fields=[], batch_size=batch_size)
+        biomes = [
+            Biome(lineage=(r.get("lineage") or "root").strip()) for r in biomes_rows
+        ]
+        _bulk_upsert(
+            Biome,
+            biomes,
+            unique_fields=["lineage"],
+            update_fields=[],
+            batch_size=batch_size,
+        )
 
         detectors = [
             BgcDetector(
@@ -205,7 +222,13 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
         )
 
         bgc_classes = [BgcClass(name=r["name"].strip()) for r in bgc_classes_rows]
-        _bulk_upsert(BgcClass, bgc_classes, unique_fields=["name"], update_fields=[], batch_size=batch_size)
+        _bulk_upsert(
+            BgcClass,
+            bgc_classes,
+            unique_fields=["name"],
+            update_fields=[],
+            batch_size=batch_size,
+        )
 
         gene_callers = [
             GeneCaller(
@@ -242,24 +265,32 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
 
         # ---- Preload FK maps ----
         study_map = _preload_map(
-            Study, (r.get("study_accession") for r in assemblies_rows), field_name="accession"
+            Study,
+            (r.get("study_accession") for r in assemblies_rows),
+            field_name="accession",
         )
         biome_map = _preload_map(
-            Biome, (r.get("biome_lineage") for r in assemblies_rows), field_name="lineage"
+            Biome,
+            (r.get("biome_lineage") for r in assemblies_rows),
+            field_name="lineage",
         )
 
         detector_map = _preload_map(
             BgcDetector, (r.get("detector_name") for r in bgcs_rows), field_name="name"
         )
         bgc_class_map = _preload_map(
-            BgcClass, (r.get("bgc_class_name") for r in bgc_bgc_classes_rows), field_name="name"
+            BgcClass,
+            (r.get("bgc_class_name") for r in bgc_bgc_classes_rows),
+            field_name="name",
         )
 
         gene_caller_map = _preload_map(
             GeneCaller, (r.get("gene_caller_name") for r in cds_rows), field_name="name"
         )
         domain_map = _preload_map(
-            Domain, (r.get("domain_acc") for r in protein_domains_rows), field_name="acc"
+            Domain,
+            (r.get("domain_acc") for r in protein_domains_rows),
+            field_name="acc",
         )
 
         # ---- Assemblies ----
@@ -270,7 +301,9 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
                 Assembly(
                     accession=accession,
                     collection=(r.get("collection") or None),
-                    study=study_map.get((r.get("study_accession") or "").strip() or None),
+                    study=study_map.get(
+                        (r.get("study_accession") or "").strip() or None
+                    ),
                     biome=biome_map.get((r.get("biome_lineage") or "").strip() or None),
                 )
             )
@@ -281,7 +314,9 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
             update_fields=["collection", "study", "biome"],
             batch_size=batch_size,
         )
-        assembly_map = _preload_map(Assembly, (r["accession"] for r in assemblies_rows), field_name="accession")
+        assembly_map = _preload_map(
+            Assembly, (r["accession"] for r in assemblies_rows), field_name="accession"
+        )
 
         # ---- Contigs ----
         # sequence is immutable -> do NOT update it on conflict
@@ -296,7 +331,9 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
                     mgyc=(r.get("mgyc") or None),
                     accession=(r.get("accession") or None),
                     name=(r.get("name") or None),
-                    assembly=assembly_map.get((r.get("assembly_accession") or "").strip() or None),
+                    assembly=assembly_map.get(
+                        (r.get("assembly_accession") or "").strip() or None
+                    ),
                     source_organism=_parse_json_maybe(r.get("source_organism")) or {},
                 )
             )
@@ -304,10 +341,21 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
             Contig,
             contigs,
             unique_fields=["sequence_sha256"],
-            update_fields=["length", "mgyc", "accession", "name", "assembly", "source_organism"],
+            update_fields=[
+                "length",
+                "mgyc",
+                "accession",
+                "name",
+                "assembly",
+                "source_organism",
+            ],
             batch_size=batch_size,
         )
-        contig_map = _preload_map(Contig, (r["sequence_sha256"] for r in contigs_rows), field_name="sequence_sha256")
+        contig_map = _preload_map(
+            Contig,
+            (r["sequence_sha256"] for r in contigs_rows),
+            field_name="sequence_sha256",
+        )
 
         # ---- Proteins ----
         # sequence is immutable -> do NOT update it on conflict
@@ -330,7 +378,9 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
             batch_size=batch_size,
         )
         protein_map = _preload_map(
-            Protein, (r["sequence_sha256"] for r in proteins_rows), field_name="sequence_sha256"
+            Protein,
+            (r["sequence_sha256"] for r in proteins_rows),
+            field_name="sequence_sha256",
         )
 
         # ---- BGCs ----
@@ -363,10 +413,9 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
         # Re-fetch BGCs for linking (by contig+detector pairs; then key in memory)
         contig_ids = {b.contig_id for b in bgc_objs}
         detector_ids = {b.detector_id for b in bgc_objs}
-        bgc_qs = (
-            Bgc.objects.filter(contig_id__in=contig_ids, detector_id__in=detector_ids)
-            .only("id", "contig_id", "detector_id", "start_position", "end_position")
-        )
+        bgc_qs = Bgc.objects.filter(
+            contig_id__in=contig_ids, detector_id__in=detector_ids
+        ).only("id", "contig_id", "detector_id", "start_position", "end_position")
         bgc_key_to_id = {
             (b.contig_id, b.detector_id, b.start_position, b.end_position): b.id
             for b in bgc_qs
@@ -442,7 +491,14 @@ def _load_one_genome_dir(genome_dir: Path, *, batch_size: int, dry_run: bool) ->
         _bulk_upsert(
             Cds,
             cds_objs,
-            unique_fields=["contig", "start_position", "end_position", "strand", "protein", "gene_caller"],
+            unique_fields=[
+                "contig",
+                "start_position",
+                "end_position",
+                "strand",
+                "protein",
+                "gene_caller",
+            ],
             update_fields=["protein_identifier", "pipeline_version"],
             batch_size=batch_size,
         )
@@ -499,7 +555,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         input_dir = Path(options["input_dir"]).expanduser().resolve()
         if not input_dir.exists() or not input_dir.is_dir():
-            raise CommandError(f"input_dir does not exist or is not a directory: {input_dir}")
+            raise CommandError(
+                f"input_dir does not exist or is not a directory: {input_dir}"
+            )
 
         batch_size: int = options["batch_size"]
         dry_run: bool = options["dry_run"]
@@ -521,7 +579,9 @@ class Command(BaseCommand):
 
         for genome_dir in subdirs:
             try:
-                counts = _load_one_genome_dir(genome_dir, batch_size=batch_size, dry_run=dry_run)
+                counts = _load_one_genome_dir(
+                    genome_dir, batch_size=batch_size, dry_run=dry_run
+                )
                 ok += 1
                 self.stdout.write(
                     self.style.SUCCESS(

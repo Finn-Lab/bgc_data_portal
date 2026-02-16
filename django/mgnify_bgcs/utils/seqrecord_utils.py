@@ -5,6 +5,7 @@ Provides:
 - EnhancedSeqRecord: SeqRecord subclass with convenience exporters
 - build_bgc_record: constructs an EnhancedSeqRecord for a given BGC id
 """
+
 from __future__ import annotations
 
 from typing import List, Dict, Any

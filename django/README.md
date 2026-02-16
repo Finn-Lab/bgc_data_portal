@@ -11,11 +11,11 @@ MGnify Biosynthetic Gene Clusters is a platform developed by EMBL-EBI to support
 
 ## Dataset
 
-The dataset contains BGC predictions organised in an SQLite database, including details on associated contigs, assemblies, proteins, and metadata. 
+The dataset contains BGC predictions organised in an SQLite database, including details on associated contigs, assemblies, proteins, and metadata.
 
 ## Funding
 
-This portal is part of the EUREMAP project, funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663). 
+This portal is part of the EUREMAP project, funded by the European Union under HORIZON-INFRA-2023-DEV-01-04 (Grant No. 101131663).
 
 
 ## Docs

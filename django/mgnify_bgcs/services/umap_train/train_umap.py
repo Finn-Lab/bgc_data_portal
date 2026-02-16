@@ -6,8 +6,16 @@ Usage:
     python train_umap.py --input_parquet <embeddings.parquet> --output_prefix <output_prefix>
 Where:
 """
-import argparse, json, os, hashlib, tempfile, uuid, tarfile
-import joblib, umap, numpy as np, pandas as pd
+import argparse
+import json
+import os
+import hashlib
+import tempfile
+import tarfile
+import joblib
+import umap
+import numpy as np
+import pandas as pd
 import sklearn
 from pathlib import Path
 from shutil import copy2
@@ -89,7 +97,7 @@ if __name__ == "__main__":
         "umap_version": umap.__version__,
     }
 
-    manifest_path = temp_outdir / f"manifest.json"
+    manifest_path = temp_outdir / "manifest.json"
     Path(manifest_path).write_text(json.dumps(manifest, indent=2))
 
     prefix = Path(args.output_dir)

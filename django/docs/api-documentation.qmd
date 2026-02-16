@@ -13,4 +13,3 @@ For detailed information on how to use the API, including available endpoints an
 ## What is an API?
 
 An API (Application Programming Interface) allows different software applications to communicate with each other. In the context of the MGnify Biosynthetic Gene Clusters Portal, the API provides a programmatic way for users to access and interact with the portal's data. This can be especially useful for automating workflows, integrating the portal's data with other bioinformatics tools, or performing large-scale analyses without needing to use the web interface.
-

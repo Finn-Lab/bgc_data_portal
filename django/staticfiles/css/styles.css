@@ -443,7 +443,7 @@
     .sequenceViewerDiv {
         overflow: auto !important;
     }
-    
+
     .download-form {
         display: flex;
         align-items: end; /* Align the dropdown and button at the bottom */

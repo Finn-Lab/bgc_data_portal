@@ -26,23 +26,23 @@ window.addEventListener('DOMContentLoaded', () => {
 // document.addEventListener('DOMContentLoaded', function () {
 //     const advancedForm = document.getElementById('search-form');
 //     const loader = document.querySelector('.bgcs-portal-spinner');
-  
+
 //     if (advancedForm && loader) {
 //       advancedForm.addEventListener('submit', function (event) {
 //         console.log('Form submit event triggered');
-  
+
 //         event.preventDefault();
 //         $('.bgcs-portal-spinner').show();
-  
+
 //         const formData = new FormData(advancedForm);
-  
+
 //         for (let [name, value] of formData.entries()) {
 //           console.log(name, value);
 //         }
-  
+
 //         const serializedData = new URLSearchParams(formData).toString();
 //         const actionUrl = advancedForm.getAttribute('action');
-  
+
 //         console.log(`${actionUrl}?${serializedData}`);
 //         window.location.href = `${actionUrl}?${$('#search-form').serialize()}`;
 //       });
@@ -50,12 +50,12 @@ window.addEventListener('DOMContentLoaded', () => {
 //       console.error('Form or Loader not found');
 //     }
 //   });
-  
+
   // Handle pagination button clicks
   $(document).on('click', '.pagination button', function (e) {
     e.preventDefault();
     var page = $(this).data('page');
-  
+
     $.ajax({
       url: $('#search-form').attr('action'),
       type: 'GET',
@@ -72,7 +72,7 @@ window.addEventListener('DOMContentLoaded', () => {
       },
     });
   });
-  
+
   function showSpinner() {
     var spinner = document.querySelector('.bgcs-portal-spinner'); // Select the spinner element
     if (spinner) {

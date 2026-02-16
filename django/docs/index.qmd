@@ -43,7 +43,7 @@ The **MGnify Biosynthetic Gene Clusters Portal** is designed with three primary 
 The Home Page is your entry point to the **MGnify Biosynthetic Gene Clusters** portal. Here, you can navigate to different sections of the site, perform a quick keyword search, and access key functionalities. The main features of the Home Page include:
 
 - **Keyword search**: Located at the top of the page, this allows you to search the portal using specific keywords or accession numbers, retrieving relevant records from both documentation and data. This is equivalent to calling the `GET /api/v1/keyword_search/` endpoint of the API.
-- **Access and explore options**: 
+- **Access and explore options**:
   - **Search BGCs**: Directs you to the Explore BGCs page for more detailed queries.
   - **API Access**: Provides documentation on how to use the API for programmatic access to BGC data.
   - **User Documentation**: Guides and examples to help you navigate and utilise the portal effectively.

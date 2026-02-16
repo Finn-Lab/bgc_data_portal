@@ -34,7 +34,7 @@ services:
   django:
     build:
       context: ./django
-      dockerfile: Dockerfile    
+      dockerfile: Dockerfile
     env_file: .env
     command: >
       sh -c "
@@ -47,7 +47,7 @@ services:
     volumes:
         - ./django:/app # DEBUG
         - static_volume:/app/static
-        - ingest_packages:/data/packages  
+        - ingest_packages:/data/packages
         - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
     environment:
       - MEDIA_ROOT=/data/packages
@@ -90,5 +90,3 @@ volumes:
   db_data:
   static_volume:
   ingest_packages:
-
-

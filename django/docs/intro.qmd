@@ -27,5 +27,3 @@ This notebook covers:
 ---
 
 ### More use cases coming soon!
-
-

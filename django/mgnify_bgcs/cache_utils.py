@@ -7,6 +7,7 @@ Provides:
 These normalize how we write/read the cache keys used by `api.py` and
 `tasks.py`.
 """
+
 from __future__ import annotations
 
 import json

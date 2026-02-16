@@ -11,14 +11,14 @@ The Home Page serves as the primary navigation hub for the **MGnify Biosynthetic
 
 ## Keyword search
 
-At the top of every page, you will find the **Keyword Search** bar. This feature allows you to quickly perform a basic search across the portal data and documents using specific keywords or accessions. 
+At the top of every page, you will find the **Keyword Search** bar. This feature allows you to quickly perform a basic search across the portal data and documents using specific keywords or accessions.
 This functionality is designed to provide a fast and straightforward way to retrieve data without requiring advanced search criteria.
 
 ## Access and explore options
 
 The Home Page offers several options to access and explore metagenomic BGC data:
 
-**Explore BGCs** gives access to more detailed searches using advanced criteria. This feature is particularly useful for users who need to perform complex queries or refine their search results based on specific parameters. Also provides basic statistics on the data portal alongside the detailed results of their searches. 
+**Explore BGCs** gives access to more detailed searches using advanced criteria. This feature is particularly useful for users who need to perform complex queries or refine their search results based on specific parameters. Also provides basic statistics on the data portal alongside the detailed results of their searches.
 
 **API Access** section provides documentation for users who wish to programmatically interact with the portal. Review the documentation, which includes endpoint descriptions and parameter details.
 

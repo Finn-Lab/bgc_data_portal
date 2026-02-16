@@ -42,7 +42,7 @@ a, a:visited, a:hover {
 .gwt-Reference-chrome-rtl {
   height: 5px;
   width: 5px;
-  
+
 }
 
 .gwt-Button {
@@ -91,7 +91,7 @@ a, a:visited, a:hover {
 .gwt-DecoratorPanel .bottomRightInner {
   width: 5px;
   height: 5px;
-  
+
 }
 .gwt-DecoratorPanel .topLeft {
   background: url(images/corner.png) no-repeat 0px 0px;
@@ -144,21 +144,21 @@ a, a:visited, a:hover {
 }
 .gwt-DialogBox .dialogTopLeftInner {
   width: 5px;
-  
+
 }
 .gwt-DialogBox .dialogTopRightInner {
   width: 8px;
-  
+
 }
 .gwt-DialogBox .dialogBottomLeftInner {
   width: 5px;
   height: 8px;
-  
+
 }
 .gwt-DialogBox .dialogBottomRightInner {
   width: 5px;
   height: 8px;
-  
+
 }
 .gwt-DialogBox .dialogTopLeft {
   background: url(images/corner.png) no-repeat -13px 0px;
@@ -205,7 +205,7 @@ a, a:visited, a:hover {
 .gwt-DisclosurePanel .header a,
 .gwt-DisclosurePanel .header td {
   text-decoration: none;  /* Remove underline from header */
-  color: black; 
+  color: black;
   cursor: pointer;
   cursor: hand;
 }
@@ -229,7 +229,7 @@ a, a:visited, a:hover {
 }
 .gwt-HorizontalSplitPanel .hsplitter {
   cursor: move;
-  border: 0px; 
+  border: 0px;
   background: #91c0ef url(images/vborder.png) repeat-y;
   line-height: 0px;
 }
@@ -237,7 +237,7 @@ a, a:visited, a:hover {
 }
 .gwt-VerticalSplitPanel .vsplitter {
   cursor: move;
-  border: 0px; 
+  border: 0px;
   background: #91c0ef url(images/hborder.png) repeat-x;
   line-height: 0px;
 }
@@ -291,7 +291,7 @@ a, a:visited, a:hover {
 .gwt-MenuBar-horizontal .gwt-MenuItemSeparator .menuSeparatorInner {
   width: 1px;
   height: 1px;
-  background: white; 
+  background: white;
 }
 .gwt-MenuBar-vertical {
   margin-top: 0px;
@@ -342,22 +342,22 @@ a, a:visited, a:hover {
 .gwt-MenuBarPopup .menuPopupTopLeftInner {
   width: 5px;
   height: 5px;
-  
+
 }
 .gwt-MenuBarPopup .menuPopupTopRightInner {
   width: 8px;
   height: 5px;
-  
+
 }
 .gwt-MenuBarPopup .menuPopupBottomLeftInner {
   width: 5px;
   height: 8px;
-  
+
 }
 .gwt-MenuBarPopup .menuPopupBottomRightInner {
   width: 8px;
   height: 8px;
-  
+
 }
 .gwt-MenuBarPopup .menuPopupTopLeft {
   background: url(images/corner.png) no-repeat 0px -36px;
@@ -432,22 +432,22 @@ a, a:visited, a:hover {
 .gwt-DecoratedPopupPanel .popupTopLeftInner {
   width: 5px;
   height: 5px;
-  
+
 }
 .gwt-DecoratedPopupPanel .popupTopRightInner {
   width: 8px;
   height: 5px;
-  
+
 }
 .gwt-DecoratedPopupPanel .popupBottomLeftInner {
   width: 5px;
   height: 8px;
-  
+
 }
 .gwt-DecoratedPopupPanel .popupBottomRightInner {
   width: 8px;
   height: 8px;
-  
+
 }
 .gwt-DecoratedPopupPanel .popupTopLeft {
   background: url(images/corner.png) no-repeat 0px -10px;
@@ -523,7 +523,7 @@ a, a:visited, a:hover {
   cursor: default;
   opacity: .5;
   filter: alpha(opacity=40);
-  
+
 }
 .gwt-PushButton-down,
 .gwt-PushButton-down-hovering,
@@ -546,7 +546,7 @@ a, a:visited, a:hover {
   cursor: default;
   opacity: 0.5;
   filter: alpha(opacity=40);
-  
+
 }
 
 .gwt-RadioButton {
@@ -570,25 +570,25 @@ a, a:visited, a:hover {
   padding: 0px 0px 0px 1px;
   margin-left: 4px;
   margin-bottom: 4px;
-  border-width: 1px; 
+  border-width: 1px;
 }
 .gwt-RichTextToolbar .gwt-PushButton-up-hovering {
   margin-left: 4px;
   margin-bottom: 4px;
   padding: 0px 0px 0px 1px;
-  border-width: 1px; 
+  border-width: 1px;
 }
 .gwt-RichTextToolbar .gwt-PushButton-down {
   margin-left: 4px;
   margin-bottom: 4px;
   padding: 0px 1px 0px 0px;
-  border-width: 1px; 
+  border-width: 1px;
 }
 .gwt-RichTextToolbar .gwt-PushButton-down-hovering {
   margin-left: 4px;
   margin-bottom: 4px;
   padding: 0px 1px 0px 0px;
-  border-width: 1px; 
+  border-width: 1px;
 }
 .gwt-RichTextToolbar .gwt-ToggleButton-up {
   margin-left: 4px;
@@ -652,7 +652,7 @@ a, a:visited, a:hover {
 .gwt-DecoratedStackPanel .stackItemTopRight {
   height: 6px;
   width: 6px;
-  
+
 }
 .gwt-DecoratedStackPanel .stackItemTopLeft {
   border-left: 1px solid #bbbbbb;
@@ -740,22 +740,22 @@ a, a:visited, a:hover {
 .gwt-SuggestBoxPopup .suggestPopupTopLeftInner {
   width: 5px;
   height: 5px;
-    
+
 }
 .gwt-SuggestBoxPopup .suggestPopupTopRightInner {
   width: 8px;
   height: 5px;
-  
+
 }
 .gwt-SuggestBoxPopup .suggestPopupBottomLeftInner {
   width: 5px;
   height: 8px;
-  
+
 }
 .gwt-SuggestBoxPopup .suggestPopupBottomRightInner {
   width: 8px;
   height: 8px;
-  
+
 }
 .gwt-SuggestBoxPopup .suggestPopupTopLeft {
   background: url(images/corner.png) no-repeat 0px -23px;
@@ -814,7 +814,7 @@ a, a:visited, a:hover {
 .gwt-TabBar .gwt-TabBarItem-selected {
   cursor: default;
   background: #bcbcbc;
-} 
+}
 .gwt-TabBar .gwt-TabBarItem-disabled {
   cursor: default;
   color: #999999;
@@ -847,7 +847,7 @@ a, a:visited, a:hover {
 .gwt-DecoratedTabBar .tabTopLeft,
 .gwt-DecoratedTabBar .tabTopRight {
   padding: 0px;
-  
+
 }
 .gwt-DecoratedTabBar .tabTopLeftInner,
 .gwt-DecoratedTabBar .tabTopRightInner {
@@ -955,7 +955,7 @@ a, a:visited, a:hover {
   border: 1px outset #ccc;
   cursor: default;
   opacity: .5;
-  
+
   filter: alpha(opacity=40);
 }
 .gwt-ToggleButton-down,
@@ -981,7 +981,7 @@ a, a:visited, a:hover {
   border: 1px inset #ccc;
   cursor: default;
   opacity: .5;
-  
+
   filter: alpha(opacity=40);
 }
 
@@ -991,7 +991,7 @@ a, a:visited, a:hover {
   white-space: nowrap;
   cursor: hand;
   cursor: pointer;
-  
+
 }
 .gwt-Tree .gwt-TreeItem-selected {
   background: #93c2f1 url(images/hborder.png) repeat-x 0px -1463px;
@@ -1142,7 +1142,7 @@ td.datePickerMonth {
 .gwt-TabLayoutPanel .gwt-TabLayoutPanelTab-selected {
   cursor: default;
   background: #bcbcbc;
-} 
+}
 
 .gwt-SplitLayoutPanel-HDragger {
   background: white url(images/splitPanelThumb.png) center center no-repeat;

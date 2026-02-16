@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Iterable, Any
-from pydantic import BaseModel
 
 
 # Bulk insert chunk size used across ingestion tasks

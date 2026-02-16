@@ -1,9 +1,7 @@
-import io
 import types
 import sys
 from pathlib import Path
 
-import pytest
 
 # Ensure the `django` package directory is on sys.path so tests can import the package
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))

@@ -92,7 +92,6 @@ def _bgc_hmmer_search(record: SeqRecord, threshold: float) -> Dict[int, float]:
 # 4.3 – Protein-set embedding search ---------------------------
 # --------------------------------------------------------------
 from collections import defaultdict
-from pgvector.django import CosineDistance
 
 
 def _proteins_set_embedding_search(record: SeqRecord, threshold: float):
@@ -128,7 +127,6 @@ def _proteins_set_embedding_search(record: SeqRecord, threshold: float):
     # ----------------------------------------------------------
     # 2–3. per-vector search, then map to BGCs
     # ----------------------------------------------------------
-    from django.db.models import Subquery, OuterRef, Exists
 
     hits_by_bgc: dict[int, set[int]] = defaultdict(set)
     similarity_results: Dict[int, float] = {}
