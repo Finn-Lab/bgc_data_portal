@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+export SERVICE_NAME="bgc_data_portal"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Activate service-specific venv
+source "$SERVICE_DIR/.venv/bin/activate"
+
+## Find env file for this service in the env wanted. Find is this script was run with {pred,dev,test} as an argument, otherwise default to prod
+REPO_ROOT="$(dirname "$(dirname "$SERVICE_DIR")")"
+ENVIRONMENT="${1:-prod}"
+echo "Activating environment for ${SERVICE_NAME} in ${ENVIRONMENT} environment"
+
+PROD_ENV_FILE="${REPO_ROOT}/env/${SERVICE_NAME}.${ENVIRONMENT}.env"
+if [[ -f "$PROD_ENV_FILE" ]]; then
+    ENV_FILE="$PROD_ENV_FILE"; source $ENV_FILE
+else
+    echo "No environment file found for ${SERVICE_NAME} in ${ENVIRONMENT} environment. Looking for ${PROD_ENV_FILE}"
+fi
