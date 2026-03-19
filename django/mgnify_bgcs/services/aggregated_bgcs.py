@@ -3,10 +3,6 @@ import logging
 
 import numpy as np
 
-from ..services.compound_search_utils import smiles_to_svg
-import torch
-
-
 from dataclasses import dataclass
 from typing import Iterable, List, Sequence, Tuple
 
@@ -16,7 +12,6 @@ from django.db.models import Prefetch, Q
 from pgvector import Vector
 
 from ..utils.lazy_loaders import (
-    protein_embedder,
     umap_model,
     get_highest_versions_by_tool,
 )
@@ -130,19 +125,13 @@ def _weighted_mean_embedding(
         return _ZERO_VECTOR, []
 
     # Compute the weighted mean
-    accum = [0.0] * _EMBED_DIM
-
     protein_weights = [w / detectors_in_region for _, w in prot_info.values()]
 
     emb_array = np.array([emb for emb, _ in prot_info.values()])
 
-    embedder = protein_embedder()
-
-    mean_emb = embedder.mean_embeddings(
-        normalized_protein_embeddings=torch.tensor(emb_array),
-        weights=protein_weights,
-        device="cuda" if torch.cuda.is_available() else "cpu",
-    )
+    weights_array = np.array(protein_weights, dtype=np.float32)
+    weights_array /= weights_array.sum()
+    mean_emb = np.sum(emb_array * weights_array[:, None], axis=0)
 
     return mean_emb, protein_weights
 
@@ -252,6 +241,7 @@ def build_aggregated_for_contigs(contig_ids: Sequence[int] | None = None) -> int
                 structure = compound.get("structure")
                 if structure:
                     try:
+                        from ..services.compound_search_utils import smiles_to_svg
                         smiles_svg = smiles_to_svg(structure)
                     except Exception as e:
                         log.error(f"Error getting SVG for compound {compound.id}: {e}")
@@ -269,8 +259,8 @@ def build_aggregated_for_contigs(contig_ids: Sequence[int] | None = None) -> int
                     "detectors": list(sorted(detector_names)),
                     "classes": list(normalized_class_names.keys()),
                     "protein_weight": protein_weight,
-                    "umap_x_coord": float(umap_coords[0][0]),
-                    "umap_y_coord": float(umap_coords[0][1]),
+                    "umap_x_coord": x if not np.isnan(x := float(umap_coords[0][0])) else None,
+                    "umap_y_coord": y if not np.isnan(y := float(umap_coords[0][1])) else None,
                 },
                 compounds=compounds,
                 smiles_svg=smiles_svg,

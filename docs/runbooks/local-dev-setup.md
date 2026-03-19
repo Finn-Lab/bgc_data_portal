@@ -109,6 +109,7 @@ python manage.py seed_data
 python manage.py seed_data --manifest medium
 
 # Update the stats to display on website
+python manage.py calculate_aggregated_bgcs
 python manage.py update_current_stats
 
 # Wipe everything and re-seed from scratch

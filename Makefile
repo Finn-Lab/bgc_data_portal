@@ -62,8 +62,11 @@ test-e2e:
 	pytest django/tests/e2e/playwright --e2e-base-url http://localhost:8080 -q
 
 # ── Observability ─────────────────────────────────────────────────────────────
-logs:
+logs-django:
 	kubectl logs -f -n bgc-local deploy/bgc-data-portal-django
+
+logs-celery:
+	kubectl logs -f -n bgc-local deploy/bgc-data-portal-celery
 
 shell:
 	kubectl exec -it -n bgc-local deploy/bgc-data-portal-django -- bash
