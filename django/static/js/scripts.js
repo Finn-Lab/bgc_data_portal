@@ -36,8 +36,8 @@ window.addEventListener('DOMContentLoaded', () => {
     if (!form) return;
     form.addEventListener('submit', () => {
       showGlobalSpinner();
-      // Disable all inputs to prevent double-submit
-      form.querySelectorAll('input, button, select, textarea').forEach(el => (el.disabled = true));
+      // Only disable submit buttons to prevent double-submit; disabling all inputs strips them from the GET query string
+      form.querySelectorAll('button[type="submit"]').forEach(el => (el.disabled = true));
     });
   });
 });

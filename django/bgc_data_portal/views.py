@@ -100,6 +100,7 @@ def search(request):
                 "sequence_form": SequenceSearchForm,
                 "chemical_form": ChemicalStructureSearchForm,
                 "result_stats": get_latest_stats(),
+                "serialized_string": "",
             },
         )
     else:

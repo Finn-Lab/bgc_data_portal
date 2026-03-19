@@ -32,13 +32,13 @@ class SequenceSearchForm(forms.Form):
     unit_of_comparison = forms.ChoiceField(
         choices=[("bgc", "Whole BGC"), ("proteins", "Protein set (CDSs)")],
         initial="bgc",
-        widget=forms.RadioSelect,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
 
     similarity_measure = forms.ChoiceField(
         choices=[("hmmer", "HMMER / alignment"), ("cosine", "Cosine (embeddings)")],
         initial="hmmer",
-        widget=forms.RadioSelect,
+        widget=forms.RadioSelect(attrs={"class": "form-check-input"}),
     )
 
     similarity_threshold = forms.FloatField(
