@@ -29,6 +29,8 @@ The workflow builds from `django/Dockerfile` (not `Dockerfile.dev`), runs
 
 ## Secrets
 
+> **The secret must exist in the namespace before running `make deploy-prod`.**
+
 Secrets are stored in the `bgc-data-portal-secret` Kubernetes Secret in the
 `bgc-data-portal-hl-prod` namespace. To create or rotate secrets:
 

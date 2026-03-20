@@ -90,6 +90,38 @@ make delete-local    # Remove Skaffold-managed resources
 make cluster-delete  # Delete the kind cluster entirely
 ```
 
+### Clean Slate (Danger Zone)
+
+To wipe all resources from the kind cluster without deleting the cluster itself
+(preserves the kind node and avoids a slow re-pull of base images):
+
+```bash
+# --- DANGER: deletes all Skaffold-managed workloads and services ---
+# kubectl delete all --all -n bgc-local
+
+# --- DANGER: destroys all persistent data (Postgres volume, etc.) ---
+# kubectl delete pvc --all -n bgc-local
+```
+
+After running these, redeploy:
+
+```bash
+make deploy-local
+```
+
+Then seed:
+
+```bash
+make shell
+python manage.py seed_data --manifest medium
+```
+
+If you want to destroy the cluster entirely (slower but fully clean):
+
+```bash
+make cluster-delete && make cluster-create && make deploy-local
+```
+
 ## Seeding the Database with Synthetic Data
 
 The portal ships with a manifest-driven factory layer that generates realistic synthetic

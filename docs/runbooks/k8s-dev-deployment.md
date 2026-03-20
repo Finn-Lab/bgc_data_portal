@@ -8,10 +8,27 @@ Deploy the BGC Data Portal to the EBI HL Kubernetes cluster (experimental namesp
 - `kubeconfig` for the EBI HL cluster (ask the team for access)
 - `skaffold` >= 2.13 and `kubectl` >= 1.29
 
+## Secrets
+
+`bgc-data-portal-secret` must exist in the namespace before any pods can start —
+it provides credentials for PostgreSQL, RabbitMQ, Django, and Celery.
+
+```bash
+# Copy the dev secrets template and fill in every ${...} placeholder
+cp deployments/k8s-dev/secrets-template.yaml /tmp/bgc-dev-secret.yaml
+# Edit /tmp/bgc-dev-secret.yaml, then apply and remove
+kubectl apply -f /tmp/bgc-dev-secret.yaml --context <your-ebi-kube-context>
+rm /tmp/bgc-dev-secret.yaml
+```
+
+> `kubectl delete all` does **not** delete Secrets, so the secret survives a normal
+> wipe. Only re-apply it when rotating credentials or after a full namespace deletion.
+
 ## Deploying
 
 ```bash
 # Build Dockerfile.dev image, push to quay.io, and apply k8s-dev manifests
+# kubectl config get-contexts
 KUBE_CONTEXT=<your-ebi-kube-context> make deploy-dev
 ```
 
@@ -54,6 +71,33 @@ python manage.py seed_data --clear --manifest medium  # wipe and re-seed
 
 Use `medium` after a fresh deploy so search, pagination, and the UMAP scatter all have
 enough data to exercise meaningfully.
+
+## Clean Slate (Danger Zone)
+
+To wipe all resources in the dev namespace and redeploy from scratch, run the commands
+below **in order**. This permanently destroys the database and all persistent volumes —
+there is no undo.
+
+```bash
+# --- DANGER: deletes all workloads and services ---
+# kubectl delete all --all -n bgc-data-portal-hl-exp --context <your-ebi-kube-context>
+
+# --- DANGER: destroys all data (Postgres, static files, packages, HF cache) ---
+# kubectl delete pvc --all -n bgc-data-portal-hl-exp --context <your-ebi-kube-context>
+```
+
+After running these, recreate the secret (see [Secrets](#secrets)) if needed, then:
+
+```bash
+KUBE_CONTEXT=<your-ebi-kube-context> make deploy-dev
+```
+
+Then seed the fresh database:
+
+```bash
+kubectl exec -it -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
+  --context <your-ebi-kube-context> -- python manage.py seed_data --manifest medium
+```
 
 ## Running Tests Against Dev
 
