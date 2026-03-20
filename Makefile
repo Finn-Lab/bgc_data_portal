@@ -1,6 +1,7 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
         dev deploy-local delete-local deploy-dev deploy-prod \
-        test-unit test-integration test-e2e logs shell db-shell validate-secrets
+        test-unit test-integration test-e2e logs shell db-shell validate-secrets \
+        clear-cache-redis clear-cache-celery clear-cache-django clear-cache
 
 ENV_FILE := deployments/k8s-local/.env.local
 
@@ -73,3 +74,18 @@ shell:
 
 db-shell:
 	kubectl exec -it -n bgc-local statefulset/postgres -- psql -U bgc_dp_pg_user mgnify_bgcs
+
+# ── Cache management ───────────────────────────────────────────────────────────
+clear-cache-redis:
+	@echo "Flushing Redis..."
+	kubectl exec -n bgc-local deploy/redis -- redis-cli FLUSHALL
+
+clear-cache-celery:
+	@echo "Purging Celery task queues..."
+	kubectl exec -n bgc-local deploy/bgc-data-portal-celery -- celery -A bgc_data_portal purge -f
+
+clear-cache-django:
+	@echo "Clearing Django cache..."
+	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
+
+clear-cache: clear-cache-redis clear-cache-celery clear-cache-django

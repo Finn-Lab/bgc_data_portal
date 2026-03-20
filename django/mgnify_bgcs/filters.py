@@ -1,7 +1,7 @@
 import re
 
 import django_filters
-from django.db.models import Q
+from django.db.models import Q, Exists, OuterRef
 
 from .models import (
     Bgc,
@@ -115,7 +115,18 @@ class BgcKeywordFilter(django_filters.FilterSet):
         class_qs = BgcClass.objects.filter(name__iregex=value)
         if class_qs.exists():
             log.info("BgcClass %s vocabulary hit", value)
-            return queryset.filter(classes__in=class_qs).distinct()
+            aggregated_with_class = Bgc.objects.filter(
+                is_aggregated_region=True, classes__in=class_qs
+            )
+            return queryset.filter(
+                Exists(
+                    aggregated_with_class.filter(
+                        contig_id=OuterRef("contig_id"),
+                        start_position__lte=OuterRef("end_position"),
+                        end_position__gte=OuterRef("start_position"),
+                    )
+                )
+            ).distinct()
 
         detector_qs = BgcDetector.objects.filter(name__iregex=rf"^{re.escape(value)}$")
         if detector_qs.exists():
