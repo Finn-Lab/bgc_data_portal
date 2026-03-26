@@ -1,0 +1,81 @@
+services:
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+  redis:
+    image: quay.io/microbiome-informatics/redis:7.4
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: ankane/pgvector:latest
+    env_file: .devcontainer/.env.devcontainer
+    volumes:
+      - devcontainer_db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+
+  rabbitmq:
+    image: quay.io/microbiome-informatics/rabbitmq:arm64
+    hostname: rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 5
+
+  # ── Main workspace (VS Code attaches here) ───────────────────────────────────
+  workspace:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.devcontainer
+    env_file: .devcontainer/.env.devcontainer
+    environment:
+      - MEDIA_ROOT=/data/packages
+    volumes:
+      - .:/workspace:cached
+      - devcontainer_static_volume:/workspace/django/static
+      - devcontainer_ingest_packages:/data/packages
+      - devcontainer_pip_cache:/home/vscode/.cache/pip
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: sleep infinity
+
+  # ── Celery worker (auto-restarts on code changes) ────────────────────────────
+  celery:
+    build:
+      context: .
+      dockerfile: .devcontainer/Dockerfile.devcontainer
+    env_file: .devcontainer/.env.devcontainer
+    environment:
+      - MEDIA_ROOT=/data/packages
+    command: >
+      sh -c "
+        sleep 15 &&
+        cd /workspace/django &&
+        watchmedo auto-restart --directory=/workspace/django --pattern='*.py' --recursive --
+        celery -A bgc_data_portal.celery worker --loglevel=info"
+    volumes:
+      - .:/workspace:cached
+      - devcontainer_ingest_packages:/data/packages
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  devcontainer_db_data:
+  devcontainer_static_volume:
+  devcontainer_ingest_packages:
+  devcontainer_pip_cache:

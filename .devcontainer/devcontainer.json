@@ -1,0 +1,44 @@
+{
+  "name": "BGC Data Portal",
+  "dockerComposeFile": "docker-compose.devcontainer.yml",
+  "service": "workspace",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+
+  "postCreateCommand": "bash .devcontainer/init-workspace.sh",
+
+  "forwardPorts": [8000],
+
+  "remoteUser": "vscode",
+
+  "remoteEnv": {
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "PYTHONPATH": "/workspace/django"
+  },
+
+  "shutdownAction": "stopCompose",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "ms-python.debugpy",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg"
+      ]
+    }
+  }
+}
