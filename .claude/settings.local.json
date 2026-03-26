@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sandbox/sandbox.sh *)",
+      "Bash(docker compose -p bgc-sandbox *)",
+      "Bash(cd /tmp/bgc-sandbox*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git diff *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(ruff *)",
+      "Bash(black *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(git push)"
+    ]
+  }
+}

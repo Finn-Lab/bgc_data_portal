@@ -1,0 +1,79 @@
+services:
+  redis:
+    image: quay.io/microbiome-informatics/redis:7.4
+    ports: ["6479:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: ankane/pgvector:latest
+    env_file: .env.sandbox
+    volumes:
+      - sandbox_db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+
+  rabbitmq:
+    image: quay.io/microbiome-informatics/rabbitmq:arm64
+    hostname: rabbitmq
+    env_file: .env.sandbox
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      retries: 5
+
+  django:
+    build:
+      context: ./django
+      dockerfile: Dockerfile.dev
+    env_file: .env.sandbox
+    command: >
+      sh -c "
+        python manage.py migrate &&
+        python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./django:/app
+      - sandbox_static_volume:/app/static
+      - sandbox_ingest_packages:/data/packages
+    environment:
+      - MEDIA_ROOT=/data/packages
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8100:8000"
+
+  celery:
+    build:
+      context: ./django
+      dockerfile: Dockerfile.worker.dev
+    env_file: .env.sandbox
+    command: >
+      sh -c "
+        sleep 15 &&
+        celery -A bgc_data_portal.celery worker --loglevel=info"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./django:/app
+      - sandbox_ingest_packages:/data/packages
+
+volumes:
+  sandbox_db_data:
+  sandbox_static_volume:
+  sandbox_ingest_packages:
