@@ -14,7 +14,10 @@ import numpy as np
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from mgnify_bgcs.models import Assembly, Bgc, BgcClass, BgcBgcClass, Contig
+from mgnify_bgcs.models import (
+    Assembly, Bgc, BgcClass, BgcBgcClass, Cds, Contig,
+    Domain, GeneCaller, Protein, ProteinDomain,
+)
 
 from discovery.models import (
     GCF,
@@ -26,7 +29,7 @@ from discovery.models import (
 )
 
 # Reuse factory pools for consistency
-from tests.factories.models import _TAXONOMY_POOL
+from tests.factories.models import _TAXONOMY_POOL, _random_aa, _sha256
 from tests.factories.discovery_models import (
     _MIBIG_COMPOUNDS,
     _NP_CLASSES,
@@ -46,6 +49,29 @@ _UMAP_CENTERS = {
 }
 
 _BGC_L1_CLASSES = list(_UMAP_CENTERS.keys())
+
+_PFAM_DOMAIN_POOL = [
+    ("PF00109", "Beta-ketoacyl synthase N-terminal", "Pfam"),
+    ("PF00698", "Acyl transferase domain", "Pfam"),
+    ("PF00550", "Phosphopantetheine attachment site", "Pfam"),
+    ("PF00668", "Condensation domain", "Pfam"),
+    ("PF00501", "AMP-binding enzyme", "Pfam"),
+    ("PF07993", "Male sterility protein", "Pfam"),
+    ("PF00975", "Thioesterase domain", "Pfam"),
+    ("PF02801", "Beta-ketoacyl synthase C-terminal", "Pfam"),
+    ("PF00106", "Short chain dehydrogenase", "Pfam"),
+    ("PF08659", "KR domain", "Pfam"),
+    ("PF00067", "Cytochrome P450", "Pfam"),
+    ("PF13561", "Enoyl-CoA hydratase/isomerase", "Pfam"),
+    ("PF00005", "ABC transporter", "Pfam"),
+    ("PF00072", "Response regulator receiver domain", "Pfam"),
+    ("PF00440", "Bacterial regulatory proteins tetR", "Pfam"),
+    ("PF00486", "Transcriptional regulatory protein C-terminal", "Pfam"),
+    ("PF00389", "D-alanine-D-alanine ligase", "Pfam"),
+    ("PF00465", "Iron-containing alcohol dehydrogenase", "Pfam"),
+    ("PF01370", "NAD dependent epimerase", "Pfam"),
+    ("PF00535", "Glycosyl transferase family 2", "Pfam"),
+]
 
 _ISOLATION_SOURCES = [
     "soil", "marine sediment", "freshwater", "rhizosphere",
@@ -79,8 +105,16 @@ class Command(BaseCommand):
             NaturalProduct.objects.all().delete()
             MibigReference.objects.all().delete()
             GCF.objects.all().delete()
-            # Also clean up seeded assemblies/contigs/bgcs
-            Assembly.objects.filter(accession__startswith="DISC_ERZ").delete()
+            # Clean up seeded domain architecture
+            # (Protein cascade-deletes ProteinDomain)
+            Protein.objects.filter(
+                mgyp__startswith="DISC_MGYP"
+            ).delete()
+            # Clean up seeded assemblies/contigs/bgcs
+            # (Assembly cascades to Contig/CDS/BGC)
+            Assembly.objects.filter(
+                accession__startswith="DISC_ERZ"
+            ).delete()
             self.stdout.write(self.style.SUCCESS("Cleared."))
 
         n_assemblies = 20 if options["small"] else 80
@@ -197,6 +231,108 @@ class Command(BaseCommand):
             assembly_bgc_map[assembly.id] = assembly_bgcs
 
         self.stdout.write(f"  {len(all_bgcs)} BGCs across {n_assemblies} assemblies.")
+
+        # 4b. Create domain architecture data
+        self.stdout.write("Creating domain architecture (CDS, Proteins, Domains)...")
+        gene_caller, _ = GeneCaller.objects.get_or_create(
+            name="Prodigal", defaults={"tool": "Prodigal", "version": "2.6.3"}
+        )
+
+        domain_objs = {}
+        for acc, name, ref_db in _PFAM_DOMAIN_POOL:
+            obj, _ = Domain.objects.get_or_create(
+                acc=acc,
+                defaults={
+                    "name": name,
+                    "ref_db": ref_db,
+                    "description": f"{name} domain",
+                },
+            )
+            domain_objs[acc] = obj
+        domain_list = list(domain_objs.values())
+
+        all_proteins = []
+        all_cds_pending = []       # (Cds instance, protein_index)
+        all_pds_pending = []       # (ProteinDomain instance, protein_index)
+        protein_idx = 0
+
+        for bgc in all_bgcs:
+            bgc_length = bgc.end_position - bgc.start_position
+            n_cds = random.randint(2, min(6, max(2, bgc_length // 1000)))
+            slot_size = bgc_length // n_cds
+
+            for ci in range(n_cds):
+                slot_start = bgc.start_position + ci * slot_size
+                gene_len = min(random.randint(300, 900), slot_size - 50)
+                gene_len = max(gene_len, 150)
+                margin = max(11, slot_size - gene_len - 10)
+                cds_start = slot_start + random.randint(10, margin)
+                cds_end = min(cds_start + gene_len, bgc.end_position)
+                cds_start = max(cds_start, bgc.start_position)
+
+                aa_seq = _random_aa(gene_len // 3)
+                seq_hash = _sha256(f"{aa_seq}_{protein_idx}")
+
+                protein = Protein(
+                    sequence=aa_seq,
+                    sequence_sha256=seq_hash,
+                    mgyp=f"DISC_MGYP{protein_idx:012d}",
+                )
+                all_proteins.append(protein)
+
+                cds = Cds(
+                    protein=None,  # set after bulk_create
+                    contig=bgc.contig,
+                    gene_caller=gene_caller,
+                    start_position=cds_start,
+                    end_position=cds_end,
+                    strand=random.choice([1, -1]),
+                    protein_identifier=f"DISC_MGYP{protein_idx:012d}",
+                    pipeline_version="1.0",
+                )
+                all_cds_pending.append((cds, protein_idx))
+
+                # 1-3 domains per protein
+                n_domains = random.randint(1, 3)
+                chosen_domains = random.sample(
+                    domain_list, min(n_domains, len(domain_list))
+                )
+                prot_pos = 0
+                for domain in chosen_domains:
+                    dom_len = random.randint(20, 80)
+                    pd = ProteinDomain(
+                        protein=None,  # set after bulk_create
+                        domain=domain,
+                        start_position=prot_pos,
+                        end_position=prot_pos + dom_len,
+                        score=round(random.uniform(10.0, 300.0), 1),
+                    )
+                    all_pds_pending.append((pd, protein_idx))
+                    prot_pos += dom_len + random.randint(5, 30)
+
+                protein_idx += 1
+
+        # Bulk create proteins (PostgreSQL returns IDs)
+        Protein.objects.bulk_create(all_proteins)
+
+        # Set protein FK and bulk create CDS
+        cds_to_create = []
+        for cds, pidx in all_cds_pending:
+            cds.protein = all_proteins[pidx]
+            cds_to_create.append(cds)
+        Cds.objects.bulk_create(cds_to_create)
+
+        # Set protein FK and bulk create ProteinDomains
+        pds_to_create = []
+        for pd, pidx in all_pds_pending:
+            pd.protein = all_proteins[pidx]
+            pds_to_create.append(pd)
+        ProteinDomain.objects.bulk_create(pds_to_create)
+
+        self.stdout.write(
+            f"  {len(all_proteins)} Proteins, {len(cds_to_create)} CDS, "
+            f"{len(pds_to_create)} ProteinDomains, {len(domain_list)} Domains."
+        )
 
         # 5. Create GCFs and assign memberships
         self.stdout.write("Creating GCFs...")
@@ -349,5 +485,6 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(
             f"Done! Seeded {n_assemblies} assemblies, {len(all_bgcs)} BGCs, "
+            f"{len(all_proteins)} Proteins, {len(pds_to_create)} ProteinDomains, "
             f"{n_gcfs} GCFs, {len(nps)} NaturalProducts, {len(mibig_refs)} MIBiG refs."
         ))

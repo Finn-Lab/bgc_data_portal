@@ -94,10 +94,27 @@ class DatasetBuilder:
                         )
                         counts["bgcs"] += 1
 
-                        for _ in range(spec["cds_per_bgc"]):
+                        cds_count = spec["cds_per_bgc"]
+                        bgc_len = bgc.end_position - bgc.start_position
+                        slot_size = max(1, bgc_len // cds_count)
+
+                        for ci in range(cds_count):
                             protein = ProteinFactory()
                             counts["proteins"] += 1
-                            CdsFactory(contig=contig, protein=protein)
+
+                            slot_start = bgc.start_position + ci * slot_size
+                            margin = max(11, slot_size // 4)
+                            cds_start = slot_start + random.randint(10, margin)
+                            cds_len = min(500, slot_size - 60)
+                            cds_end = cds_start + random.randint(200, max(200, cds_len))
+                            cds_end = min(cds_end, bgc.end_position)
+
+                            CdsFactory(
+                                contig=contig,
+                                protein=protein,
+                                start_position=cds_start,
+                                end_position=cds_end,
+                            )
 
                             for _ in range(spec["pfam_domains_per_protein"]):
                                 ProteinDomainFactory(protein=protein)
