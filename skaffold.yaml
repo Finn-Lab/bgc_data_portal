@@ -35,6 +35,13 @@ build:
             dest: /app
           - src: "**/*.js"
             dest: /app
+    - image: bgc-data-portal-workspace
+      context: django
+      docker:
+        dockerfile: Dockerfile.workspace
+      platforms:
+        - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
+      # NO sync block — workspace is isolated, no host file sync by design
   local:
     push: false
 

@@ -1,0 +1,46 @@
+FROM python:3.10-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc build-essential python3-dev libffi-dev libssl-dev git \
+    libxrender1 libxext6 libsm6 \
+    curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 20 LTS (required for Claude Code CLI)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# ── Layer A: heavy ML packages (rarely change → maximise cache) ─────────────
+COPY requirements-ml.txt .
+RUN pip install --upgrade pip && pip install -r requirements-ml.txt
+
+# ── Layer B: remaining deps (worker + dev extras) ────────────────────────────
+COPY requirements-web.txt requirements-worker.txt requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-worker.txt -r requirements-dev.txt
+
+# Create non-root user (Claude Code refuses --dangerously-skip-permissions as root)
+RUN useradd -m -s /bin/bash -u 1000 claude
+
+# ── Layer C: application code (changes often) ───────────────────────────────
+COPY --chown=claude:claude . .
+
+# Initialise a git repo so Claude can commit and generate patches inside the pod
+RUN chown -R claude:claude /app
+USER claude
+
+RUN git init \
+    && git config user.email "claude-workspace@local" \
+    && git config user.name "Claude Workspace" \
+    && git add -A \
+    && git commit -m "initial workspace snapshot"
+
+CMD ["sleep", "infinity"]

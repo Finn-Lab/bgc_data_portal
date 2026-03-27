@@ -1,7 +1,9 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
         dev deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
-        clear-cache-redis clear-cache-celery clear-cache-django clear-cache
+        clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
+        workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
+        workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
 ENV_FILE := deployments/k8s-local/.env.local
 
@@ -89,3 +91,31 @@ clear-cache-django:
 	kubectl exec -n bgc-local deploy/bgc-data-portal-django -- python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
+
+# ── Workspace (Claude Code in isolated pod) ──────────────────────────────────
+workspace-enter:
+	./scripts/workspace.sh enter
+
+workspace-login:
+	./scripts/workspace.sh login
+
+workspace-claude:
+	./scripts/workspace.sh claude
+
+workspace-sync-in:
+	./scripts/workspace.sh sync-in
+
+workspace-sync-out:
+	./scripts/workspace.sh sync-out
+
+workspace-patch:
+	./scripts/workspace.sh patch
+
+workspace-apply-patch:
+	./scripts/workspace.sh apply-patch
+
+workspace-set-api-key:
+	./scripts/workspace.sh set-api-key
+
+workspace-restart:
+	./scripts/workspace.sh restart

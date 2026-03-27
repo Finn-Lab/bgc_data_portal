@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace
+  namespace: bgc-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace
+  template:
+    metadata:
+      labels:
+        app: workspace
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: workspace
+          image: bgc-data-portal-workspace
+          workingDir: /app
+          command: ["sleep", "infinity"]
+          envFrom:
+            - secretRef:
+                name: bgc-data-portal-secret
+            - configMapRef:
+                name: app-config
+          env:
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: workspace-secret
+                  key: ANTHROPIC_API_KEY
+                  optional: true
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
+          volumeMounts:
+            - name: packages
+              mountPath: /data/packages
+            - name: workspace-home
+              mountPath: /home/claude
+      volumes:
+        - name: packages
+          emptyDir: {}
+        - name: workspace-home
+          emptyDir: {}

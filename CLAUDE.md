@@ -77,3 +77,25 @@ django/
 | Async workers | Celery |
 | Production server | Gunicorn |
 | Local dev | Docker Compose |
+
+## Kubernetes Workspace (Claude Code in an isolated pod)
+
+An isolated workspace pod in the Kind cluster where `claude --dangerously-skip-permissions` can run safely. All edits, shell commands, and git ops happen inside the pod.
+
+```bash
+# First time (Max account): log in via OAuth
+make workspace-login              # follow the URL to authenticate
+
+# Enter Claude Code directly
+make workspace-claude
+
+# Or enter a shell first
+make workspace-enter
+
+# After Claude makes changes, extract them as a patch:
+make workspace-patch           # Creates workspace.patch on host
+make workspace-apply-patch     # Applies the patch to host repo
+
+# Refresh workspace with latest host code:
+make workspace-sync-in
+```
