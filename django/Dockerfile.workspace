@@ -37,7 +37,8 @@ COPY --chown=claude:claude . .
 RUN chown -R claude:claude /app
 USER claude
 
-RUN git init \
+RUN printf 'node_modules/\n__pycache__/\n*.pyc\n.venv/\n*.egg-info/\n' >> .gitignore \
+    && git init \
     && git config user.email "claude-workspace@local" \
     && git config user.name "Claude Workspace" \
     && git add -A \

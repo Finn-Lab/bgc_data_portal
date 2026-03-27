@@ -66,7 +66,7 @@ case "${1:-}" in
     POD=$(get_pod)
     echo "Generating git patch inside workspace..."
     kubectl exec -n "$NAMESPACE" "$POD" -- bash -c \
-      'cd /app && git add -A && git diff --cached > /tmp/workspace.patch'
+      'cd /app && git add -A && git diff --cached -- . ":!node_modules" ":!*/node_modules" ":!__pycache__" ":!*.pyc" ":!.venv" > /tmp/workspace.patch'
     kubectl cp "$NAMESPACE/$POD:/tmp/workspace.patch" ./workspace.patch
     LINES=$(wc -l < workspace.patch)
     if [ "$LINES" -eq 0 ]; then
