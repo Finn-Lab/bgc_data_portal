@@ -1,5 +1,5 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
-        dev deploy-local delete-local deploy-dev deploy-prod \
+        dev dev-full dev-clean deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
@@ -13,8 +13,8 @@ REQUIRED_VARS := DJANGO_SECRET_KEY DATABASE_URL POSTGRES_USER POSTGRES_PASSWORD 
 
 validate-secrets:
 	@test -f $(ENV_FILE) || \
-	  (echo "ERROR: $(ENV_FILE) not found." && \
-	   echo "  Run: cp $(ENV_FILE).example $(ENV_FILE)" && exit 1)
+	  (echo "INFO: $(ENV_FILE) not found, copying from example..." && \
+	   cp $(ENV_FILE).example $(ENV_FILE))
 	@for var in $(REQUIRED_VARS); do \
 	    grep -q "^$$var=" $(ENV_FILE) || \
 	      (echo "ERROR: $$var is missing in $(ENV_FILE)" && exit 1); \
@@ -38,8 +38,14 @@ create-local-secrets: validate-secrets create-local-namespace
 	  --dry-run=client -o yaml | kubectl apply -f -
 
 # ── Local dev loop ────────────────────────────────────────────────────────────
-dev:
-	skaffold dev -p local
+dev: create-local-secrets
+	skaffold dev -p local --cleanup=false --no-prune
+
+dev-full: create-local-secrets
+	skaffold dev -p local-full --cleanup=false --no-prune
+
+dev-clean:
+	skaffold delete -p local
 
 deploy-local: create-local-secrets
 	skaffold run -p local

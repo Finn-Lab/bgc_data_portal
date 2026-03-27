@@ -6,12 +6,8 @@
   <meta name="base-path" content="{{ FORCE_SCRIPT_NAME }}" />
   <title>Discovery Dashboard - MGnify BGCs</title>
   {% load static %}
-  {% if DEBUG %}
-  <script type="module" src="http://localhost:5173/static/dashboard/src/main.tsx"></script>
-  {% else %}
   <link rel="stylesheet" href="{% static 'dashboard/assets/index.css' %}" />
   <script type="module" src="{% static 'dashboard/assets/index.js' %}"></script>
-  {% endif %}
 </head>
 <body>
   <div id="dashboard-root"></div>

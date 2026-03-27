@@ -35,13 +35,6 @@ build:
             dest: /app
           - src: "**/*.js"
             dest: /app
-    - image: bgc-data-portal-workspace
-      context: django
-      docker:
-        dockerfile: Dockerfile.workspace
-      platforms:
-        - linux/arm64   # M3 Pro / Apple Silicon; change to linux/amd64 for Intel/CI
-      # NO sync block — workspace is isolated, no host file sync by design
   local:
     push: false
 
@@ -70,6 +63,58 @@ profiles:
   - name: local
     activation:
       - kubeContext: kind-bgc-local
+
+  # ── local-full ────────────────────────────────────────────────────────────
+  # Same as local but includes the workspace pod (Claude Code isolated env).
+  # Usage: make dev-full   OR   skaffold dev -p local-full
+  - name: local-full
+    build:
+      artifacts:
+        - image: bgc-data-portal-django
+          context: django
+          docker:
+            dockerfile: Dockerfile.dev
+          platforms:
+            - linux/arm64
+          sync:
+            manual:
+              - src: "**/*.py"
+                dest: /app
+              - src: "**/*.html"
+                dest: /app
+              - src: "**/*.css"
+                dest: /app
+              - src: "**/*.js"
+                dest: /app
+        - image: bgc-data-portal-django-worker
+          context: django
+          docker:
+            dockerfile: Dockerfile.worker.dev
+          platforms:
+            - linux/arm64
+          sync:
+            manual:
+              - src: "**/*.py"
+                dest: /app
+              - src: "**/*.html"
+                dest: /app
+              - src: "**/*.css"
+                dest: /app
+              - src: "**/*.js"
+                dest: /app
+        - image: bgc-data-portal-workspace
+          context: django
+          docker:
+            dockerfile: Dockerfile.workspace
+          platforms:
+            - linux/arm64
+          # NO sync block — workspace is isolated, no host file sync by design
+      local:
+        push: false
+    manifests:
+      rawYaml:
+        - deployments/k8s-local/manifests/*.yaml
+        - deployments/k8s-local/manifests-workspace/*.yaml
 
   # ── dev ────────────────────────────────────────────────────────────────────
   # Builds and pushes to quay.io, deploys to k8s-dev (EBI HL cluster, exp ns).
