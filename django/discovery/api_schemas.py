@@ -264,3 +264,56 @@ class PaginatedGenomeAggregationResponse(Schema):
 
 class ShortlistExportRequest(Schema):
     ids: list[int]
+
+
+# ── BGC Region schemas ───────────────────────────────────────────────────────
+
+
+class PfamAnnotationOut(Schema):
+    accession: str
+    description: str = ""
+    go_slim: str = ""
+    envelope_start: int = 0
+    envelope_end: int = 0
+    e_value: Optional[str] = None
+
+
+class RegionCdsOut(Schema):
+    protein_id: str
+    start: int
+    end: int
+    strand: int
+    protein_length: int
+    gene_caller: str = ""
+    cluster_representative: Optional[str] = None
+    cluster_representative_url: Optional[str] = None
+    sequence: str = ""
+    pfam: list[PfamAnnotationOut] = []
+
+
+class RegionDomainOut(Schema):
+    accession: str
+    description: str = ""
+    start: int
+    end: int
+    strand: int
+    score: Optional[float] = None
+    go_slim: list[str] = []
+    parent_cds_id: str = ""
+
+
+class RegionClusterOut(Schema):
+    accession: str
+    start: int
+    end: int
+    source: str = ""
+    bgc_classes: list[str] = []
+
+
+class BgcRegionOut(Schema):
+    region_length: int
+    window_start: int
+    window_end: int
+    cds_list: list[RegionCdsOut] = []
+    domain_list: list[RegionDomainOut] = []
+    cluster_list: list[RegionClusterOut] = []

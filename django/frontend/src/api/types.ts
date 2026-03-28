@@ -254,6 +254,58 @@ export interface PaginatedGenomeAggregationResponse {
   pagination: PaginationMeta;
 }
 
+// ── BGC Region schemas ────────────────────────────────────────────────────
+
+export interface PfamAnnotation {
+  accession: string;
+  description: string;
+  go_slim: string;
+  envelope_start: number;
+  envelope_end: number;
+  e_value: string | null;
+}
+
+export interface RegionCds {
+  protein_id: string;
+  start: number;
+  end: number;
+  strand: number;
+  protein_length: number;
+  gene_caller: string;
+  cluster_representative: string | null;
+  cluster_representative_url: string | null;
+  sequence: string;
+  pfam: PfamAnnotation[];
+}
+
+export interface RegionDomain {
+  accession: string;
+  description: string;
+  start: number;
+  end: number;
+  strand: number;
+  score: number | null;
+  go_slim: string[];
+  parent_cds_id: string;
+}
+
+export interface RegionCluster {
+  accession: string;
+  start: number;
+  end: number;
+  source: string;
+  bgc_classes: string[];
+}
+
+export interface BgcRegionData {
+  region_length: number;
+  window_start: number;
+  window_end: number;
+  cds_list: RegionCds[];
+  domain_list: RegionDomain[];
+  cluster_list: RegionCluster[];
+}
+
 // ── Export schemas ─────────────────────────────────────────────────────────
 
 export interface ShortlistExportRequest {

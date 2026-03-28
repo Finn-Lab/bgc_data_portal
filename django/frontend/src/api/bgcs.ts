@@ -1,8 +1,12 @@
 import { apiGet } from "./client";
-import type { BgcDetail, BgcScatterPoint } from "./types";
+import type { BgcDetail, BgcRegionData, BgcScatterPoint } from "./types";
 
 export function fetchBgcDetail(bgcId: number) {
   return apiGet<BgcDetail>(`/bgcs/${bgcId}/`);
+}
+
+export function fetchBgcRegion(bgcId: number) {
+  return apiGet<BgcRegionData>(`/bgcs/${bgcId}/region/`);
 }
 
 export interface BgcScatterParams {

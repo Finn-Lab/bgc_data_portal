@@ -14,6 +14,8 @@ from django.http import HttpResponse
 from ninja import Router, Query
 from ninja.errors import HttpError
 
+from django.db.models import Prefetch
+
 from mgnify_bgcs.models import (
     Assembly,
     Bgc,
@@ -22,6 +24,7 @@ from mgnify_bgcs.models import (
     Domain,
     ProteinDomain,
 )
+from mgnify_bgcs.services.pfam_to_slim.pfam_annots import pfamToGoSlim
 from discovery.models import (
     BgcScore,
     GCFMembership,
@@ -33,6 +36,7 @@ from discovery.services.scoring import compute_composite_priority
 from discovery.api_schemas import (
     BgcClassOption,
     BgcDetail,
+    BgcRegionOut,
     BgcRosterItem,
     BgcScatterPoint,
     DomainArchitectureItem,
@@ -50,9 +54,13 @@ from discovery.api_schemas import (
     PaginatedQueryResultResponse,
     PaginationMeta,
     ParentGenomeSummary,
+    PfamAnnotationOut,
     QueryResultBgc,
     QueryResultGenomeAggregation,
     QueryWeightParams,
+    RegionCdsOut,
+    RegionClusterOut,
+    RegionDomainOut,
     ShortlistExportRequest,
     TaxonomyNode,
 )
@@ -388,6 +396,140 @@ def bgc_detail(request, bgc_id: int):
         is_validated=bs.is_validated if bs else False,
         domain_architecture=domain_arch,
         parent_genome=parent,
+    )
+
+
+@discovery_router.get("/bgcs/{bgc_id}/region/", response=BgcRegionOut)
+def bgc_region(request, bgc_id: int):
+    """Return CDS, domain, and cluster data for the BGC genomic region."""
+    try:
+        bgc = Bgc.objects.select_related("contig", "detector").get(id=bgc_id)
+    except Bgc.DoesNotExist:
+        raise HttpError(404, "BGC not found")
+
+    if not bgc.contig:
+        raise HttpError(404, "BGC has no associated contig")
+
+    extended_window = 2000
+    window_start = max(0, bgc.start_position - extended_window)
+    window_end = bgc.end_position + extended_window
+    region_length = window_end - window_start
+
+    # ── CDS within the window ────────────────────────────────────────────
+    pfam_domain_prefetch = Prefetch(
+        "protein__proteindomain_set",
+        queryset=ProteinDomain.objects.select_related("domain").filter(
+            domain__ref_db="Pfam"
+        ),
+        to_attr="pfam_hits",
+    )
+    cds_qs = (
+        Cds.objects.filter(
+            contig=bgc.contig,
+            start_position__lte=window_end,
+            end_position__gte=window_start,
+        )
+        .select_related("protein", "gene_caller")
+        .prefetch_related(pfam_domain_prefetch)
+        .order_by("start_position")
+    )
+
+    cds_list = []
+    domain_list = []
+
+    for cds in cds_qs:
+        protein = cds.protein
+        protein_id = (
+            protein.mgyp or cds.protein_identifier or str(cds.id)
+        )
+        rep = protein.cluster_representative
+        gene_caller_name = cds.gene_caller.name if cds.gene_caller else ""
+
+        # Build Pfam annotation rows
+        pfam_rows = []
+        for pd in getattr(protein, "pfam_hits", []):
+            domain = pd.domain
+            go_slims = pfamToGoSlim.get(domain.acc, [])
+            go_slim_str = ";".join(go_slims) if go_slims else ""
+
+            pfam_rows.append(
+                PfamAnnotationOut(
+                    accession=domain.acc,
+                    description=domain.description or domain.name or "",
+                    go_slim=go_slim_str,
+                    envelope_start=pd.start_position,
+                    envelope_end=pd.end_position,
+                    e_value=str(pd.score) if pd.score is not None else None,
+                )
+            )
+
+            # Build RegionDomainOut for the SVG overlay
+            # Convert AA positions to nucleotide positions on the contig
+            if cds.strand >= 0:
+                dom_nt_start = cds.start_position + pd.start_position * 3
+                dom_nt_end = cds.start_position + pd.end_position * 3
+            else:
+                dom_nt_start = cds.end_position - pd.end_position * 3
+                dom_nt_end = cds.end_position - pd.start_position * 3
+
+            domain_list.append(
+                RegionDomainOut(
+                    accession=domain.acc,
+                    description=domain.description or domain.name or "",
+                    start=max(0, dom_nt_start - window_start),
+                    end=max(0, dom_nt_end - window_start),
+                    strand=cds.strand,
+                    score=pd.score,
+                    go_slim=go_slims,
+                    parent_cds_id=protein_id,
+                )
+            )
+
+        cds_list.append(
+            RegionCdsOut(
+                protein_id=protein_id,
+                start=cds.start_position - window_start,
+                end=cds.end_position - window_start,
+                strand=cds.strand,
+                protein_length=len(protein.sequence) if protein.sequence else 0,
+                gene_caller=gene_caller_name,
+                cluster_representative=rep,
+                cluster_representative_url=(
+                    f"https://www.ebi.ac.uk/metagenomics/proteins/{rep}/"
+                    if rep
+                    else None
+                ),
+                sequence=protein.sequence or "",
+                pfam=pfam_rows,
+            )
+        )
+
+    # ── Overlapping BGC clusters ─────────────────────────────────────────
+    cluster_list = []
+    overlapping_bgcs = Bgc.objects.filter(
+        contig=bgc.contig,
+        start_position__lte=window_end,
+        end_position__gte=window_start,
+    ).select_related("detector").prefetch_related("classes")
+
+    for ob in overlapping_bgcs:
+        cluster_list.append(
+            RegionClusterOut(
+                accession=ob.accession,
+                start=max(0, ob.start_position - window_start),
+                end=max(0, ob.end_position - window_start),
+                source=ob.detector.name if ob.detector else "",
+                bgc_classes=[c.name for c in ob.classes.all()],
+            )
+        )
+
+    return BgcRegionOut(
+        region_length=region_length,
+        window_start=window_start,
+        window_end=window_end,
+        cds_list=cds_list,
+        domain_list=domain_list,
+        cluster_list=cluster_list,
     )
 
 

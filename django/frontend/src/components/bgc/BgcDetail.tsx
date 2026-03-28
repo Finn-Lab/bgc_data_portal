@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { useBgcDetail } from "@/hooks/use-bgc-detail";
-import { DomainArchitecture } from "./DomainArchitecture";
+import { useBgcRegion } from "@/hooks/use-bgc-region";
+import { RegionPlot } from "./RegionPlot";
+import { CdsProteinInfo } from "./CdsProteinInfo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +11,7 @@ import { useModeStore } from "@/stores/mode-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { Microscope, Search, Star } from "lucide-react";
+import type { RegionCds } from "@/api/types";
 
 interface BgcDetailProps {
   bgcId: number;
@@ -15,9 +19,16 @@ interface BgcDetailProps {
 
 export function BgcDetail({ bgcId }: BgcDetailProps) {
   const { data: bgc, isLoading } = useBgcDetail(bgcId);
+  const { data: regionData, isLoading: regionLoading } = useBgcRegion(bgcId);
   const setMode = useModeStore((s) => s.setMode);
   const setActiveGenomeId = useSelectionStore((s) => s.setActiveGenomeId);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
+  const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
+
+  // Reset selected CDS when bgcId changes
+  useEffect(() => {
+    setSelectedCds(null);
+  }, [bgcId]);
 
   if (isLoading) {
     return (
@@ -115,16 +126,9 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
 
       <Separator />
 
-      {/* Domain architecture */}
-      <div>
-        <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>Domain Architecture</h5>
-        <DomainArchitecture domains={bgc.domain_architecture} />
-      </div>
-
       {/* Parent genome */}
       {bgc.parent_genome && (
         <>
-          <Separator />
           <div className="text-xs">
             <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Genome</h5>
             <div className="flex items-center gap-2">
@@ -139,8 +143,37 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
               )}
             </div>
           </div>
+          <Separator />
         </>
       )}
+
+      {/* Explore Region */}
+      <div>
+        <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.5rem" }}>Explore Region</h5>
+        {regionLoading ? (
+          <Skeleton className="h-40 w-full" />
+        ) : regionData ? (
+          <>
+            <RegionPlot
+              data={regionData}
+              onCdsClick={(cds) =>
+                setSelectedCds((prev) =>
+                  prev?.protein_id === cds.protein_id ? null : cds,
+                )
+              }
+              selectedCdsId={selectedCds?.protein_id ?? null}
+            />
+            {selectedCds && (
+              <CdsProteinInfo
+                cds={selectedCds}
+                onClose={() => setSelectedCds(null)}
+              />
+            )}
+          </>
+        ) : (
+          <p className="text-xs text-muted-foreground">No region data</p>
+        )}
+      </div>
     </div>
   );
 }
