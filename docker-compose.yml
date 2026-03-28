@@ -31,6 +31,21 @@ services:
       interval: 5s
       retries: 5
 
+  frontend:
+    image: node:20-slim
+    working_dir: /app/frontend
+    command: sh -c "npm ci && npx vite build --watch"
+    volumes:
+      - ./django/frontend:/app/frontend
+      - ./django/static:/app/static
+      - frontend_node_modules:/app/frontend/node_modules
+    healthcheck:
+      test: ["CMD", "test", "-f", "/app/static/dashboard/assets/index.js"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+      start_period: 30s
+
   django:
     build:
       context: ./django
@@ -38,15 +53,10 @@ services:
     env_file: .env
     command: >
       sh -c "
-            #  python manage.py makemigrations mgnify_bgcs &&
              python manage.py migrate &&
-             # run server in debug mode
-             python manage.py runserver 0.0.0.0:8000
-             # run server in production mode
-              # gunicorn bgc_data_portal.wsgi:application -b 0.0.0.0:8000"
+             python manage.py runserver 0.0.0.0:8000"
     volumes:
-        - ./django:/app # DEBUG
-        - static_volume:/app/static
+        - ./django:/app
         - ingest_packages:/data/packages
         - /Users/fragoso/.cache/huggingface:/data/huggingface # DEBUG
     environment:
@@ -58,6 +68,8 @@ services:
       rabbitmq:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      frontend:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -88,5 +100,5 @@ services:
 
 volumes:
   db_data:
-  static_volume:
+  frontend_node_modules:
   ingest_packages:

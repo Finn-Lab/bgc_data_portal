@@ -1,7 +1,12 @@
 FROM python:3.10-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc build-essential python3-dev libffi-dev libssl-dev git \
+    gcc build-essential python3-dev libffi-dev libssl-dev git curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 LTS for frontend build
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -14,6 +19,11 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements-web.txt -r requirements-dev.txt
 
 COPY . .
+
+# Build the React frontend (outputs to /app/static/dashboard/)
+WORKDIR /app/frontend
+RUN npm ci && npx vite build
+WORKDIR /app
 
 EXPOSE 8000
 
