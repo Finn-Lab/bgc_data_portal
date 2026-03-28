@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { WeightTuner } from "@/components/WeightTuner";
+import { SidebarShortlists } from "@/components/trays/SidebarShortlists";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { SlidersHorizontal } from "lucide-react";
@@ -35,6 +36,8 @@ export function DashboardShell() {
                   <FilterPanel />
                   <Separator />
                   <WeightTuner />
+                  <Separator />
+                  <SidebarShortlists />
                 </div>
               </ScrollArea>
             </SheetContent>

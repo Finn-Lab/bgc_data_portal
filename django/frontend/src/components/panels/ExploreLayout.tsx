@@ -4,7 +4,6 @@ import { GenomeDetail } from "@/components/genome/GenomeDetail";
 import { BgcRoster } from "@/components/bgc/BgcRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
-import { TrayContainer } from "@/components/trays/TrayContainer";
 import { PanelContainer } from "./PanelContainer";
 import { useSelectionStore } from "@/stores/selection-store";
 
@@ -48,8 +47,6 @@ export function ExploreLayout() {
         </PanelContainer>
       )}
 
-      {/* Shortlist trays */}
-      <TrayContainer />
     </div>
   );
 }

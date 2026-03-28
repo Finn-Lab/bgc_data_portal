@@ -2,7 +2,6 @@ import { QueryResultsRoster } from "@/components/query/QueryResultsRoster";
 import { GenomeAggregationRoster } from "@/components/query/GenomeAggregationRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
-import { TrayContainer } from "@/components/trays/TrayContainer";
 import { PanelContainer } from "./PanelContainer";
 import { QueryActions } from "@/components/query/QueryActions";
 import { useSelectionStore } from "@/stores/selection-store";
@@ -37,8 +36,6 @@ export function QueryLayout() {
         <GenomeAggregationRoster />
       </PanelContainer>
 
-      {/* Shortlist trays */}
-      <TrayContainer />
     </div>
   );
 }
