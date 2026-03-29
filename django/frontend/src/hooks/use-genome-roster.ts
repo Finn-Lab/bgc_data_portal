@@ -27,11 +27,12 @@ export function useGenomeRoster() {
     taxonomy_family: filters.taxonomyFamily || undefined,
     taxonomy_genus: filters.taxonomyGenus || undefined,
     bgc_class: filters.bgcClass || undefined,
+    biome_lineage: filters.biomeLineage || undefined,
+    bgc_accession: filters.bgcAccession || undefined,
+    assembly_accession: filters.assemblyAccession || undefined,
     w_diversity: weights.w_diversity,
     w_novelty: weights.w_novelty,
     w_density: weights.w_density,
-    w_taxonomic: weights.w_taxonomic,
-    w_quality: weights.w_quality,
   };
 
   const query = useQuery({

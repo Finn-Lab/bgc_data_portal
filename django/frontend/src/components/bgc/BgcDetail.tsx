@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useModeStore } from "@/stores/mode-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
-import { Microscope, Search, Star } from "lucide-react";
+import { ExternalLink, Microscope, Search, Star } from "lucide-react";
 import type { RegionCds } from "@/api/types";
 
 interface BgcDetailProps {
@@ -126,13 +126,21 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
 
       <Separator />
 
-      {/* Parent genome */}
+      {/* Parent assembly */}
       {bgc.parent_genome && (
         <>
           <div className="text-xs">
-            <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Genome</h5>
+            <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>Parent Assembly</h5>
             <div className="flex items-center gap-2">
-              <span>{bgc.parent_genome.organism_name ?? bgc.parent_genome.accession}</span>
+              <a
+                href={`https://www.ebi.ac.uk/ena/browser/view/${bgc.parent_genome.accession}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-blue-600 hover:underline"
+              >
+                {bgc.parent_genome.organism_name ?? bgc.parent_genome.accession}
+                <ExternalLink className="h-3 w-3" />
+              </a>
               {bgc.parent_genome.is_type_strain && (
                 <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
               )}
@@ -141,6 +149,46 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                   {bgc.parent_genome.taxonomy_family}
                 </Badge>
               )}
+            </div>
+            {bgc.parent_genome.isolation_source && (
+              <div className="mt-1 text-muted-foreground">
+                Isolation source: {bgc.parent_genome.isolation_source}
+              </div>
+            )}
+          </div>
+          <Separator />
+        </>
+      )}
+
+      {/* Chemical compounds */}
+      {bgc.natural_products && bgc.natural_products.length > 0 && (
+        <>
+          <div>
+            <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>
+              Chemical Compounds
+            </h5>
+            <div className="space-y-2">
+              {bgc.natural_products.map((np) => (
+                <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
+                  {np.smiles_svg && (
+                    <div
+                      className="flex-shrink-0"
+                      dangerouslySetInnerHTML={{ __html: np.smiles_svg }}
+                    />
+                  )}
+                  <div className="text-xs">
+                    <div className="font-medium">{np.name}</div>
+                    <div className="text-muted-foreground">
+                      {[np.chemical_class_l1, np.chemical_class_l2, np.chemical_class_l3]
+                        .filter(Boolean)
+                        .join(" > ")}
+                    </div>
+                    <div className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
+                      {np.smiles}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
           <Separator />

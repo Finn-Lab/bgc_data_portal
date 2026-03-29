@@ -1,26 +1,33 @@
 import { useQuery } from "@tanstack/react-query";
-import { postDomainQuery } from "@/api/queries";
+import { postChemicalQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import { useQueryWeightStore } from "@/stores/query-weight-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useState, useEffect } from "react";
 
-export function useDomainQuery() {
+export function useChemicalQuery() {
   const [page, setPage] = useState(1);
   const [enabled, setEnabled] = useState(false);
-  const conditions = useQueryStore((s) => s.domainConditions);
-  const logic = useQueryStore((s) => s.logic);
+  const smilesQuery = useQueryStore((s) => s.smilesQuery);
+  const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
   const setResultBgcIds = useQueryStore((s) => s.setResultBgcIds);
   const weights = useQueryWeightStore();
   const filters = useFilterStore();
 
-  const hasConditions = conditions.length > 0;
+  const hasQuery = smilesQuery.trim().length > 0;
 
   const query = useQuery({
-    queryKey: ["domain-query", conditions, logic, weights, filters, page],
+    queryKey: [
+      "chemical-query",
+      smilesQuery,
+      similarityThreshold,
+      weights,
+      filters,
+      page,
+    ],
     queryFn: () =>
-      postDomainQuery(
-        { domains: conditions, logic },
+      postChemicalQuery(
+        { smiles: smilesQuery, similarity_threshold: similarityThreshold },
         {
           page,
           page_size: 50,
@@ -42,7 +49,7 @@ export function useDomainQuery() {
           bgc_accession: filters.bgcAccession || undefined,
         }
       ),
-    enabled,
+    enabled: enabled && hasQuery,
   });
 
   // Store result IDs for genome aggregation
@@ -57,6 +64,6 @@ export function useDomainQuery() {
     page,
     setPage,
     runQuery: () => setEnabled(true),
-    hasConditions,
+    hasQuery,
   };
 }

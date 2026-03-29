@@ -13,12 +13,18 @@ interface FilterState {
   npClassL2: string[];
   npClassL3: string[];
   search: string;
+  biomeLineage: string;
+  bgcAccession: string;
+  assemblyAccession: string;
 
   setTypeStrainOnly: (v: boolean) => void;
   setTaxonomy: (rank: string, value: string) => void;
   setBgcClass: (v: string) => void;
   setNpClass: (level: "l1" | "l2" | "l3", values: string[]) => void;
   setSearch: (v: string) => void;
+  setBiomeLineage: (v: string) => void;
+  setBgcAccession: (v: string) => void;
+  setAssemblyAccession: (v: string) => void;
   clearFilters: () => void;
 }
 
@@ -35,6 +41,9 @@ const initialState = {
   npClassL2: [] as string[],
   npClassL3: [] as string[],
   search: "",
+  biomeLineage: "",
+  bgcAccession: "",
+  assemblyAccession: "",
 };
 
 const TAXONOMY_RANKS = [
@@ -73,5 +82,8 @@ export const useFilterStore = create<FilterState>((set) => ({
           : { npClassL3: values }
     ),
   setSearch: (v) => set({ search: v }),
+  setBiomeLineage: (v) => set({ biomeLineage: v }),
+  setBgcAccession: (v) => set({ bgcAccession: v }),
+  setAssemblyAccession: (v) => set({ assemblyAccession: v }),
   clearFilters: () => set(initialState),
 }));

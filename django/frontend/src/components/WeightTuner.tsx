@@ -72,16 +72,6 @@ const GENOME_WEIGHT_CONFIG: {
     label: "Density",
     tooltip: "BGC count per megabase of genome",
   },
-  {
-    key: "w_taxonomic",
-    label: "Taxonomic Novelty",
-    tooltip: "Distance to nearest characterized producer",
-  },
-  {
-    key: "w_quality",
-    label: "Genome Quality",
-    tooltip: "Assembly quality score",
-  },
 ];
 
 const QUERY_WEIGHT_CONFIG: {

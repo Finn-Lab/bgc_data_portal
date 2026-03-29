@@ -11,11 +11,9 @@ from ninja import Schema
 class GenomeWeightParams(Schema):
     """Weights for the Explore Genomes composite priority score."""
 
-    w_diversity: float = 0.25
-    w_novelty: float = 0.40
-    w_density: float = 0.15
-    w_taxonomic: float = 0.10
-    w_quality: float = 0.10
+    w_diversity: float = 0.30
+    w_novelty: float = 0.45
+    w_density: float = 0.25
 
 
 class QueryWeightParams(Schema):
@@ -120,6 +118,12 @@ class BgcRosterItem(Schema):
     is_partial: bool = False
     nearest_mibig_accession: Optional[str] = None
     nearest_mibig_distance: Optional[float] = None
+    assembly_accession: Optional[str] = None
+
+
+class PaginatedBgcRosterResponse(Schema):
+    items: list[BgcRosterItem]
+    pagination: PaginationMeta
 
 
 class DomainArchitectureItem(Schema):
@@ -138,6 +142,17 @@ class ParentGenomeSummary(Schema):
     taxonomy_family: Optional[str] = None
     is_type_strain: bool = False
     genome_quality: Optional[float] = None
+    isolation_source: Optional[str] = None
+
+
+class NaturalProductSummary(Schema):
+    id: int
+    name: str
+    smiles: str
+    smiles_svg: str = ""
+    chemical_class_l1: str = ""
+    chemical_class_l2: Optional[str] = None
+    chemical_class_l3: Optional[str] = None
 
 
 class BgcDetail(Schema):
@@ -155,6 +170,7 @@ class BgcDetail(Schema):
     is_validated: bool = False
     domain_architecture: list[DomainArchitectureItem] = []
     parent_genome: Optional[ParentGenomeSummary] = None
+    natural_products: list[NaturalProductSummary] = []
 
 
 class BgcScatterPoint(Schema):
@@ -208,6 +224,11 @@ class PaginatedDomainResponse(Schema):
 
 
 # ── Query mode schemas ────────────────────────────────────────────────────────
+
+
+class ChemicalQueryRequest(Schema):
+    smiles: str
+    similarity_threshold: float = 0.5
 
 
 class DomainCondition(Schema):

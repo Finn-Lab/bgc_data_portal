@@ -39,6 +39,8 @@ from discovery.api_schemas import (
     BgcRegionOut,
     BgcRosterItem,
     BgcScatterPoint,
+    ChemicalQueryRequest,
+    PaginatedBgcRosterResponse,
     DomainArchitectureItem,
     DomainOption,
     DomainQueryRequest,
@@ -47,6 +49,7 @@ from discovery.api_schemas import (
     GenomeScatterPoint,
     GenomeWeightParams,
     MibigReferencePoint,
+    NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
     PaginatedGenomeAggregationResponse,
@@ -85,15 +88,11 @@ def _genome_composite(gs: GenomeScore, weights: GenomeWeightParams) -> float:
             "diversity": gs.bgc_diversity_score,
             "novelty": gs.bgc_novelty_score,
             "density": gs.bgc_density,
-            "taxonomic": gs.taxonomic_novelty,
-            "quality": gs.genome_quality,
         },
         weights={
             "diversity": weights.w_diversity,
             "novelty": weights.w_novelty,
             "density": weights.w_density,
-            "taxonomic": weights.w_taxonomic,
-            "quality": weights.w_quality,
         },
     )
 
@@ -143,6 +142,9 @@ def genome_roster(
     taxonomy_genus: Optional[str] = None,
     type_strain_only: bool = False,
     bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
     weights: GenomeWeightParams = Query(...),
 ):
     qs = Assembly.objects.select_related("genome_score").filter(
@@ -174,6 +176,20 @@ def genome_roster(
         )
     if bgc_class:
         qs = qs.filter(contigs__bgcs__classes__name__iexact=bgc_class).distinct()
+    if biome_lineage:
+        qs = qs.filter(biome__lineage__icontains=biome_lineage)
+    if bgc_accession:
+        bgc_accession = bgc_accession.strip()
+        if bgc_accession.upper().startswith("MGYB"):
+            try:
+                bgc_pk = int(bgc_accession[4:])
+                qs = qs.filter(contigs__bgcs__id=bgc_pk).distinct()
+            except ValueError:
+                pass
+        else:
+            qs = qs.filter(contigs__bgcs__identifier__icontains=bgc_accession).distinct()
+    if assembly_accession:
+        qs = qs.filter(accession__icontains=assembly_accession)
 
     # Materialize with composite scores
     assemblies = list(qs)
@@ -285,6 +301,77 @@ def genome_bgc_roster(request, assembly_id: int):
     return items
 
 
+@discovery_router.get("/bgcs/roster/", response=PaginatedBgcRosterResponse)
+def bgc_roster(
+    request,
+    assembly_ids: Optional[str] = None,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Paginated BGC roster filtered by assembly IDs, with sorting."""
+    qs = (
+        Bgc.objects.filter(bgc_score__isnull=False)
+        .select_related("bgc_score", "contig__assembly")
+    )
+
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(contig__assembly_id__in=ids)
+        else:
+            qs = qs.none()
+    else:
+        qs = qs.none()
+
+    # Sorting
+    sort_map = {
+        "novelty_score": "bgc_score__novelty_score",
+        "size_kb": "bgc_score__size_kb",
+        "domain_novelty": "bgc_score__domain_novelty",
+        "classification_l1": "bgc_score__classification_l1",
+        "accession": "id",  # accession is derived from id
+    }
+    order_field = sort_map.get(sort_by, "bgc_score__novelty_score")
+    if order == "asc":
+        qs = qs.order_by(order_field)
+    else:
+        qs = qs.order_by(f"-{order_field}")
+
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_qs = qs[offset : offset + ps]
+
+    items = []
+    for bgc in page_qs:
+        bs = bgc.bgc_score
+        assembly = bgc.contig.assembly if bgc.contig else None
+        items.append(
+            BgcRosterItem(
+                id=bgc.id,
+                accession=bgc.accession,
+                classification_l1=bs.classification_l1 if bs else "",
+                classification_l2=bs.classification_l2 if bs else None,
+                classification_l3=bs.classification_l3 if bs else None,
+                size_kb=bs.size_kb if bs else 0.0,
+                novelty_score=bs.novelty_score if bs else 0.0,
+                domain_novelty=bs.domain_novelty if bs else 0.0,
+                is_partial=bgc.is_partial,
+                nearest_mibig_accession=bs.nearest_mibig_accession if bs else None,
+                nearest_mibig_distance=bs.nearest_mibig_distance if bs else None,
+                assembly_accession=assembly.accession if assembly else None,
+            )
+        )
+
+    return PaginatedBgcRosterResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
+    )
+
+
 @discovery_router.get("/genome-scatter/", response=list[GenomeScatterPoint])
 def genome_scatter(
     request,
@@ -379,6 +466,28 @@ def bgc_detail(request, bgc_id: int):
             taxonomy_family=assembly.taxonomy_family,
             is_type_strain=assembly.is_type_strain,
             genome_quality=assembly.genome_quality,
+            isolation_source=assembly.isolation_source,
+        )
+
+    # Natural products
+    np_items = []
+    for np in NaturalProduct.objects.filter(bgc_id=bgc_id):
+        svg = ""
+        try:
+            from mgnify_bgcs.services.compound_search_utils import smiles_to_svg
+            svg = smiles_to_svg(np.smiles) if np.smiles else ""
+        except Exception:
+            pass
+        np_items.append(
+            NaturalProductSummary(
+                id=np.id,
+                name=np.name,
+                smiles=np.smiles,
+                smiles_svg=svg,
+                chemical_class_l1=np.chemical_class_l1,
+                chemical_class_l2=np.chemical_class_l2,
+                chemical_class_l3=np.chemical_class_l3,
+            )
         )
 
     return BgcDetail(
@@ -396,6 +505,7 @@ def bgc_detail(request, bgc_id: int):
         is_validated=bs.is_validated if bs else False,
         domain_architecture=domain_arch,
         parent_genome=parent,
+        natural_products=np_items,
     )
 
 
@@ -599,12 +709,21 @@ def domain_query(
     body: DomainQueryRequest,
     page: int = 1,
     page_size: int = 25,
+    search: Optional[str] = None,
+    taxonomy_kingdom: Optional[str] = None,
+    taxonomy_phylum: Optional[str] = None,
+    taxonomy_class: Optional[str] = None,
+    taxonomy_order: Optional[str] = None,
+    taxonomy_family: Optional[str] = None,
+    taxonomy_genus: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
     weights: QueryWeightParams = Query(...),
 ):
-    """Find BGCs by protein domain composition."""
-    if not body.domains:
-        raise HttpError(400, "At least one domain is required")
-
+    """Find BGCs by protein domain composition and/or sidebar filters."""
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
 
@@ -612,6 +731,43 @@ def domain_query(
     qs = Bgc.objects.select_related("bgc_score", "contig__assembly").filter(
         bgc_score__isnull=False
     )
+
+    # Apply sidebar filters
+    if type_strain_only:
+        qs = qs.filter(contig__assembly__is_type_strain=True)
+    if taxonomy_kingdom:
+        qs = qs.filter(contig__assembly__taxonomy_kingdom__iexact=taxonomy_kingdom)
+    if taxonomy_phylum:
+        qs = qs.filter(contig__assembly__taxonomy_phylum__iexact=taxonomy_phylum)
+    if taxonomy_class:
+        qs = qs.filter(contig__assembly__taxonomy_class__iexact=taxonomy_class)
+    if taxonomy_order:
+        qs = qs.filter(contig__assembly__taxonomy_order__iexact=taxonomy_order)
+    if taxonomy_family:
+        qs = qs.filter(contig__assembly__taxonomy_family__iexact=taxonomy_family)
+    if taxonomy_genus:
+        qs = qs.filter(contig__assembly__taxonomy_genus__iexact=taxonomy_genus)
+    if search:
+        qs = qs.filter(
+            Q(contig__assembly__organism_name__icontains=search)
+            | Q(contig__assembly__accession__icontains=search)
+        )
+    if bgc_class:
+        qs = qs.filter(classes__name__iexact=bgc_class).distinct()
+    if biome_lineage:
+        qs = qs.filter(contig__assembly__biome__lineage__icontains=biome_lineage)
+    if assembly_accession:
+        qs = qs.filter(contig__assembly__accession__icontains=assembly_accession)
+    if bgc_accession:
+        bgc_accession = bgc_accession.strip()
+        if bgc_accession.upper().startswith("MGYB"):
+            try:
+                bgc_pk = int(bgc_accession[4:])
+                qs = qs.filter(id=bgc_pk)
+            except ValueError:
+                pass
+        else:
+            qs = qs.filter(identifier__icontains=bgc_accession)
 
     if body.logic == "and" and required:
         # BGC must contain proteins with ALL required domains
@@ -723,6 +879,166 @@ def similar_bgc_query(
     for bgc in qs:
         bs = bgc.bgc_score
         similarity = 1.0 - bgc.distance
+        relevance = compute_composite_priority(
+            scores={
+                "similarity": similarity,
+                "novelty": bs.novelty_score if bs else 0.0,
+                "completeness": 0.0 if bgc.is_partial else 1.0,
+                "domain_novelty": bs.domain_novelty if bs else 0.0,
+            },
+            weights={
+                "similarity": weights.w_similarity,
+                "novelty": weights.w_novelty,
+                "completeness": weights.w_completeness,
+                "domain_novelty": weights.w_domain_novelty,
+            },
+        )
+        results.append((bgc, relevance))
+
+    results.sort(key=lambda x: x[1], reverse=True)
+    total_count = len(results)
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_results = results[offset : offset + ps]
+
+    items = []
+    for bgc, relevance in page_results:
+        bs = bgc.bgc_score
+        assembly = bgc.contig.assembly if bgc.contig else None
+        items.append(
+            QueryResultBgc(
+                id=bgc.id,
+                accession=bgc.accession,
+                classification_l1=bs.classification_l1 if bs else "",
+                classification_l2=bs.classification_l2 if bs else None,
+                size_kb=bs.size_kb if bs else 0.0,
+                novelty_score=bs.novelty_score if bs else 0.0,
+                domain_novelty=bs.domain_novelty if bs else 0.0,
+                is_partial=bgc.is_partial,
+                relevance_score=round(relevance, 4),
+                assembly_id=assembly.id if assembly else None,
+                assembly_accession=assembly.accession if assembly else None,
+                organism_name=assembly.organism_name if assembly else None,
+                is_type_strain=assembly.is_type_strain if assembly else False,
+            )
+        )
+
+    return PaginatedQueryResultResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp
+        ),
+    )
+
+
+@discovery_router.post("/query/chemical/", response=PaginatedQueryResultResponse)
+def chemical_query(
+    request,
+    body: ChemicalQueryRequest,
+    page: int = 1,
+    page_size: int = 25,
+    search: Optional[str] = None,
+    taxonomy_kingdom: Optional[str] = None,
+    taxonomy_phylum: Optional[str] = None,
+    taxonomy_class: Optional[str] = None,
+    taxonomy_order: Optional[str] = None,
+    taxonomy_family: Optional[str] = None,
+    taxonomy_genus: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    weights: QueryWeightParams = Query(...),
+):
+    """Find BGCs by chemical structure similarity using NaturalProduct SMILES."""
+    if not body.smiles or not body.smiles.strip():
+        raise HttpError(400, "SMILES string is required")
+
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem, DataStructs
+    except ImportError:
+        raise HttpError(500, "RDKit is not available")
+
+    query_mol = Chem.MolFromSmiles(body.smiles.strip())
+    if query_mol is None:
+        raise HttpError(400, "Invalid SMILES string")
+
+    query_fp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
+
+    # Compute similarities against NaturalProduct SMILES
+    bgc_similarities: dict[int, float] = {}
+    for np_obj in NaturalProduct.objects.filter(bgc__isnull=False).only(
+        "bgc_id", "smiles"
+    ):
+        if not np_obj.smiles:
+            continue
+        try:
+            mol = Chem.MolFromSmiles(np_obj.smiles)
+            if mol is None:
+                continue
+            fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+            similarity = DataStructs.TanimotoSimilarity(query_fp, fp)
+            if similarity >= body.similarity_threshold:
+                existing = bgc_similarities.get(np_obj.bgc_id, 0.0)
+                bgc_similarities[np_obj.bgc_id] = max(existing, similarity)
+        except Exception:
+            continue
+
+    if not bgc_similarities:
+        return PaginatedQueryResultResponse(
+            items=[],
+            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+        )
+
+    # Fetch matching BGCs
+    qs = (
+        Bgc.objects.filter(id__in=bgc_similarities.keys(), bgc_score__isnull=False)
+        .select_related("bgc_score", "contig__assembly")
+    )
+
+    # Apply sidebar filters
+    if type_strain_only:
+        qs = qs.filter(contig__assembly__is_type_strain=True)
+    if taxonomy_kingdom:
+        qs = qs.filter(contig__assembly__taxonomy_kingdom__iexact=taxonomy_kingdom)
+    if taxonomy_phylum:
+        qs = qs.filter(contig__assembly__taxonomy_phylum__iexact=taxonomy_phylum)
+    if taxonomy_class:
+        qs = qs.filter(contig__assembly__taxonomy_class__iexact=taxonomy_class)
+    if taxonomy_order:
+        qs = qs.filter(contig__assembly__taxonomy_order__iexact=taxonomy_order)
+    if taxonomy_family:
+        qs = qs.filter(contig__assembly__taxonomy_family__iexact=taxonomy_family)
+    if taxonomy_genus:
+        qs = qs.filter(contig__assembly__taxonomy_genus__iexact=taxonomy_genus)
+    if search:
+        qs = qs.filter(
+            Q(contig__assembly__organism_name__icontains=search)
+            | Q(contig__assembly__accession__icontains=search)
+        )
+    if bgc_class:
+        qs = qs.filter(classes__name__iexact=bgc_class).distinct()
+    if biome_lineage:
+        qs = qs.filter(contig__assembly__biome__lineage__icontains=biome_lineage)
+    if assembly_accession:
+        qs = qs.filter(contig__assembly__accession__icontains=assembly_accession)
+    if bgc_accession:
+        bgc_accession = bgc_accession.strip()
+        if bgc_accession.upper().startswith("MGYB"):
+            try:
+                bgc_pk = int(bgc_accession[4:])
+                qs = qs.filter(id=bgc_pk)
+            except ValueError:
+                pass
+        else:
+            qs = qs.filter(identifier__icontains=bgc_accession)
+
+    # Score and paginate
+    results = []
+    for bgc in qs:
+        bs = bgc.bgc_score
+        similarity = bgc_similarities.get(bgc.id, 0.0)
         relevance = compute_composite_priority(
             scores={
                 "similarity": similarity,

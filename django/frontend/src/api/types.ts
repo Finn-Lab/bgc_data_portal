@@ -4,16 +4,12 @@ export interface GenomeWeightParams {
   w_diversity: number;
   w_novelty: number;
   w_density: number;
-  w_taxonomic: number;
-  w_quality: number;
 }
 
 export const GENOME_WEIGHT_DEFAULTS: GenomeWeightParams = {
-  w_diversity: 0.25,
-  w_novelty: 0.4,
-  w_density: 0.15,
-  w_taxonomic: 0.1,
-  w_quality: 0.1,
+  w_diversity: 0.3,
+  w_novelty: 0.45,
+  w_density: 0.25,
 };
 
 export interface QueryWeightParams {
@@ -118,6 +114,12 @@ export interface BgcRosterItem {
   is_partial: boolean;
   nearest_mibig_accession: string | null;
   nearest_mibig_distance: number | null;
+  assembly_accession: string | null;
+}
+
+export interface PaginatedBgcRosterResponse {
+  items: BgcRosterItem[];
+  pagination: PaginationMeta;
 }
 
 export interface DomainArchitectureItem {
@@ -136,6 +138,17 @@ export interface ParentGenomeSummary {
   taxonomy_family: string | null;
   is_type_strain: boolean;
   genome_quality: number | null;
+  isolation_source: string | null;
+}
+
+export interface NaturalProductSummary {
+  id: number;
+  name: string;
+  smiles: string;
+  smiles_svg: string;
+  chemical_class_l1: string;
+  chemical_class_l2: string | null;
+  chemical_class_l3: string | null;
 }
 
 export interface BgcDetail {
@@ -153,6 +166,7 @@ export interface BgcDetail {
   is_validated: boolean;
   domain_architecture: DomainArchitectureItem[];
   parent_genome: ParentGenomeSummary | null;
+  natural_products: NaturalProductSummary[];
 }
 
 export interface BgcScatterPoint {

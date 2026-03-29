@@ -21,6 +21,9 @@ export interface GenomeRosterParams extends Partial<GenomeWeightParams> {
   taxonomy_family?: string;
   taxonomy_genus?: string;
   bgc_class?: string;
+  biome_lineage?: string;
+  bgc_accession?: string;
+  assembly_accession?: string;
 }
 
 export function fetchGenomeRoster(params: GenomeRosterParams = {}) {

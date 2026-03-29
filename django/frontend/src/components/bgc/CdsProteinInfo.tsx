@@ -85,7 +85,7 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
 
       {/* Pfam annotations table */}
       <div className="mb-3">
-        <h6 className="font-semibold mb-1">Pfam Annotations</h6>
+        <h6 className="font-semibold text-xs mb-1">Pfam Annotations</h6>
         {cds.pfam.length === 0 ? (
           <p className="text-muted-foreground italic">No Pfam annotations</p>
         ) : (

@@ -1,5 +1,6 @@
 import { useDomainQuery } from "@/hooks/use-domain-query";
 import { useSimilarBgcQuery } from "@/hooks/use-similar-bgc-query";
+import { useChemicalQuery } from "@/hooks/use-chemical-query";
 import { useQueryStore } from "@/stores/query-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { BgcContextMenu } from "@/components/bgc/BgcContextMenu";
@@ -18,14 +19,20 @@ import { cn } from "@/lib/utils";
 
 export function QueryResultsRoster() {
   const similarBgcSourceId = useQueryStore((s) => s.similarBgcSourceId);
+  const smilesQuery = useQueryStore((s) => s.smilesQuery);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
 
   const domainQuery = useDomainQuery();
   const similarQuery = useSimilarBgcQuery();
+  const chemicalQuery = useChemicalQuery();
 
-  // Pick the active query
-  const query = similarBgcSourceId ? similarQuery : domainQuery;
+  // Pick the active query: similar BGC > chemical > domain
+  const query = similarBgcSourceId
+    ? similarQuery
+    : smilesQuery.trim()
+      ? chemicalQuery
+      : domainQuery;
   const { data, isLoading, page, setPage } = query;
 
   if (isLoading) {

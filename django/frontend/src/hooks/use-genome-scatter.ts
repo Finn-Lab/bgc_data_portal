@@ -16,8 +16,6 @@ export function useGenomeScatter(xAxis: string, yAxis: string) {
     w_diversity: weights.w_diversity,
     w_novelty: weights.w_novelty,
     w_density: weights.w_density,
-    w_taxonomic: weights.w_taxonomic,
-    w_quality: weights.w_quality,
   };
 
   return useQuery({

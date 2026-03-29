@@ -15,7 +15,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from mgnify_bgcs.models import (
-    Assembly, Bgc, BgcClass, BgcBgcClass, Cds, Contig,
+    Assembly, Bgc, BgcClass, BgcBgcClass, Biome, Cds, Contig,
     Domain, GeneCaller, Protein, ProteinDomain,
 )
 
@@ -71,6 +71,16 @@ _PFAM_DOMAIN_POOL = [
     ("PF00465", "Iron-containing alcohol dehydrogenase", "Pfam"),
     ("PF01370", "NAD dependent epimerase", "Pfam"),
     ("PF00535", "Glycosyl transferase family 2", "Pfam"),
+]
+
+_BIOME_LINEAGES = [
+    "root:Environmental:Terrestrial:Soil",
+    "root:Environmental:Aquatic:Marine",
+    "root:Environmental:Aquatic:Freshwater",
+    "root:Host-associated:Human:Digestive system",
+    "root:Host-associated:Plants:Rhizosphere",
+    "root:Environmental:Terrestrial:Volcanic",
+    "root:Host-associated:Insecta",
 ]
 
 _ISOLATION_SOURCES = [
@@ -173,6 +183,18 @@ class Command(BaseCommand):
                 ),
             )
             assemblies.append(assembly)
+
+        # 3b. Create biomes and assign to assemblies
+        self.stdout.write("Creating biomes...")
+        biome_objs = []
+        for lineage in _BIOME_LINEAGES:
+            biome, _ = Biome.objects.get_or_create(lineage=lineage)
+            biome_objs.append(biome)
+        for assembly in assemblies:
+            if not assembly.biome_id:
+                assembly.biome = random.choice(biome_objs)
+                assembly.save(update_fields=["biome"])
+        self.stdout.write(f"  {len(biome_objs)} biomes assigned.")
 
         # 4. Create contigs and BGCs for each assembly
         self.stdout.write("Creating contigs and BGCs...")

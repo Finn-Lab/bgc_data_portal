@@ -6,6 +6,8 @@ interface QueryState {
   logic: "and" | "or";
   similarBgcSourceId: number | null;
   resultBgcIds: number[];
+  smilesQuery: string;
+  similarityThreshold: number;
 
   addDomainCondition: (condition: DomainCondition) => void;
   removeDomainCondition: (acc: string) => void;
@@ -13,6 +15,8 @@ interface QueryState {
   setLogic: (logic: "and" | "or") => void;
   setSimilarBgcSourceId: (id: number | null) => void;
   setResultBgcIds: (ids: number[]) => void;
+  setSmilesQuery: (v: string) => void;
+  setSimilarityThreshold: (v: number) => void;
   clearQuery: () => void;
 }
 
@@ -21,6 +25,8 @@ export const useQueryStore = create<QueryState>((set) => ({
   logic: "and",
   similarBgcSourceId: null,
   resultBgcIds: [],
+  smilesQuery: "",
+  similarityThreshold: 0.5,
 
   addDomainCondition: (condition) =>
     set((s) => {
@@ -40,11 +46,15 @@ export const useQueryStore = create<QueryState>((set) => ({
   setLogic: (logic) => set({ logic }),
   setSimilarBgcSourceId: (id) => set({ similarBgcSourceId: id }),
   setResultBgcIds: (ids) => set({ resultBgcIds: ids }),
+  setSmilesQuery: (v) => set({ smilesQuery: v }),
+  setSimilarityThreshold: (v) => set({ similarityThreshold: v }),
   clearQuery: () =>
     set({
       domainConditions: [],
       logic: "and",
       similarBgcSourceId: null,
       resultBgcIds: [],
+      smilesQuery: "",
+      similarityThreshold: 0.5,
     }),
 }));

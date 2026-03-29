@@ -6,8 +6,10 @@ import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { NpClassFilter } from "./NpClassFilter";
 import { DomainQueryBuilder } from "./DomainQueryBuilder";
+import { ChemicalStructureSearch } from "./ChemicalStructureSearch";
 import { useFilterStore } from "@/stores/filter-store";
 import { useModeStore } from "@/stores/mode-store";
+import { Label } from "@/components/ui/label";
 import { Search, RotateCcw } from "lucide-react";
 
 export function FilterPanel() {
@@ -15,6 +17,12 @@ export function FilterPanel() {
   const search = useFilterStore((s) => s.search);
   const setSearch = useFilterStore((s) => s.setSearch);
   const clearFilters = useFilterStore((s) => s.clearFilters);
+  const biomeLineage = useFilterStore((s) => s.biomeLineage);
+  const setBiomeLineage = useFilterStore((s) => s.setBiomeLineage);
+  const bgcAccession = useFilterStore((s) => s.bgcAccession);
+  const setBgcAccession = useFilterStore((s) => s.setBgcAccession);
+  const assemblyAccession = useFilterStore((s) => s.assemblyAccession);
+  const setAssemblyAccession = useFilterStore((s) => s.setAssemblyAccession);
 
   return (
     <div className="space-y-4">
@@ -55,19 +63,61 @@ export function FilterPanel() {
             <TabsTrigger value="domains" className="flex-1 text-xs">
               Domain Query
             </TabsTrigger>
+            <TabsTrigger value="chemical" className="flex-1 text-xs">
+              Chemical Search
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="filters" className="space-y-4">
             <TaxonomyFilter />
+            <div className="space-y-1.5">
+              <Label className="text-xs">Biome Lineage</Label>
+              <Input
+                placeholder="e.g. root:Environmental:Soil"
+                value={biomeLineage}
+                onChange={(e) => setBiomeLineage(e.target.value)}
+                className="vf-form__input h-8 text-xs"
+              />
+            </div>
             <BgcClassFilter />
             <NpClassFilter />
+            <div className="space-y-1.5">
+              <Label className="text-xs">Assembly Accession</Label>
+              <Input
+                placeholder="e.g. ERZ..."
+                value={assemblyAccession}
+                onChange={(e) => setAssemblyAccession(e.target.value)}
+                className="vf-form__input h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">BGC Accession (MGYB)</Label>
+              <Input
+                placeholder="e.g. MGYB000000000001"
+                value={bgcAccession}
+                onChange={(e) => setBgcAccession(e.target.value)}
+                className="vf-form__input h-8 text-xs"
+              />
+            </div>
           </TabsContent>
           <TabsContent value="domains">
             <DomainQueryBuilder />
+          </TabsContent>
+          <TabsContent value="chemical">
+            <ChemicalStructureSearch />
           </TabsContent>
         </Tabs>
       ) : (
         <div className="space-y-4">
           <TaxonomyFilter />
+          <div className="space-y-1.5">
+            <Label className="text-xs">Biome Lineage</Label>
+            <Input
+              placeholder="e.g. root:Environmental:Soil"
+              value={biomeLineage}
+              onChange={(e) => setBiomeLineage(e.target.value)}
+              className="vf-form__input h-8 text-xs"
+            />
+          </div>
           <BgcClassFilter />
           <NpClassFilter />
         </div>

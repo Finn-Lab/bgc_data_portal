@@ -72,8 +72,8 @@ export function BgcScatter() {
         marker: {
           symbol: "triangle-up",
           color: "#d1d5db",
-          size: 6,
-          opacity: 0.5,
+          size: 10,
+          opacity: 0.7,
         },
       });
     }

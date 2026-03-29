@@ -9,6 +9,18 @@ import type {
 export interface DomainQueryParams extends Partial<QueryWeightParams> {
   page?: number;
   page_size?: number;
+  search?: string;
+  type_strain_only?: boolean;
+  taxonomy_kingdom?: string;
+  taxonomy_phylum?: string;
+  taxonomy_class?: string;
+  taxonomy_order?: string;
+  taxonomy_family?: string;
+  taxonomy_genus?: string;
+  bgc_class?: string;
+  biome_lineage?: string;
+  assembly_accession?: string;
+  bgc_accession?: string;
 }
 
 export function postDomainQuery(
@@ -44,6 +56,43 @@ export function postSimilarBgcQuery(
   return apiPost<PaginatedQueryResultResponse>(
     `/query/similar-bgc/${bgcId}/${qs ? `?${qs}` : ""}`,
     {}
+  );
+}
+
+export interface ChemicalQueryRequest {
+  smiles: string;
+  similarity_threshold: number;
+}
+
+export interface ChemicalQueryParams extends Partial<QueryWeightParams> {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  type_strain_only?: boolean;
+  taxonomy_kingdom?: string;
+  taxonomy_phylum?: string;
+  taxonomy_class?: string;
+  taxonomy_order?: string;
+  taxonomy_family?: string;
+  taxonomy_genus?: string;
+  bgc_class?: string;
+  biome_lineage?: string;
+  assembly_accession?: string;
+  bgc_accession?: string;
+}
+
+export function postChemicalQuery(
+  body: ChemicalQueryRequest,
+  params: ChemicalQueryParams = {}
+) {
+  const queryString = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) queryString.set(key, String(value));
+  }
+  const qs = queryString.toString();
+  return apiPost<PaginatedQueryResultResponse>(
+    `/query/chemical/${qs ? `?${qs}` : ""}`,
+    body
   );
 }
 
