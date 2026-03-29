@@ -145,11 +145,20 @@ def genome_roster(
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
     weights: GenomeWeightParams = Query(...),
 ):
     qs = Assembly.objects.select_related("genome_score").filter(
         genome_score__isnull=False
     )
+
+    # Filter by explicit assembly IDs (used by Query mode genome panels)
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(id__in=ids)
+        else:
+            qs = qs.none()
 
     # Filters
     if type_strain_only:
@@ -372,6 +381,20 @@ def bgc_roster(
     )
 
 
+@discovery_router.get("/bgcs/parent-assemblies/", response=list[int])
+def bgc_parent_assemblies(request, bgc_ids: str):
+    """Return unique parent assembly IDs for the given BGC IDs."""
+    ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
+    if not ids:
+        return []
+    assembly_ids = (
+        Bgc.objects.filter(id__in=ids, contig__assembly__isnull=False)
+        .values_list("contig__assembly_id", flat=True)
+        .distinct()
+    )
+    return list(assembly_ids)
+
+
 @discovery_router.get("/genome-scatter/", response=list[GenomeScatterPoint])
 def genome_scatter(
     request,
@@ -380,6 +403,7 @@ def genome_scatter(
     type_strain_only: bool = False,
     taxonomy_family: Optional[str] = None,
     bgc_class: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
     weights: GenomeWeightParams = Query(...),
 ):
     allowed_axes = {
@@ -395,6 +419,10 @@ def genome_scatter(
     qs = Assembly.objects.select_related("genome_score").filter(
         genome_score__isnull=False
     )
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(id__in=ids)
     if type_strain_only:
         qs = qs.filter(is_type_strain=True)
     if taxonomy_family:
@@ -473,17 +501,19 @@ def bgc_detail(request, bgc_id: int):
     np_items = []
     for np in NaturalProduct.objects.filter(bgc_id=bgc_id):
         svg = ""
-        try:
-            from mgnify_bgcs.services.compound_search_utils import smiles_to_svg
-            svg = smiles_to_svg(np.smiles) if np.smiles else ""
-        except Exception:
-            pass
+        if not np.structure_svg_base64 and np.smiles:
+            try:
+                from mgnify_bgcs.services.compound_search_utils import smiles_to_svg
+                svg = smiles_to_svg(np.smiles) if np.smiles else ""
+            except Exception:
+                pass
         np_items.append(
             NaturalProductSummary(
                 id=np.id,
                 name=np.name,
                 smiles=np.smiles,
                 smiles_svg=svg,
+                structure_thumbnail=np.structure_svg_base64,
                 chemical_class_l1=np.chemical_class_l1,
                 chemical_class_l2=np.chemical_class_l2,
                 chemical_class_l3=np.chemical_class_l3,

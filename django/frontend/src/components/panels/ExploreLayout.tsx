@@ -5,7 +5,30 @@ import { BgcRoster } from "@/components/bgc/BgcRoster";
 import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { BgcDetail } from "@/components/bgc/BgcDetail";
 import { PanelContainer } from "./PanelContainer";
+import { Badge } from "@/components/ui/badge";
 import { useSelectionStore } from "@/stores/selection-store";
+import { useShortlistStore } from "@/stores/shortlist-store";
+
+function BgcSourceBadge() {
+  const genomeShortlist = useShortlistStore((s) => s.genomes);
+  const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
+
+  if (genomeShortlist.length > 0) {
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        From {genomeShortlist.length} shortlisted genome{genomeShortlist.length > 1 ? "s" : ""}
+      </Badge>
+    );
+  }
+  if (activeGenomeId) {
+    return (
+      <Badge variant="outline" className="text-[10px]">
+        From selected genome
+      </Badge>
+    );
+  }
+  return null;
+}
 
 export function ExploreLayout() {
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
@@ -32,10 +55,10 @@ export function ExploreLayout() {
 
       {/* Bottom section: BGC panels */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[300px]">
+        <PanelContainer title="BGC Roster" className="min-h-[300px]" actions={<BgcSourceBadge />}>
           <BgcRoster />
         </PanelContainer>
-        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]">
+        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]" actions={<BgcSourceBadge />}>
           <BgcScatter />
         </PanelContainer>
       </div>

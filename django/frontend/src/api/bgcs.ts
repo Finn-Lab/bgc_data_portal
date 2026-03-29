@@ -31,3 +31,7 @@ export interface BgcRosterParams {
 export function fetchBgcRoster(params: BgcRosterParams = {}) {
   return apiGet<PaginatedBgcRosterResponse>("/bgcs/roster/", params as Record<string, string | number | boolean | undefined>);
 }
+
+export function fetchParentAssemblies(bgcIds: number[]) {
+  return apiGet<number[]>("/bgcs/parent-assemblies/", { bgc_ids: bgcIds.join(",") });
+}

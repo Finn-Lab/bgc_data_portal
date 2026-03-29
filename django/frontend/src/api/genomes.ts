@@ -24,6 +24,7 @@ export interface GenomeRosterParams extends Partial<GenomeWeightParams> {
   biome_lineage?: string;
   bgc_accession?: string;
   assembly_accession?: string;
+  assembly_ids?: string;
 }
 
 export function fetchGenomeRoster(params: GenomeRosterParams = {}) {
@@ -44,6 +45,7 @@ export interface GenomeScatterParams extends Partial<GenomeWeightParams> {
   type_strain_only?: boolean;
   taxonomy_family?: string;
   bgc_class?: string;
+  assembly_ids?: string;
 }
 
 export function fetchGenomeScatter(params: GenomeScatterParams = {}) {

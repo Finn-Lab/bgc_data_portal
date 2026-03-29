@@ -170,11 +170,21 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
             <div className="space-y-2">
               {bgc.natural_products.map((np) => (
                 <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
-                  {np.smiles_svg && (
-                    <div
-                      className="flex-shrink-0"
-                      dangerouslySetInnerHTML={{ __html: np.smiles_svg }}
-                    />
+                  {(np.structure_thumbnail || np.smiles_svg) && (
+                    np.structure_thumbnail ? (
+                      <img
+                        src={`data:image/svg+xml;base64,${np.structure_thumbnail}`}
+                        width={48}
+                        height={48}
+                        alt={np.name}
+                        className="flex-shrink-0 rounded border"
+                      />
+                    ) : (
+                      <div
+                        className="flex-shrink-0"
+                        dangerouslySetInnerHTML={{ __html: np.smiles_svg }}
+                      />
+                    )
                   )}
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>

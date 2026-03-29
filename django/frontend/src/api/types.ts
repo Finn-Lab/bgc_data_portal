@@ -146,6 +146,7 @@ export interface NaturalProductSummary {
   name: string;
   smiles: string;
   smiles_svg: string;
+  structure_thumbnail: string;
   chemical_class_l1: string;
   chemical_class_l2: string | null;
   chemical_class_l3: string | null;

@@ -150,6 +150,7 @@ class NaturalProductSummary(Schema):
     name: str
     smiles: str
     smiles_svg: str = ""
+    structure_thumbnail: str = ""
     chemical_class_l1: str = ""
     chemical_class_l2: Optional[str] = None
     chemical_class_l3: Optional[str] = None

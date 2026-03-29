@@ -418,6 +418,22 @@ class Command(BaseCommand):
                 )
             )
         NaturalProduct.objects.bulk_create(nps)
+
+        # Generate base64 SVG thumbnails for NaturalProducts
+        self.stdout.write("Generating compound structure thumbnails...")
+        try:
+            import base64
+            from mgnify_bgcs.services.compound_search_utils import smiles_to_svg
+            for np_obj in nps:
+                if np_obj.smiles:
+                    svg = smiles_to_svg(np_obj.smiles, size=(64, 64))
+                    if svg:
+                        np_obj.structure_svg_base64 = base64.b64encode(svg.encode()).decode()
+            NaturalProduct.objects.bulk_update(nps, ["structure_svg_base64"])
+            self.stdout.write("  Thumbnails generated.")
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"  Thumbnail generation failed: {e}"))
+
         self.stdout.write(f"  {len(nps)} NaturalProducts created.")
 
         # 7. Compute BgcScores

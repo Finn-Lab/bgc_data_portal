@@ -55,6 +55,7 @@ class NaturalProduct(models.Model):
     chemical_class_l1 = models.CharField(max_length=100)
     chemical_class_l2 = models.CharField(max_length=100, blank=True, null=True)
     chemical_class_l3 = models.CharField(max_length=100, blank=True, null=True)
+    structure_svg_base64 = models.TextField(blank=True, default="")
     producing_organism = models.CharField(max_length=255, blank=True, null=True)
     bgc = models.ForeignKey(
         "mgnify_bgcs.Bgc",
