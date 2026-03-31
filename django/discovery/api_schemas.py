@@ -281,6 +281,53 @@ class PaginatedGenomeAggregationResponse(Schema):
     pagination: PaginationMeta
 
 
+# ── Stats schemas ────────────────────────────────────────────────────────────
+
+
+class SunburstNode(Schema):
+    id: str
+    label: str
+    parent: str = ""
+    count: int = 0
+
+
+class ScoreDistribution(Schema):
+    label: str
+    values: list[float] = []
+
+
+class CoreDomain(Schema):
+    acc: str
+    name: str
+    bgc_count: int = 0
+    fraction: float = 0.0
+
+
+class BgcClassCount(Schema):
+    name: str
+    count: int = 0
+
+
+class GenomeStatsResponse(Schema):
+    taxonomy_sunburst: list[SunburstNode] = []
+    score_distributions: list[ScoreDistribution] = []
+    type_strain_count: int = 0
+    non_type_strain_count: int = 0
+    mean_bgc_per_genome: float = 0.0
+    mean_l1_class_per_genome: float = 0.0
+    total_genomes: int = 0
+
+
+class BgcStatsResponse(Schema):
+    core_domains: list[CoreDomain] = []
+    score_distributions: list[ScoreDistribution] = []
+    complete_count: int = 0
+    partial_count: int = 0
+    np_class_sunburst: list[SunburstNode] = []
+    bgc_class_distribution: list[BgcClassCount] = []
+    total_bgcs: int = 0
+
+
 # ── Export schemas ────────────────────────────────────────────────────────────
 
 

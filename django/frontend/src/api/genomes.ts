@@ -3,6 +3,7 @@ import type {
   BgcRosterItem,
   GenomeDetail,
   GenomeScatterPoint,
+  GenomeStatsResponse,
   GenomeWeightParams,
   PaginatedGenomeResponse,
 } from "./types";
@@ -50,4 +51,24 @@ export interface GenomeScatterParams extends Partial<GenomeWeightParams> {
 
 export function fetchGenomeScatter(params: GenomeScatterParams = {}) {
   return apiGet<GenomeScatterPoint[]>("/genome-scatter/", params as Record<string, string | number | boolean | undefined>);
+}
+
+export interface GenomeStatsParams {
+  search?: string;
+  type_strain_only?: boolean;
+  taxonomy_kingdom?: string;
+  taxonomy_phylum?: string;
+  taxonomy_class?: string;
+  taxonomy_order?: string;
+  taxonomy_family?: string;
+  taxonomy_genus?: string;
+  bgc_class?: string;
+  biome_lineage?: string;
+  bgc_accession?: string;
+  assembly_accession?: string;
+  assembly_ids?: string;
+}
+
+export function fetchGenomeStats(params: GenomeStatsParams = {}) {
+  return apiGet<GenomeStatsResponse>("/stats/genomes/", params as Record<string, string | number | boolean | undefined>);
 }

@@ -4,6 +4,7 @@ Mounted on the main NinjaAPI at /api/dashboard/.
 """
 
 import csv
+import json
 import math
 from io import StringIO
 from typing import Optional
@@ -33,13 +34,18 @@ from discovery.models import (
     NaturalProduct,
 )
 from discovery.services.scoring import compute_composite_priority
+from discovery.services.stats import compute_bgc_stats, compute_genome_stats
 from discovery.api_schemas import (
+    BgcClassCount,
     BgcClassOption,
     BgcDetail,
     BgcRegionOut,
     BgcRosterItem,
     BgcScatterPoint,
+    BgcStatsResponse,
     ChemicalQueryRequest,
+    CoreDomain,
+    GenomeStatsResponse,
     PaginatedBgcRosterResponse,
     DomainArchitectureItem,
     DomainOption,
@@ -64,7 +70,9 @@ from discovery.api_schemas import (
     RegionCdsOut,
     RegionClusterOut,
     RegionDomainOut,
+    ScoreDistribution,
     ShortlistExportRequest,
+    SunburstNode,
     TaxonomyNode,
 )
 
@@ -123,44 +131,33 @@ def _assembly_to_roster_item(assembly: Assembly, composite: float) -> GenomeRost
     )
 
 
-# ── Genome endpoints ─────────────────────────────────────────────────────────
+# ── Shared filter helpers ────────────────────────────────────────────────────
 
 
-@discovery_router.get("/genomes/", response=PaginatedGenomeResponse)
-def genome_roster(
-    request,
-    page: int = 1,
-    page_size: int = 25,
-    sort_by: str = "composite_score",
-    order: str = "desc",
-    search: Optional[str] = None,
+def _apply_genome_filters(
+    qs,
+    *,
+    assembly_ids: Optional[str] = None,
+    type_strain_only: bool = False,
     taxonomy_kingdom: Optional[str] = None,
     taxonomy_phylum: Optional[str] = None,
     taxonomy_class: Optional[str] = None,
     taxonomy_order: Optional[str] = None,
     taxonomy_family: Optional[str] = None,
     taxonomy_genus: Optional[str] = None,
-    type_strain_only: bool = False,
+    search: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
-    assembly_ids: Optional[str] = None,
-    weights: GenomeWeightParams = Query(...),
 ):
-    qs = Assembly.objects.select_related("genome_score").filter(
-        genome_score__isnull=False
-    )
-
-    # Filter by explicit assembly IDs (used by Query mode genome panels)
+    """Apply common genome/assembly filters to a queryset."""
     if assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(id__in=ids)
         else:
             qs = qs.none()
-
-    # Filters
     if type_strain_only:
         qs = qs.filter(is_type_strain=True)
     if taxonomy_kingdom:
@@ -196,9 +193,71 @@ def genome_roster(
             except ValueError:
                 pass
         else:
-            qs = qs.filter(contigs__bgcs__identifier__icontains=bgc_accession).distinct()
+            qs = qs.filter(
+                contigs__bgcs__identifier__icontains=bgc_accession
+            ).distinct()
     if assembly_accession:
         qs = qs.filter(accession__icontains=assembly_accession)
+    return qs
+
+
+def _apply_bgc_filters(qs, *, assembly_ids: Optional[str] = None):
+    """Apply common BGC filters to a queryset."""
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(contig__assembly_id__in=ids)
+        else:
+            qs = qs.none()
+    else:
+        qs = qs.none()
+    return qs
+
+
+# ── Genome endpoints ─────────────────────────────────────────────────────────
+
+
+@discovery_router.get("/genomes/", response=PaginatedGenomeResponse)
+def genome_roster(
+    request,
+    page: int = 1,
+    page_size: int = 25,
+    sort_by: str = "composite_score",
+    order: str = "desc",
+    search: Optional[str] = None,
+    taxonomy_kingdom: Optional[str] = None,
+    taxonomy_phylum: Optional[str] = None,
+    taxonomy_class: Optional[str] = None,
+    taxonomy_order: Optional[str] = None,
+    taxonomy_family: Optional[str] = None,
+    taxonomy_genus: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    weights: GenomeWeightParams = Query(...),
+):
+    qs = Assembly.objects.select_related("genome_score").filter(
+        genome_score__isnull=False
+    )
+    qs = _apply_genome_filters(
+        qs,
+        assembly_ids=assembly_ids,
+        type_strain_only=type_strain_only,
+        taxonomy_kingdom=taxonomy_kingdom,
+        taxonomy_phylum=taxonomy_phylum,
+        taxonomy_class=taxonomy_class,
+        taxonomy_order=taxonomy_order,
+        taxonomy_family=taxonomy_family,
+        taxonomy_genus=taxonomy_genus,
+        search=search,
+        bgc_class=bgc_class,
+        biome_lineage=biome_lineage,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+    )
 
     # Materialize with composite scores
     assemblies = list(qs)
@@ -324,15 +383,7 @@ def bgc_roster(
         Bgc.objects.filter(bgc_score__isnull=False)
         .select_related("bgc_score", "contig__assembly")
     )
-
-    if assembly_ids:
-        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
-        if ids:
-            qs = qs.filter(contig__assembly_id__in=ids)
-        else:
-            qs = qs.none()
-    else:
-        qs = qs.none()
+    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
 
     # Sorting
     sort_map = {
@@ -1352,6 +1403,155 @@ def domain_list(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp
         ),
     )
+
+
+# ── Stats endpoints ───────────────────────────────────────────────────────────
+
+
+@discovery_router.get("/stats/genomes/", response=GenomeStatsResponse)
+def genome_stats(
+    request,
+    search: Optional[str] = None,
+    taxonomy_kingdom: Optional[str] = None,
+    taxonomy_phylum: Optional[str] = None,
+    taxonomy_class: Optional[str] = None,
+    taxonomy_order: Optional[str] = None,
+    taxonomy_family: Optional[str] = None,
+    taxonomy_genus: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+):
+    """Aggregated statistics for the filtered genome set."""
+    qs = Assembly.objects.select_related("genome_score").filter(
+        genome_score__isnull=False
+    )
+    qs = _apply_genome_filters(
+        qs,
+        assembly_ids=assembly_ids,
+        type_strain_only=type_strain_only,
+        taxonomy_kingdom=taxonomy_kingdom,
+        taxonomy_phylum=taxonomy_phylum,
+        taxonomy_class=taxonomy_class,
+        taxonomy_order=taxonomy_order,
+        taxonomy_family=taxonomy_family,
+        taxonomy_genus=taxonomy_genus,
+        search=search,
+        bgc_class=bgc_class,
+        biome_lineage=biome_lineage,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+    )
+    return compute_genome_stats(qs)
+
+
+@discovery_router.get("/stats/bgcs/", response=BgcStatsResponse)
+def bgc_stats(
+    request,
+    assembly_ids: Optional[str] = None,
+):
+    """Aggregated statistics for the filtered BGC set."""
+    qs = Bgc.objects.filter(bgc_score__isnull=False)
+    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+    return compute_bgc_stats(qs)
+
+
+@discovery_router.get("/stats/genomes/export/")
+def genome_stats_export(
+    request,
+    format: str = "json",
+    search: Optional[str] = None,
+    taxonomy_kingdom: Optional[str] = None,
+    taxonomy_phylum: Optional[str] = None,
+    taxonomy_class: Optional[str] = None,
+    taxonomy_order: Optional[str] = None,
+    taxonomy_family: Optional[str] = None,
+    taxonomy_genus: Optional[str] = None,
+    type_strain_only: bool = False,
+    bgc_class: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+):
+    """Export genome stats as JSON or TSV."""
+    qs = Assembly.objects.select_related("genome_score").filter(
+        genome_score__isnull=False
+    )
+    qs = _apply_genome_filters(
+        qs,
+        assembly_ids=assembly_ids,
+        type_strain_only=type_strain_only,
+        taxonomy_kingdom=taxonomy_kingdom,
+        taxonomy_phylum=taxonomy_phylum,
+        taxonomy_class=taxonomy_class,
+        taxonomy_order=taxonomy_order,
+        taxonomy_family=taxonomy_family,
+        taxonomy_genus=taxonomy_genus,
+        search=search,
+        bgc_class=bgc_class,
+        biome_lineage=biome_lineage,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+    )
+    stats = compute_genome_stats(qs)
+
+    if format == "tsv":
+        return _stats_to_tsv_response(stats, "genome_stats.tsv")
+
+    response = HttpResponse(
+        json.dumps(stats, default=str),
+        content_type="application/json",
+    )
+    response["Content-Disposition"] = 'attachment; filename="genome_stats.json"'
+    return response
+
+
+@discovery_router.get("/stats/bgcs/export/")
+def bgc_stats_export(
+    request,
+    format: str = "json",
+    assembly_ids: Optional[str] = None,
+):
+    """Export BGC stats as JSON or TSV."""
+    qs = Bgc.objects.filter(bgc_score__isnull=False)
+    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+    stats = compute_bgc_stats(qs)
+
+    if format == "tsv":
+        return _stats_to_tsv_response(stats, "bgc_stats.tsv")
+
+    response = HttpResponse(
+        json.dumps(stats, default=str),
+        content_type="application/json",
+    )
+    response["Content-Disposition"] = 'attachment; filename="bgc_stats.json"'
+    return response
+
+
+def _stats_to_tsv_response(stats: dict, filename: str) -> HttpResponse:
+    """Convert a stats dict into a flat TSV download."""
+    buf = StringIO()
+    writer = csv.writer(buf, delimiter="\t")
+    writer.writerow(["section", "key", "value"])
+
+    for key, value in stats.items():
+        if isinstance(value, list):
+            for i, item in enumerate(value):
+                if isinstance(item, dict):
+                    for k, v in item.items():
+                        writer.writerow([key, f"{i}.{k}", v])
+                else:
+                    writer.writerow([key, str(i), item])
+        else:
+            writer.writerow(["summary", key, value])
+
+    response = HttpResponse(buf.getvalue(), content_type="text/tab-separated-values")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 # ── Export endpoints ──────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { apiGet } from "./client";
-import type { BgcDetail, BgcRegionData, BgcScatterPoint, PaginatedBgcRosterResponse } from "./types";
+import type { BgcDetail, BgcRegionData, BgcScatterPoint, BgcStatsResponse, PaginatedBgcRosterResponse } from "./types";
 
 export function fetchBgcDetail(bgcId: number) {
   return apiGet<BgcDetail>(`/bgcs/${bgcId}/`);
@@ -35,4 +35,12 @@ export function fetchBgcRoster(params: BgcRosterParams = {}) {
 
 export function fetchParentAssemblies(bgcIds: number[]) {
   return apiGet<number[]>("/bgcs/parent-assemblies/", { bgc_ids: bgcIds.join(",") });
+}
+
+export interface BgcStatsParams {
+  assembly_ids?: string;
+}
+
+export function fetchBgcStats(params: BgcStatsParams = {}) {
+  return apiGet<BgcStatsResponse>("/stats/bgcs/", params as Record<string, string | number | boolean | undefined>);
 }

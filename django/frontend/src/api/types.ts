@@ -321,6 +321,52 @@ export interface BgcRegionData {
   cluster_list: RegionCluster[];
 }
 
+// ── Stats schemas ─────────────────────────────────────────────────────────
+
+export interface SunburstNode {
+  id: string;
+  label: string;
+  parent: string;
+  count: number;
+}
+
+export interface ScoreDistribution {
+  label: string;
+  values: number[];
+}
+
+export interface CoreDomain {
+  acc: string;
+  name: string;
+  bgc_count: number;
+  fraction: number;
+}
+
+export interface BgcClassCount {
+  name: string;
+  count: number;
+}
+
+export interface GenomeStatsResponse {
+  taxonomy_sunburst: SunburstNode[];
+  score_distributions: ScoreDistribution[];
+  type_strain_count: number;
+  non_type_strain_count: number;
+  mean_bgc_per_genome: number;
+  mean_l1_class_per_genome: number;
+  total_genomes: number;
+}
+
+export interface BgcStatsResponse {
+  core_domains: CoreDomain[];
+  score_distributions: ScoreDistribution[];
+  complete_count: number;
+  partial_count: number;
+  np_class_sunburst: SunburstNode[];
+  bgc_class_distribution: BgcClassCount[];
+  total_bgcs: number;
+}
+
 // ── Export schemas ─────────────────────────────────────────────────────────
 
 export interface ShortlistExportRequest {
