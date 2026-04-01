@@ -112,6 +112,7 @@ class Bgc(models.Model):
     )
     embedding = VectorField(dimensions=1152, null=True, blank=True)
     is_aggregated_region = models.BooleanField(default=False)
+    is_mibig = models.BooleanField(default=False)
     compounds = models.JSONField(
         default=list,
         blank=True,

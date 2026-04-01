@@ -136,11 +136,131 @@ class Command(BaseCommand):
             obj, _ = BgcClass.objects.get_or_create(name=name)
             bgc_class_objs[name] = obj
 
-        # 2. Create MIBiG references
-        self.stdout.write("Creating MIBiG references...")
+        # 2. Create MIBiG references with full Bgc records
+        self.stdout.write("Creating MIBiG references (with full BGC records)...")
         mibig_refs = []
+
+        # Create a dedicated MIBiG assembly and contig
+        mibig_assembly, _ = Assembly.objects.get_or_create(
+            accession="MIBIG_REFERENCE",
+            defaults=dict(
+                organism_name="MIBiG Reference Collection",
+                is_type_strain=False,
+                genome_size_mb=0.0,
+                genome_quality=1.0,
+            ),
+        )
+        mibig_contig, _ = Contig.objects.get_or_create(
+            sequence_sha256="mibig_reference_contig_sha256",
+            defaults=dict(
+                assembly=mibig_assembly,
+                mgyc="MIBIG_CONTIG",
+                accession="mibig_contig",
+                name="mibig_contig",
+                length=10_000_000,
+                sequence="ACGT" * 2_500_000,
+            ),
+        )
+        gene_caller_mibig, _ = GeneCaller.objects.get_or_create(
+            name="MIBiG", defaults={"tool": "MIBiG", "version": "3.0"}
+        )
+
+        # Ensure domains exist for MIBiG BGCs
+        mibig_domain_objs = {}
+        for acc, name, ref_db in _PFAM_DOMAIN_POOL:
+            obj, _ = Domain.objects.get_or_create(
+                acc=acc,
+                defaults={"name": name, "ref_db": ref_db, "description": f"{name} domain"},
+            )
+            mibig_domain_objs[acc] = obj
+        mibig_domain_list = list(mibig_domain_objs.values())
+
+        mibig_proteins = []
+        mibig_cds_pending = []
+        mibig_pds_pending = []
+        mibig_protein_idx = 0
+
         for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
             ux, uy = _clustered_umap(bgc_class, jitter=1.5)
+            emb = np.random.randn(1152).astype(np.float32).tolist()
+
+            # Create full Bgc record for MIBiG entry
+            bgc_start = i * 100_000
+            bgc_end = bgc_start + random.randint(10_000, 80_000)
+            mibig_bgc = Bgc.objects.create(
+                contig=mibig_contig,
+                identifier=f"mibig_BGC{i + 1:07d}",
+                start_position=bgc_start,
+                end_position=bgc_end,
+                is_partial=False,
+                is_mibig=True,
+                embedding=emb,
+                metadata={
+                    "umap_x_coord": ux,
+                    "umap_y_coord": uy,
+                    "detectors": ["MIBiG"],
+                },
+            )
+            BgcBgcClass.objects.get_or_create(
+                bgc=mibig_bgc,
+                bgc_class=bgc_class_objs.get(bgc_class, bgc_class_objs["Other"]),
+            )
+
+            # Create CDS/Protein/ProteinDomain for this MIBiG BGC
+            bgc_length = bgc_end - bgc_start
+            n_cds = random.randint(3, 6)
+            slot_size = bgc_length // n_cds
+            for ci in range(n_cds):
+                slot_start = bgc_start + ci * slot_size
+                gene_len = min(random.randint(300, 900), slot_size - 50)
+                gene_len = max(gene_len, 150)
+                margin = max(11, slot_size - gene_len - 10)
+                cds_start = slot_start + random.randint(10, margin)
+                cds_end = min(cds_start + gene_len, bgc_end)
+                cds_start = max(cds_start, bgc_start)
+
+                aa_seq = _random_aa(gene_len // 3)
+                seq_hash = _sha256(f"mibig_{aa_seq}_{mibig_protein_idx}")
+
+                protein = Protein(
+                    sequence=aa_seq,
+                    sequence_sha256=seq_hash,
+                    mgyp=f"MIBIG_MGYP{mibig_protein_idx:012d}",
+                )
+                mibig_proteins.append(protein)
+
+                cds = Cds(
+                    protein=None,
+                    contig=mibig_contig,
+                    gene_caller=gene_caller_mibig,
+                    start_position=cds_start,
+                    end_position=cds_end,
+                    strand=random.choice([1, -1]),
+                    protein_identifier=f"MIBIG_MGYP{mibig_protein_idx:012d}",
+                    pipeline_version="1.0",
+                )
+                mibig_cds_pending.append((cds, mibig_protein_idx))
+
+                n_domains = random.randint(1, 3)
+                chosen_domains = random.sample(
+                    mibig_domain_list, min(n_domains, len(mibig_domain_list))
+                )
+                prot_pos = 0
+                for domain in chosen_domains:
+                    dom_len = random.randint(20, 80)
+                    pd = ProteinDomain(
+                        protein=None,
+                        domain=domain,
+                        start_position=prot_pos,
+                        end_position=prot_pos + dom_len,
+                        score=round(random.uniform(10.0, 300.0), 1),
+                    )
+                    mibig_pds_pending.append((pd, mibig_protein_idx))
+                    prot_pos += dom_len + random.randint(5, 30)
+
+                mibig_protein_idx += 1
+
+            # Create MibigReference linked to the Bgc
             ref, created = MibigReference.objects.get_or_create(
                 accession=f"BGC{i + 1:07d}",
                 defaults=dict(
@@ -148,11 +268,33 @@ class Command(BaseCommand):
                     bgc_class=bgc_class,
                     umap_x=ux,
                     umap_y=uy,
-                    embedding=np.random.randn(1152).astype(np.float32).tolist(),
+                    embedding=emb,
+                    bgc=mibig_bgc,
                 ),
             )
+            if not created and ref.bgc is None:
+                ref.bgc = mibig_bgc
+                ref.save(update_fields=["bgc"])
             mibig_refs.append(ref)
-        self.stdout.write(f"  {len(mibig_refs)} MIBiG references ready.")
+
+        # Bulk create MIBiG proteins, CDS, and protein domains
+        Protein.objects.bulk_create(mibig_proteins)
+        mibig_cds_to_create = []
+        for cds, pidx in mibig_cds_pending:
+            cds.protein = mibig_proteins[pidx]
+            mibig_cds_to_create.append(cds)
+        Cds.objects.bulk_create(mibig_cds_to_create)
+
+        mibig_pds_to_create = []
+        for pd, pidx in mibig_pds_pending:
+            pd.protein = mibig_proteins[pidx]
+            mibig_pds_to_create.append(pd)
+        ProteinDomain.objects.bulk_create(mibig_pds_to_create)
+
+        self.stdout.write(
+            f"  {len(mibig_refs)} MIBiG references with full BGC records "
+            f"({len(mibig_proteins)} proteins, {len(mibig_cds_to_create)} CDS)."
+        )
 
         # 3. Create assemblies with taxonomy
         self.stdout.write("Creating assemblies...")

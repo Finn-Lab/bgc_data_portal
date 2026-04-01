@@ -481,6 +481,7 @@ class GenomeAssessmentResponse(Schema):
 class GcfDomainFrequency(Schema):
     domain_acc: str
     domain_name: str
+    description: Optional[str] = None
     frequency: float = 0.0
     category: str = ""  # "core" | "variable" | "rare"
 
@@ -555,5 +556,5 @@ class BgcAssessmentResponse(Schema):
     mibig_reference_points: list[MibigReferencePoint] = []
     # Domain architecture for comparison
     submitted_domains: list[DomainArchitectureItem] = []
-    nearest_mibig_domains: list[DomainArchitectureItem] = []
     nearest_mibig_accession: Optional[str] = None
+    nearest_mibig_bgc_id: Optional[int] = None

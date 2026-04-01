@@ -83,6 +83,7 @@ class Migration(migrations.Migration):
                 ('umap_x', models.FloatField()),
                 ('umap_y', models.FloatField()),
                 ('embedding', pgvector.django.vector.VectorField(blank=True, dimensions=1152, null=True)),
+                ('bgc', models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='mibig_ref', to='mgnify_bgcs.bgc')),
             ],
             options={
                 'indexes': [pgvector.django.indexes.HnswIndex(ef_construction=512, fields=['embedding'], m=16, name='mibig_embedding_hnsw', opclasses=['vector_cosine_ops'])],
@@ -97,6 +98,7 @@ class Migration(migrations.Migration):
                 ('chemical_class_l1', models.CharField(max_length=100)),
                 ('chemical_class_l2', models.CharField(blank=True, max_length=100, null=True)),
                 ('chemical_class_l3', models.CharField(blank=True, max_length=100, null=True)),
+                ('structure_svg_base64', models.TextField(blank=True, default='')),
                 ('producing_organism', models.CharField(blank=True, max_length=255, null=True)),
                 ('bgc', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='natural_products', to='mgnify_bgcs.bgc')),
             ],

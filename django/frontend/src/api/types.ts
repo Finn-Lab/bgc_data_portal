@@ -455,6 +455,7 @@ export interface GenomeAssessmentResult {
 export interface GcfDomainFrequency {
   domain_acc: string;
   domain_name: string;
+  description: string | null;
   frequency: number;
   category: "core" | "variable" | "rare";
 }
@@ -524,6 +525,6 @@ export interface BgcAssessmentResult {
   nearest_neighbors: AssessNearestNeighborPoint[];
   mibig_reference_points: MibigReferencePoint[];
   submitted_domains: DomainArchitectureItem[];
-  nearest_mibig_domains: DomainArchitectureItem[];
   nearest_mibig_accession: string | null;
+  nearest_mibig_bgc_id: number | null;
 }

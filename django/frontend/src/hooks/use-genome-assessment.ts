@@ -27,12 +27,19 @@ export function useGenomeAssessment() {
     },
   });
 
-  // Auto-trigger assessment when assetId changes and we're in genome mode
+  // Auto-trigger assessment when assetId or weights change
   useEffect(() => {
     if (assetType === "genome" && assetId && status === "idle") {
       mutation.mutate(assetId);
     }
-  }, [assetType, assetId]);
+  }, [assetType, assetId, weights.w_diversity, weights.w_novelty, weights.w_density]);
+
+  // Reset to idle when weights change so re-assessment triggers
+  useEffect(() => {
+    if (assetType === "genome" && assetId && status === "success") {
+      useAssessStore.getState().setStatus("idle");
+    }
+  }, [weights.w_diversity, weights.w_novelty, weights.w_density]);
 
   // Poll for results
   const poll = useQuery({

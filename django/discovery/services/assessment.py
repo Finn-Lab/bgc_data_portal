@@ -32,8 +32,6 @@ GENOME_SCORE_DIMENSIONS = [
     ("bgc_diversity_score", "Diversity"),
     ("bgc_novelty_score", "Novelty"),
     ("bgc_density", "Density"),
-    ("taxonomic_novelty", "Taxonomic Novelty"),
-    ("genome_quality", "Genome Quality"),
 ]
 
 # Threshold for GCF novelty — if distance to nearest GCF representative
@@ -111,7 +109,7 @@ def compute_genome_assessment(assembly_id: int, weights: dict) -> dict:
 
     # ── BGC novelty breakdown ────────────────────────────────────────────
     bgcs = Bgc.objects.filter(
-        contig__assembly=assembly, is_aggregated_region=True
+        contig__assembly=assembly, bgc_score__isnull=False
     ).select_related("bgc_score")
 
     bgc_novelty_breakdown = []
@@ -368,8 +366,13 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
 
     # ── Domain architecture for comparison ───────────────────────────────
     nearest_mibig_accession = score.nearest_mibig_accession if score else None
-    nearest_mibig_domains: list[dict] = []
-    # MIBiG domains would require MIBiG BGCs in the DB — provide empty if not available
+    nearest_mibig_bgc_id = None
+    if nearest_mibig_accession:
+        mibig_ref = MibigReference.objects.filter(
+            accession=nearest_mibig_accession
+        ).select_related("bgc").first()
+        if mibig_ref and mibig_ref.bgc_id:
+            nearest_mibig_bgc_id = mibig_ref.bgc_id
 
     return {
         "bgc_id": bgc.id,
@@ -385,8 +388,8 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "nearest_neighbors": nearest_neighbors,
         "mibig_reference_points": mibig_points,
         "submitted_domains": submitted_domains,
-        "nearest_mibig_domains": nearest_mibig_domains,
         "nearest_mibig_accession": nearest_mibig_accession,
+        "nearest_mibig_bgc_id": nearest_mibig_bgc_id,
     }
 
 
@@ -515,7 +518,7 @@ def _compute_gcf_domain_frequency(member_bgc_ids: list[int]) -> list[dict]:
             )
         )
         .filter(bgc_count__gte=1)
-        .values("acc", "name", "bgc_count")
+        .values("acc", "name", "description", "bgc_count")
         .order_by("-bgc_count")
     )
 
@@ -532,6 +535,7 @@ def _compute_gcf_domain_frequency(member_bgc_ids: list[int]) -> list[dict]:
             {
                 "domain_acc": row["acc"],
                 "domain_name": row["name"],
+                "description": row["description"] or "",
                 "frequency": round(freq, 4),
                 "category": category,
             }

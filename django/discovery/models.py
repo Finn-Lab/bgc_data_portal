@@ -88,6 +88,13 @@ class MibigReference(models.Model):
     umap_x = models.FloatField()
     umap_y = models.FloatField()
     embedding = VectorField(dimensions=1152, null=True, blank=True)
+    bgc = models.OneToOneField(
+        "mgnify_bgcs.Bgc",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="mibig_ref",
+    )
 
     class Meta:
         indexes = [

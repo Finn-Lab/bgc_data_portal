@@ -115,16 +115,16 @@ export function WeightTuner() {
           <ChevronDown
             className={`h-4 w-4 transition-transform ${open ? "" : "-rotate-90"}`}
           />
-          {mode === "explore" ? "Priority Weights" : "Relevance Weights"}
+          {mode === "query" ? "Relevance Weights" : "Priority Weights"}
         </CollapsibleTrigger>
         <Button
           variant="ghost"
           size="sm"
           className="h-7 gap-1 text-xs"
           onClick={() =>
-            mode === "explore"
-              ? genomeWeights.resetDefaults()
-              : queryWeights.resetDefaults()
+            mode === "query"
+              ? queryWeights.resetDefaults()
+              : genomeWeights.resetDefaults()
           }
         >
           <RotateCcw className="h-3 w-3" />
@@ -132,23 +132,23 @@ export function WeightTuner() {
         </Button>
       </div>
       <CollapsibleContent className="space-y-3 pt-2">
-        {mode === "explore"
-          ? GENOME_WEIGHT_CONFIG.map((cfg) => (
-              <WeightSlider
-                key={cfg.key}
-                label={cfg.label}
-                tooltip={cfg.tooltip}
-                value={genomeWeights[cfg.key]}
-                onChange={(v) => genomeWeights.setWeight(cfg.key, v)}
-              />
-            ))
-          : QUERY_WEIGHT_CONFIG.map((cfg) => (
+        {mode === "query"
+          ? QUERY_WEIGHT_CONFIG.map((cfg) => (
               <WeightSlider
                 key={cfg.key}
                 label={cfg.label}
                 tooltip={cfg.tooltip}
                 value={queryWeights[cfg.key]}
                 onChange={(v) => queryWeights.setWeight(cfg.key, v)}
+              />
+            ))
+          : GENOME_WEIGHT_CONFIG.map((cfg) => (
+              <WeightSlider
+                key={cfg.key}
+                label={cfg.label}
+                tooltip={cfg.tooltip}
+                value={genomeWeights[cfg.key]}
+                onChange={(v) => genomeWeights.setWeight(cfg.key, v)}
               />
             ))}
       </CollapsibleContent>

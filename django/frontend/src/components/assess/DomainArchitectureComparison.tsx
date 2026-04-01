@@ -1,96 +1,86 @@
-import type { DomainArchitectureItem } from "@/api/types";
+import { useState } from "react";
+import { RegionPlot } from "@/components/bgc/RegionPlot";
+import { useBgcRegion } from "@/hooks/use-bgc-region";
+import { Loader2 } from "lucide-react";
+import type { RegionCds } from "@/api/types";
 
 interface DomainArchitectureComparisonProps {
-  submittedDomains: DomainArchitectureItem[];
-  mibigDomains: DomainArchitectureItem[];
-  mibigAccession: string | null;
+  bgcId: number;
+  nearestMibigBgcId: number | null;
+  nearestMibigAccession: string | null;
 }
 
-const DOMAIN_COLORS = [
-  "#3b82f6", "#ef4444", "#22c55e", "#f97316", "#a855f7",
-  "#ec4899", "#14b8a6", "#eab308", "#6366f1", "#f43f5e",
-];
-
 export function DomainArchitectureComparison({
-  submittedDomains,
-  mibigDomains,
-  mibigAccession,
+  bgcId,
+  nearestMibigBgcId,
+  nearestMibigAccession,
 }: DomainArchitectureComparisonProps) {
-  // Assign colors by domain accession
-  const allAccs = [
-    ...new Set([
-      ...submittedDomains.map((d) => d.domain_acc),
-      ...mibigDomains.map((d) => d.domain_acc),
-    ]),
-  ];
-  const colorMap: Record<string, string> = {};
-  allAccs.forEach((acc, i) => {
-    colorMap[acc] = DOMAIN_COLORS[i % DOMAIN_COLORS.length];
-  });
+  const submittedRegion = useBgcRegion(bgcId);
+  const mibigRegion = useBgcRegion(nearestMibigBgcId);
+
+  const [selectedCds, setSelectedCds] = useState<string | null>(null);
+
+  const handleCdsClick = (_cds: RegionCds) => {
+    setSelectedCds((prev) => (prev === _cds.protein_id ? null : _cds.protein_id));
+  };
+
+  if (submittedRegion.isLoading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!submittedRegion.data) {
+    return (
+      <p className="py-4 text-sm text-muted-foreground">
+        Region data not available for this BGC.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-4">
-      <DomainRow
-        label="Submitted BGC"
-        domains={submittedDomains}
-        colorMap={colorMap}
-      />
-      {mibigDomains.length > 0 ? (
-        <DomainRow
-          label={`Nearest MIBiG: ${mibigAccession || "Unknown"}`}
-          domains={mibigDomains}
-          colorMap={colorMap}
+      {/* Submitted BGC region */}
+      <div>
+        <p className="mb-1 text-xs font-medium">Submitted BGC</p>
+        <RegionPlot
+          data={submittedRegion.data}
+          onCdsClick={handleCdsClick}
+          selectedCdsId={selectedCds}
         />
-      ) : (
+      </div>
+
+      {/* Nearest MIBiG region */}
+      {nearestMibigBgcId && (
+        <div>
+          <p className="mb-1 text-xs font-medium">
+            Nearest MIBiG: {nearestMibigAccession || "Unknown"}
+          </p>
+          {mibigRegion.isLoading ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : mibigRegion.data ? (
+            <RegionPlot
+              data={mibigRegion.data}
+              onCdsClick={handleCdsClick}
+              selectedCdsId={selectedCds}
+            />
+          ) : (
+            <p className="py-2 text-xs text-muted-foreground">
+              Region data not available for MIBiG reference.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!nearestMibigBgcId && nearestMibigAccession && (
         <p className="text-xs text-muted-foreground">
-          {mibigAccession
-            ? `Nearest MIBiG: ${mibigAccession} (domain data not available)`
-            : "No MIBiG reference available for comparison"}
+          Nearest MIBiG: {nearestMibigAccession} (region data not available)
         </p>
       )}
-    </div>
-  );
-}
-
-function DomainRow({
-  label,
-  domains,
-  colorMap,
-}: {
-  label: string;
-  domains: DomainArchitectureItem[];
-  colorMap: Record<string, string>;
-}) {
-  if (domains.length === 0) return null;
-
-  const maxEnd = Math.max(...domains.map((d) => d.end), 1);
-
-  return (
-    <div>
-      <p className="mb-1 text-xs font-medium">{label}</p>
-      <div className="relative h-8 w-full rounded border bg-gray-50">
-        {domains.map((d, i) => {
-          const left = (d.start / maxEnd) * 100;
-          const width = Math.max(((d.end - d.start) / maxEnd) * 100, 1);
-          return (
-            <div
-              key={`${d.domain_acc}-${i}`}
-              className="absolute top-1 h-6 rounded text-[8px] leading-6 text-white"
-              style={{
-                left: `${left}%`,
-                width: `${width}%`,
-                backgroundColor: colorMap[d.domain_acc] || "#6b7280",
-                minWidth: 4,
-              }}
-              title={`${d.domain_name} (${d.domain_acc}) [${d.start}-${d.end}]`}
-            >
-              {width > 5 && (
-                <span className="truncate px-0.5">{d.domain_name}</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 }

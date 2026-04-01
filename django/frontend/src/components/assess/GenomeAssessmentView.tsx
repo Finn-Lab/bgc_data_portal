@@ -1,4 +1,5 @@
 import { useAssessStore } from "@/stores/assess-store";
+import { useShortlistStore } from "@/stores/shortlist-store";
 import { useGenomeAssessment } from "@/hooks/use-genome-assessment";
 import { PanelContainer } from "@/components/panels/PanelContainer";
 import { AssessmentLoading } from "./AssessmentLoading";
@@ -10,7 +11,9 @@ import { RedundancyMatrix } from "./RedundancyMatrix";
 import { ChemicalSpaceMap } from "./ChemicalSpaceMap";
 import { CrossModeActions } from "./CrossModeActions";
 import { AssessmentExportButton } from "./AssessmentExportButton";
-import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, ListPlus } from "lucide-react";
+import { toast } from "sonner";
 
 export function GenomeAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
@@ -53,6 +56,21 @@ export function GenomeAssessmentView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const ok = useShortlistStore.getState().addGenome({
+                id: result.assembly_id,
+                label: result.organism_name || result.accession,
+              });
+              if (ok) toast.success("Added to genome shortlist");
+              else toast.error("Shortlist full (max 20)");
+            }}
+          >
+            <ListPlus className="mr-1 h-3 w-3" />
+            Add to Shortlist
+          </Button>
           <AssessmentExportButton />
           <CrossModeActions assetType="genome" assetId={result.assembly_id} />
         </div>

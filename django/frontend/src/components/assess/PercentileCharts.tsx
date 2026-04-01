@@ -11,7 +11,7 @@ export function PercentileCharts({
   radarReferences,
 }: PercentileChartsProps) {
   return (
-    <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
       {percentileRanks.map((p) => {
         const ref = radarReferences.find((r) => r.dimension === p.dimension);
         return (
@@ -43,13 +43,13 @@ export function PercentileCharts({
                 },
               ]}
               layout={{
-                height: 140,
-                margin: { t: 20, b: 0, l: 20, r: 20 },
+                height: 180,
+                margin: { t: 20, b: 10, l: 20, r: 20 },
                 autosize: true,
               }}
               config={{ responsive: true, displayModeBar: false }}
               useResizeHandler
-              style={{ width: "100%", height: 140 }}
+              style={{ width: "100%", height: 180 }}
             />
             <span className="text-[10px] text-muted-foreground">
               Value: {p.value.toFixed(3)}

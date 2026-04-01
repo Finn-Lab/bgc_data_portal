@@ -1,4 +1,5 @@
 import { useAssessStore } from "@/stores/assess-store";
+import { useShortlistStore } from "@/stores/shortlist-store";
 import { useBgcAssessment } from "@/hooks/use-bgc-assessment";
 import { PanelContainer } from "@/components/panels/PanelContainer";
 import { AssessmentLoading } from "./AssessmentLoading";
@@ -10,7 +11,9 @@ import { GcfMemberMap } from "./GcfMemberMap";
 import { BgcChemicalSpaceMap } from "./BgcChemicalSpaceMap";
 import { CrossModeActions } from "./CrossModeActions";
 import { AssessmentExportButton } from "./AssessmentExportButton";
-import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertCircle, ListPlus } from "lucide-react";
+import { toast } from "sonner";
 
 export function BgcAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
@@ -55,6 +58,21 @@ export function BgcAssessmentView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const ok = useShortlistStore.getState().addBgc({
+                id: result.bgc_id,
+                label: result.accession,
+              });
+              if (ok) toast.success("Added to BGC shortlist");
+              else toast.error("Shortlist full (max 20)");
+            }}
+          >
+            <ListPlus className="mr-1 h-3 w-3" />
+            Add to Shortlist
+          </Button>
           <AssessmentExportButton />
           <CrossModeActions assetType="bgc" assetId={assetId!} />
         </div>
@@ -82,12 +100,12 @@ export function BgcAssessmentView() {
       )}
 
       {/* Domain architecture comparison */}
-      {result.submitted_domains.length > 0 && (
+      {result.bgc_id && (
         <PanelContainer title="Domain Architecture Comparison">
           <DomainArchitectureComparison
-            submittedDomains={result.submitted_domains}
-            mibigDomains={result.nearest_mibig_domains}
-            mibigAccession={result.nearest_mibig_accession}
+            bgcId={result.bgc_id}
+            nearestMibigBgcId={result.nearest_mibig_bgc_id}
+            nearestMibigAccession={result.nearest_mibig_accession}
           />
         </PanelContainer>
       )}
