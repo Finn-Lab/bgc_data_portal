@@ -49,6 +49,9 @@ items:
             - name: postgres
               image: quay.io/microbiome-informatics/pgvector:dev
               imagePullPolicy: Always
+              env:
+                - name: PGDATA
+                  value: /var/lib/postgresql/data/pgdata
               envFrom:
                 - secretRef:
                     name: bgc-data-portal-secret
