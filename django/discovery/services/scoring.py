@@ -1,5 +1,5 @@
 """
-Runtime scoring for the discovery dashboard.
+Runtime scoring for the Discovery Platform.
 
 All BGC-level and genome-level sub-scores are precomputed and stored in
 GenomeScore / BgcScore.  Only the composite priority score is computed at

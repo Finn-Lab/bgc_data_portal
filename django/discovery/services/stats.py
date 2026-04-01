@@ -1,4 +1,4 @@
-"""Aggregation statistics for the discovery dashboard stats panels."""
+"""Aggregation statistics for the Discovery Platform stats panels."""
 
 import random
 from collections import defaultdict

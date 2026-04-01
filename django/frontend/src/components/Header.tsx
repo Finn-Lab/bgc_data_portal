@@ -10,10 +10,25 @@ export function Header() {
       <div className="vf-cluster">
         <div className="vf-cluster__inner" style={{ alignItems: "center", gap: "1rem" }}>
           <h2 className="vf-text-heading--5" style={{ margin: 0 }}>
-            Discovery Dashboard
+            Discovery Platform
           </h2>
           <div className="vf-tabs">
             <ul className="vf-tabs__list" style={{ margin: 0 }}>
+              <li className="vf-tabs__item">
+                <a
+                  className={cn(
+                    "vf-tabs__link",
+                    mode === "query" && "is-active"
+                  )}
+                  href="#query"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setMode("query");
+                  }}
+                >
+                  Search BGCs
+                </a>
+              </li>
               <li className="vf-tabs__item">
                 <a
                   className={cn(
@@ -27,21 +42,6 @@ export function Header() {
                   }}
                 >
                   Explore Genomes
-                </a>
-              </li>
-              <li className="vf-tabs__item">
-                <a
-                  className={cn(
-                    "vf-tabs__link",
-                    mode === "query" && "is-active"
-                  )}
-                  href="#query"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setMode("query");
-                  }}
-                >
-                  Query BGC / Chemistry
                 </a>
               </li>
               <li className="vf-tabs__item">

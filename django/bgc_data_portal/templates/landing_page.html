@@ -45,11 +45,11 @@ limitations under the License.
     <section class="vf-card-container | vf-u-fullbleed">
         <div class="vf-card-container__inner | vf-grid vf-grid__col-3">
             <div class="vf-grid__col--span-2">
-                <div class="vf-grid vf-grid__col-2">
+                <div class="vf-grid vf-grid__col-3">
                 <article class="vf-card vf-card--brand vf-card--bordered">
                     <div class="vf-card__content | vf-stack vf-stack--400">
                         <h3 class="vf-card__heading">
-                            <a class="vf-card__link" href="{% url 'search' %}">Explore BGCs
+                            <a class="vf-card__link" href="{% url 'dashboard' %}">Search BGCs
                                 <svg aria-hidden="true"
                                      class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
                                      width="1em"
@@ -59,9 +59,43 @@ limitations under the License.
                                 </svg>
                             </a>
                         </h3>
-                        <p class="vf-card__text">Find and download metagenomic biosynthetic gene clusters using advanced search options.</p>
+                        <p class="vf-card__text">Search biosynthetic gene clusters using advanced filters and domain queries.</p>
                     </div>
                 </article>
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link" href="{% url 'dashboard' %}?mode=explore">Explore Genomes
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">Browse genome and BGC rosters with interactive scatter plots and statistics.</p>
+                    </div>
+                </article>
+                <article class="vf-card vf-card--brand vf-card--bordered">
+                    <div class="vf-card__content | vf-stack vf-stack--400">
+                        <h3 class="vf-card__heading">
+                            <a class="vf-card__link" href="{% url 'dashboard' %}?mode=assess">Asset Evaluation
+                                <svg aria-hidden="true"
+                                     class="vf-card__heading__icon | vf-icon vf-icon-arrow--inline-end"
+                                     width="1em"
+                                     height="1em"
+                                     xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M0 12c0 6.627 5.373 12 12 12s12-5.373 12-12S18.627 0 12 0C5.376.008.008 5.376 0 12zm13.707-5.209l4.5 4.5a1 1 0 010 1.414l-4.5 4.5a1 1 0 01-1.414-1.414l2.366-2.367a.25.25 0 00-.177-.424H6a1 1 0 010-2h8.482a.25.25 0 00.177-.427l-2.366-2.368a1 1 0 011.414-1.414z" fill="currentColor" fill-rule="nonzero" />
+                                </svg>
+                            </a>
+                        </h3>
+                        <p class="vf-card__text">Generate structured assessment reports for genomes and BGCs.</p>
+                    </div>
+                </article>
+                </div>
+                <div class="vf-grid vf-grid__col-3" style="margin-top: 1rem;">
                 <article class="vf-card vf-card--brand vf-card--bordered">
                     <div class="vf-card__content | vf-stack vf-stack--400">
                         <h3 class="vf-card__heading">

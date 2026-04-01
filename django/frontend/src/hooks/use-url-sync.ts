@@ -14,7 +14,7 @@ export function useUrlSync() {
     initialized.current = true;
 
     const mode = searchParams.get("mode");
-    if (mode === "explore" || mode === "query") {
+    if (mode === "explore" || mode === "query" || mode === "assess") {
       useModeStore.getState().setMode(mode);
     }
 
@@ -78,11 +78,11 @@ export function useUrlSync() {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (value && value !== "explore") {
+          if (value && value !== "query") {
             next.set(key, value);
           } else if (key !== "mode") {
             next.delete(key);
-          } else if (value === "explore") {
+          } else if (value === "query") {
             next.delete(key);
           }
           return next;

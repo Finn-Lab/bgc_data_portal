@@ -18,8 +18,8 @@ limitations under the License.
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="base-path" content="{{ FORCE_SCRIPT_NAME }}" />
-  <meta name="description" content="Discovery Dashboard for MGnify Biosynthetic Gene Clusters.">
-  <title>Discovery Dashboard - MGnify BGCs</title>
+  <meta name="description" content="Discovery Platform for MGnify Biosynthetic Gene Clusters.">
+  <title>Discovery Platform - MGnify BGCs</title>
   {% load static %}
   <!-- VF CSS (loaded first, Tailwind utilities override where needed) -->
   <link rel="stylesheet" href="https://assets.emblstatic.net/vf/v2.5.17/css/styles.css">
@@ -40,10 +40,7 @@ limitations under the License.
       <nav class="vf-navigation vf-navigation--global | vf-cluster">
         <ul class="vf-navigation__list | vf-list | vf-cluster__inner">
           <li class="vf-navigation__item">
-            <a href="{% url 'search' %}" class="vf-navigation__link">Search</a>
-          </li>
-          <li class="vf-navigation__item">
-            <a href="{% url 'dashboard' %}" class="vf-navigation__link" aria-current="page">Dashboard</a>
+            <a href="{% url 'dashboard' %}" class="vf-navigation__link" aria-current="page">Discovery Platform</a>
           </li>
           <li class="vf-navigation__item">
             <a href="{% url 'docs_index' %}" class="vf-navigation__link">Documentation</a>

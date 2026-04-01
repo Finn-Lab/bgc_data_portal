@@ -8,6 +8,6 @@ interface ModeState {
 }
 
 export const useModeStore = create<ModeState>((set) => ({
-  mode: "explore",
+  mode: "query",
   setMode: (mode) => set({ mode }),
 }));

@@ -436,7 +436,7 @@ def download_results_tsv(request):
 
 
 def dashboard_spa(request):
-    """Serve the React SPA for the discovery dashboard."""
+    """Serve the React SPA for the Discovery Platform."""
     return render(request, "dashboard.html", {
         "FORCE_SCRIPT_NAME": settings.FORCE_SCRIPT_NAME,
         "DEBUG": settings.DEBUG,

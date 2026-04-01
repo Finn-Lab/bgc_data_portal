@@ -1,4 +1,4 @@
-"""Integration tests for the discovery dashboard API endpoints."""
+"""Integration tests for the Discovery Platform API endpoints."""
 
 import json
 

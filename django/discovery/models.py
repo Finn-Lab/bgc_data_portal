@@ -112,7 +112,7 @@ class MibigReference(models.Model):
 
 
 class GenomeScore(models.Model):
-    """Precomputed genome-level (Assembly) scores for the discovery dashboard."""
+    """Precomputed genome-level (Assembly) scores for the Discovery Platform."""
 
     assembly = models.OneToOneField(
         "mgnify_bgcs.Assembly",
@@ -134,7 +134,7 @@ class GenomeScore(models.Model):
 
 
 class BgcScore(models.Model):
-    """Precomputed BGC-level scores for the discovery dashboard."""
+    """Precomputed BGC-level scores for the Discovery Platform."""
 
     bgc = models.OneToOneField(
         "mgnify_bgcs.Bgc",

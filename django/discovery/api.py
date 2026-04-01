@@ -1,4 +1,4 @@
-"""Discovery dashboard API — Django Ninja Router.
+"""Discovery Platform API — Django Ninja Router.
 
 Mounted on the main NinjaAPI at /api/dashboard/.
 """
@@ -78,7 +78,7 @@ from discovery.api_schemas import (
     TaxonomyNode,
 )
 
-discovery_router = Router(tags=["Discovery Dashboard"])
+discovery_router = Router(tags=["Discovery Platform"])
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

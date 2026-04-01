@@ -1,4 +1,4 @@
-"""Pydantic schemas for the discovery dashboard API."""
+"""Pydantic schemas for the Discovery Platform API."""
 
 from typing import Optional
 
