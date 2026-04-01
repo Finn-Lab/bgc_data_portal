@@ -41,16 +41,16 @@ class PaginationMeta(Schema):
 class GenomeRosterItem(Schema):
     id: int
     accession: str
-    organism_name: Optional[str] = None
-    taxonomy_kingdom: Optional[str] = None
-    taxonomy_phylum: Optional[str] = None
-    taxonomy_class: Optional[str] = None
-    taxonomy_order: Optional[str] = None
-    taxonomy_family: Optional[str] = None
-    taxonomy_genus: Optional[str] = None
-    taxonomy_species: Optional[str] = None
+    organism_name: str = ""
+    taxonomy_kingdom: str = ""
+    taxonomy_phylum: str = ""
+    taxonomy_class: str = ""
+    taxonomy_order: str = ""
+    taxonomy_family: str = ""
+    taxonomy_genus: str = ""
+    taxonomy_species: str = ""
     is_type_strain: bool = False
-    type_strain_catalog_url: Optional[str] = None
+    type_strain_catalog_url: str = ""
     # Scores
     bgc_count: int = 0
     l1_class_count: int = 0
@@ -58,7 +58,7 @@ class GenomeRosterItem(Schema):
     bgc_novelty_score: float = 0.0
     bgc_density: float = 0.0
     taxonomic_novelty: float = 0.0
-    genome_quality: float = 0.0
+    genome_quality: Optional[float] = None
     composite_score: float = 0.0
 
 
@@ -70,19 +70,19 @@ class PaginatedGenomeResponse(Schema):
 class GenomeDetail(Schema):
     id: int
     accession: str
-    organism_name: Optional[str] = None
-    taxonomy_kingdom: Optional[str] = None
-    taxonomy_phylum: Optional[str] = None
-    taxonomy_class: Optional[str] = None
-    taxonomy_order: Optional[str] = None
-    taxonomy_family: Optional[str] = None
-    taxonomy_genus: Optional[str] = None
-    taxonomy_species: Optional[str] = None
+    organism_name: str = ""
+    taxonomy_kingdom: str = ""
+    taxonomy_phylum: str = ""
+    taxonomy_class: str = ""
+    taxonomy_order: str = ""
+    taxonomy_family: str = ""
+    taxonomy_genus: str = ""
+    taxonomy_species: str = ""
     is_type_strain: bool = False
-    type_strain_catalog_url: Optional[str] = None
+    type_strain_catalog_url: str = ""
     genome_size_mb: Optional[float] = None
     genome_quality: Optional[float] = None
-    isolation_source: Optional[str] = None
+    isolation_source: str = ""
     # Scores
     bgc_count: int = 0
     l1_class_count: int = 0
@@ -253,7 +253,7 @@ class QueryResultBgc(Schema):
     is_partial: bool = False
     relevance_score: float = 0.0
     # Parent genome summary
-    assembly_id: Optional[int] = None
+    genome_id: Optional[int] = None
     assembly_accession: Optional[str] = None
     organism_name: Optional[str] = None
     is_type_strain: bool = False
@@ -265,7 +265,7 @@ class PaginatedQueryResultResponse(Schema):
 
 
 class QueryResultGenomeAggregation(Schema):
-    assembly_id: int
+    genome_id: int
     accession: str
     organism_name: Optional[str] = None
     taxonomy_family: Optional[str] = None

@@ -1,2 +1,2 @@
-FROM ankane/pgvector:v0.5.1
+FROM pgvector/pgvector:pg18-trixie
 COPY init/init_vector.sql /docker-entrypoint-initdb.d/init_vector.sql

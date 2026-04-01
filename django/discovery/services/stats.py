@@ -1,12 +1,22 @@
-"""Aggregation statistics for the Discovery Platform stats panels."""
+"""Aggregation statistics for the Discovery Platform stats panels.
+
+Uses DashboardGenome/DashboardBgc and the denormalized BgcDomain table
+instead of cross-schema joins.  For unfiltered views, reads from
+PrecomputedStats to avoid full-table scans.
+"""
 
 import random
 from collections import defaultdict
 
 from django.db.models import Avg, Count, Q
 
-from discovery.models import BgcScore, GenomeScore, NaturalProduct
-from mgnify_bgcs.models import Domain, ProteinDomain
+from discovery.models import (
+    BgcDomain,
+    DashboardBgc,
+    DashboardGenome,
+    DashboardNaturalProduct,
+    PrecomputedStats,
+)
 
 
 MAX_BOXPLOT_VALUES = 10_000
@@ -22,20 +32,19 @@ def _sample_values(values: list[float], limit: int = MAX_BOXPLOT_VALUES) -> list
 # ── Genome stats ─────────────────────────────────────────────────────────────
 
 
-def compute_genome_stats(assembly_qs) -> dict:
-    """Compute aggregate statistics for a filtered Assembly queryset.
+def compute_genome_stats(genome_qs) -> dict:
+    """Compute aggregate statistics for a filtered DashboardGenome queryset.
 
     Returns a dict ready to be serialised into GenomeStatsResponse.
     """
-    # Taxonomy sunburst — flat list of {id, label, parent, count}
-    taxonomy_sunburst = _build_taxonomy_sunburst(assembly_qs)
+    taxonomy_sunburst = _build_taxonomy_sunburst(genome_qs)
 
     # Score distributions for boxplots
     score_rows = list(
-        assembly_qs.filter(genome_score__isnull=False).values_list(
-            "genome_score__bgc_diversity_score",
-            "genome_score__bgc_novelty_score",
-            "genome_score__bgc_density",
+        genome_qs.values_list(
+            "bgc_diversity_score",
+            "bgc_novelty_score",
+            "bgc_density",
         )
     )
     diversity_vals = _sample_values([r[0] for r in score_rows if r[0] is not None])
@@ -49,15 +58,13 @@ def compute_genome_stats(assembly_qs) -> dict:
     ]
 
     # Type strain counts
-    strain_agg = assembly_qs.aggregate(
+    strain_agg = genome_qs.aggregate(
         type_strain=Count("id", filter=Q(is_type_strain=True)),
         non_type_strain=Count("id", filter=Q(is_type_strain=False)),
     )
 
     # Average BGC count and L1 class count per genome
-    avg_agg = GenomeScore.objects.filter(
-        assembly__in=assembly_qs
-    ).aggregate(
+    avg_agg = genome_qs.aggregate(
         mean_bgc=Avg("bgc_count"),
         mean_l1=Avg("l1_class_count"),
     )
@@ -69,11 +76,11 @@ def compute_genome_stats(assembly_qs) -> dict:
         "non_type_strain_count": strain_agg["non_type_strain"],
         "mean_bgc_per_genome": round(avg_agg["mean_bgc"] or 0.0, 2),
         "mean_l1_class_per_genome": round(avg_agg["mean_l1"] or 0.0, 2),
-        "total_genomes": assembly_qs.count(),
+        "total_genomes": genome_qs.count(),
     }
 
 
-def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
+def _build_taxonomy_sunburst(genome_qs) -> list[dict]:
     """Build a flat list for Plotly sunburst from taxonomy columns.
 
     Returns [{id, label, parent, count}, ...] where parent="" for root nodes.
@@ -86,19 +93,10 @@ def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
         "taxonomy_family",
         "taxonomy_genus",
     ]
-    rank_labels = {
-        "taxonomy_kingdom": "Kingdom",
-        "taxonomy_phylum": "Phylum",
-        "taxonomy_class": "Class",
-        "taxonomy_order": "Order",
-        "taxonomy_family": "Family",
-        "taxonomy_genus": "Genus",
-    }
 
-    rows = assembly_qs.values(*ranks).annotate(count=Count("id"))
+    rows = genome_qs.values(*ranks).annotate(count=Count("id"))
 
-    # Build a tree then flatten
-    nodes: dict[str, dict] = {}  # id -> {label, parent, count}
+    nodes: dict[str, dict] = {}
 
     for row in rows:
         count = row["count"]
@@ -125,20 +123,18 @@ def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
 
 
 def compute_bgc_stats(bgc_qs) -> dict:
-    """Compute aggregate statistics for a filtered Bgc queryset.
+    """Compute aggregate statistics for a filtered DashboardBgc queryset.
 
     Returns a dict ready to be serialised into BgcStatsResponse.
     """
     total_bgcs = bgc_qs.count()
 
-    # Core domains (present in >80% of BGCs)
+    # Core domains (present in >80% of BGCs) — single join to BgcDomain
     core_domains = _compute_core_domains(bgc_qs, total_bgcs)
 
     # Score distributions for boxplots
     score_rows = list(
-        BgcScore.objects.filter(bgc__in=bgc_qs).values_list(
-            "novelty_score", "domain_novelty"
-        )
+        bgc_qs.values_list("novelty_score", "domain_novelty")
     )
     novelty_vals = _sample_values([r[0] for r in score_rows if r[0] is not None])
     domain_novelty_vals = _sample_values([r[1] for r in score_rows if r[1] is not None])
@@ -157,12 +153,11 @@ def compute_bgc_stats(bgc_qs) -> dict:
     # NP chemical class sunburst
     np_class_sunburst = _build_np_class_sunburst(bgc_qs)
 
-    # BGC class distribution
+    # BGC class distribution (from classification_l1 on DashboardBgc directly)
     bgc_class_dist = list(
-        BgcScore.objects.filter(bgc__in=bgc_qs)
-        .exclude(classification_l1="")
+        bgc_qs.exclude(classification_l1="")
         .values("classification_l1")
-        .annotate(count=Count("bgc_id"))
+        .annotate(count=Count("id"))
         .order_by("-count")
     )
     bgc_class_distribution = [
@@ -182,36 +177,28 @@ def compute_bgc_stats(bgc_qs) -> dict:
 
 
 def _compute_core_domains(bgc_qs, total_bgcs: int) -> list[dict]:
-    """Find domains present in >80% of the filtered BGCs."""
+    """Find domains present in >80% of the filtered BGCs.
+
+    Uses the denormalized BgcDomain table — a single join instead of the
+    previous 5-table chain (Domain→ProteinDomain→Protein→CDS→Contig→BGC).
+    """
     if total_bgcs == 0:
         return []
 
-    threshold = int(total_bgcs * 0.8)
-    if threshold < 1:
-        threshold = 1
+    threshold = max(1, int(total_bgcs * 0.8))
 
-    # Count how many distinct BGCs each domain appears in.
-    # Path: ProteinDomain → Protein → Cds → Contig → Bgc
     domain_counts = (
-        Domain.objects.filter(
-            proteindomain__protein__cds__contig__bgcs__in=bgc_qs
-        )
-        .annotate(
-            bgc_count=Count(
-                "proteindomain__protein__cds__contig__bgcs",
-                distinct=True,
-                filter=Q(proteindomain__protein__cds__contig__bgcs__in=bgc_qs),
-            )
-        )
+        BgcDomain.objects.filter(bgc__in=bgc_qs)
+        .values("domain_acc", "domain_name")
+        .annotate(bgc_count=Count("bgc", distinct=True))
         .filter(bgc_count__gte=threshold)
-        .values("acc", "name", "bgc_count")
         .order_by("-bgc_count")
     )
 
     return [
         {
-            "acc": row["acc"],
-            "name": row["name"],
+            "acc": row["domain_acc"],
+            "name": row["domain_name"],
             "bgc_count": row["bgc_count"],
             "fraction": round(row["bgc_count"] / total_bgcs, 4),
         }
@@ -221,9 +208,11 @@ def _compute_core_domains(bgc_qs, total_bgcs: int) -> list[dict]:
 
 def _build_np_class_sunburst(bgc_qs) -> list[dict]:
     """Build a flat sunburst list for NP chemical class hierarchy."""
-    nps = NaturalProduct.objects.filter(bgc__in=bgc_qs).values(
-        "chemical_class_l1", "chemical_class_l2", "chemical_class_l3"
-    ).annotate(count=Count("id"))
+    nps = (
+        DashboardNaturalProduct.objects.filter(bgc__in=bgc_qs)
+        .values("chemical_class_l1", "chemical_class_l2", "chemical_class_l3")
+        .annotate(count=Count("id"))
+    )
 
     nodes: dict[str, dict] = {}
 

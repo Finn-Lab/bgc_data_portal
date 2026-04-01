@@ -11,7 +11,7 @@ import logging
 
 from celery import shared_task
 
-from mgnify_bgcs.cache_utils import set_job_cache
+from discovery.cache_utils import set_job_cache
 
 log = logging.getLogger(__name__)
 
@@ -19,17 +19,17 @@ ASSESSMENT_TTL = 86_400  # 24 hours
 
 
 @shared_task(name="discovery.tasks.assess_genome", bind=True, acks_late=True)
-def assess_genome(self, assembly_id: int, weights: dict) -> bool:
+def assess_genome(self, genome_id: int, weights: dict) -> bool:
     """Run a full genome assessment and cache the result."""
     task_id = self.request.id
-    search_key = f"assess_genome:{assembly_id}"
+    search_key = f"assess_genome:{genome_id}"
 
     # Mark as pending
     set_job_cache(search_key=search_key, task_id=task_id, timeout=ASSESSMENT_TTL)
 
     from discovery.services.assessment import compute_genome_assessment
 
-    result = compute_genome_assessment(assembly_id, weights)
+    result = compute_genome_assessment(genome_id, weights)
 
     set_job_cache(
         search_key=search_key,
@@ -37,7 +37,7 @@ def assess_genome(self, assembly_id: int, weights: dict) -> bool:
         task_id=task_id,
         timeout=ASSESSMENT_TTL,
     )
-    log.info("Genome assessment completed for assembly %s (task %s)", assembly_id, task_id)
+    log.info("Genome assessment completed for genome %s (task %s)", genome_id, task_id)
     return True
 
 

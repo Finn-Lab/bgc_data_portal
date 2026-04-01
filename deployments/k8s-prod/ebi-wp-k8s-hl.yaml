@@ -60,7 +60,7 @@ items:
                 sizeLimit: 1Gi
           containers:
             - name: postgres
-              image: quay.io/microbiome-informatics/pgvector:amd64
+              image: quay.io/microbiome-informatics/pgvector:latest
               imagePullPolicy: Always
               envFrom:
                 - secretRef:
@@ -87,7 +87,7 @@ items:
                 periodSeconds: 10
               volumeMounts:
                 - name: db-data
-                  mountPath: /var/lib/postgresql/data
+                  mountPath: /var/lib/postgresql
                 # Mount the tmpfs volume to /dev/shm so PostgreSQL can allocate
                 # sufficient POSIX shared memory for operations.
                 - name: dshm

@@ -47,7 +47,7 @@ items:
             - name: quay-pull-secret
           containers:
             - name: postgres
-              image: quay.io/microbiome-informatics/pgvector:amd64
+              image: quay.io/microbiome-informatics/pgvector:dev
               imagePullPolicy: Always
               envFrom:
                 - secretRef:
@@ -74,7 +74,7 @@ items:
                 periodSeconds: 10
               volumeMounts:
                 - name: db-data
-                  mountPath: /var/lib/postgresql/data
+                  mountPath: /var/lib/postgresql
       volumeClaimTemplates:
         - metadata:
             name: db-data

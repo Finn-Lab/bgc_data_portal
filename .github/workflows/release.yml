@@ -29,6 +29,9 @@ jobs:
           - folder: django
             image_name: bgc_dp_web_site_worker
             dockerfile: Dockerfile.worker
+          - folder: db
+            image_name: pgvector
+            dockerfile: Dockerfile
 
     steps:
       - name: Checkout
