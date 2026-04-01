@@ -1454,10 +1454,15 @@ def genome_stats(
 def bgc_stats(
     request,
     assembly_ids: Optional[str] = None,
+    bgc_ids: Optional[str] = None,
 ):
     """Aggregated statistics for the filtered BGC set."""
     qs = Bgc.objects.filter(bgc_score__isnull=False)
-    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+    if bgc_ids:
+        ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
+        qs = qs.filter(id__in=ids) if ids else qs.none()
+    else:
+        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
     return compute_bgc_stats(qs)
 
 
@@ -1517,10 +1522,15 @@ def bgc_stats_export(
     request,
     format: str = "json",
     assembly_ids: Optional[str] = None,
+    bgc_ids: Optional[str] = None,
 ):
     """Export BGC stats as JSON or TSV."""
     qs = Bgc.objects.filter(bgc_score__isnull=False)
-    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+    if bgc_ids:
+        ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
+        qs = qs.filter(id__in=ids) if ids else qs.none()
+    else:
+        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
     stats = compute_bgc_stats(qs)
 
     if format == "tsv":

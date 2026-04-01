@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useAssessStore } from "@/stores/assess-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useBgcAssessment } from "@/hooks/use-bgc-assessment";
@@ -7,8 +8,7 @@ import { GcfContextPanel } from "./GcfContextPanel";
 import { NoveltyGauges } from "./NoveltyGauges";
 import { DomainDifferentialChart } from "./DomainDifferentialChart";
 import { DomainArchitectureComparison } from "./DomainArchitectureComparison";
-import { GcfMemberMap } from "./GcfMemberMap";
-import { BgcChemicalSpaceMap } from "./BgcChemicalSpaceMap";
+import { BgcScatter } from "@/components/bgc/BgcScatter";
 import { CrossModeActions } from "./CrossModeActions";
 import { AssessmentExportButton } from "./AssessmentExportButton";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,18 @@ export function BgcAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
   const assetId = useAssessStore((s) => s.assetId);
   const { isLoading, isError, result, retry } = useBgcAssessment();
+
+  const assessBgcIds = useMemo(() => {
+    if (!result) return [];
+    const ids: number[] = [];
+    if (result.bgc_id) ids.push(result.bgc_id);
+    if (result.gcf_context?.member_points) {
+      for (const m of result.gcf_context.member_points) {
+        if (!ids.includes(m.bgc_id)) ids.push(m.bgc_id);
+      }
+    }
+    return ids;
+  }, [result]);
 
   if (isLoading) {
     return <AssessmentLoading label={assetLabel} />;
@@ -110,24 +122,15 @@ export function BgcAssessmentView() {
         </PanelContainer>
       )}
 
-      {/* GCF Member Map */}
-      {result.gcf_context && (
-        <PanelContainer title="GCF Member Map" className="min-h-[350px]">
-          <GcfMemberMap
-            members={result.gcf_context.member_points}
-            submittedPoint={result.submitted_point}
+      {/* BGC Chemical Space (UMAP) */}
+      {assessBgcIds.length > 0 && (
+        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[400px]">
+          <BgcScatter
+            bgcIdsOverride={assessBgcIds}
+            highlightBgcId={result.bgc_id}
           />
         </PanelContainer>
       )}
-
-      {/* Chemical Space */}
-      <PanelContainer title="Chemical Space" className="min-h-[400px]">
-        <BgcChemicalSpaceMap
-          submittedPoint={result.submitted_point}
-          neighbors={result.nearest_neighbors}
-          mibigPoints={result.mibig_reference_points}
-        />
-      </PanelContainer>
     </>
   );
 }

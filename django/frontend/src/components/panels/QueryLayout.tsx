@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { QueryActions } from "@/components/query/QueryActions";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
+import { useQueryStore } from "@/stores/query-store";
 import { useParentAssemblies } from "@/hooks/use-parent-assemblies";
 
 function GenomeSourceBadge() {
@@ -53,6 +54,7 @@ export function QueryLayout() {
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
   const queryAssemblyIds = useQueryAssemblyIds();
+  const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto p-4">
@@ -68,8 +70,8 @@ export function QueryLayout() {
           <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]">
             <BgcScatter />
           </PanelContainer>
-          <PanelContainer title="BGC Stats" className="min-h-[280px]" actions={<BgcStatsActions />}>
-            <BgcStats />
+          <PanelContainer title="BGC Stats" className="min-h-[280px]" actions={<BgcStatsActions bgcIds={resultBgcIds} />}>
+            <BgcStats bgcIds={resultBgcIds} />
           </PanelContainer>
         </div>
       </div>

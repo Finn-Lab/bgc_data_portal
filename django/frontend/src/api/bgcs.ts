@@ -39,6 +39,7 @@ export function fetchParentAssemblies(bgcIds: number[]) {
 
 export interface BgcStatsParams {
   assembly_ids?: string;
+  bgc_ids?: string;
 }
 
 export function fetchBgcStats(params: BgcStatsParams = {}) {

@@ -21,10 +21,12 @@ const BGC_CLASS_COLORS: Record<string, string> = {
 
 interface BgcScatterProps {
   assemblyIdsOverride?: number[];
+  bgcIdsOverride?: number[];
+  highlightBgcId?: number;
   markerSymbol?: string;
 }
 
-export function BgcScatter({ assemblyIdsOverride, markerSymbol }: BgcScatterProps = {}) {
+export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId, markerSymbol }: BgcScatterProps = {}) {
   const [showMibig, setShowMibig] = useState(true);
   const mode = useModeStore((s) => s.mode);
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
@@ -33,26 +35,32 @@ export function BgcScatter({ assemblyIdsOverride, markerSymbol }: BgcScatterProp
   const genomeShortlist = useShortlistStore((s) => s.genomes);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
 
-  // When override is provided (e.g. assess mode), use it directly
-  const assemblyIds = assemblyIdsOverride
-    ? assemblyIdsOverride
-    : mode === "explore"
-      ? genomeShortlist.length > 0
-        ? genomeShortlist.map((g) => g.id)
-        : activeGenomeId
-          ? [activeGenomeId]
-          : []
-      : undefined;
+  // When bgcIdsOverride is provided (e.g. assess mode), use it directly
+  const assemblyIds = bgcIdsOverride
+    ? undefined
+    : assemblyIdsOverride
+      ? assemblyIdsOverride
+      : mode === "explore"
+        ? genomeShortlist.length > 0
+          ? genomeShortlist.map((g) => g.id)
+          : activeGenomeId
+            ? [activeGenomeId]
+            : []
+        : undefined;
 
   // Query mode: filter by query result BGC IDs
-  const bgcIds = !assemblyIdsOverride && mode === "query" ? resultBgcIds : undefined;
+  const bgcIds = bgcIdsOverride
+    ? bgcIdsOverride
+    : !assemblyIdsOverride && mode === "query" ? resultBgcIds : undefined;
   const hasQueryResults = mode === "query" && resultBgcIds.length > 0;
 
-  const hasData = assemblyIdsOverride
-    ? assemblyIdsOverride.length > 0
-    : mode === "explore"
-      ? (genomeShortlist.length > 0 || activeGenomeId != null)
-      : hasQueryResults;
+  const hasData = bgcIdsOverride
+    ? bgcIdsOverride.length > 0
+    : assemblyIdsOverride
+      ? assemblyIdsOverride.length > 0
+      : mode === "explore"
+        ? (genomeShortlist.length > 0 || activeGenomeId != null)
+        : hasQueryResults;
 
   const { data: points, isLoading } = useBgcScatter({
     assemblyIds: assemblyIds as number[] | undefined,
@@ -127,8 +135,31 @@ export function BgcScatter({ assemblyIdsOverride, markerSymbol }: BgcScatterProp
       });
     }
 
+    // Highlight trace for assessed BGC (star overlay)
+    if (highlightBgcId && points) {
+      const hp = points.find((p) => p.id === highlightBgcId);
+      if (hp) {
+        result.push({
+          type: "scatter" as const,
+          mode: "markers" as const,
+          name: "Assessed BGC",
+          x: [hp.umap_x],
+          y: [hp.umap_y],
+          customdata: [hp.id],
+          text: [`Assessed: ${hp.bgc_class}<br>ID: ${hp.id}`],
+          hoverinfo: "text" as const,
+          marker: {
+            symbol: "star",
+            size: 18,
+            color: "#3b82f6",
+            line: { color: "black", width: 1.5 },
+          },
+        });
+      }
+    }
+
     return result;
-  }, [points, activeBgcId, showMibig]);
+  }, [points, activeBgcId, showMibig, highlightBgcId]);
 
   const handleClick = useCallback(
     (event: Plotly.PlotMouseEvent) => {

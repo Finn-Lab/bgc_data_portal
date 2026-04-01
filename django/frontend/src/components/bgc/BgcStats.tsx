@@ -24,8 +24,12 @@ const BGC_CLASS_COLORS: Record<string, string> = {
   Other: "#6b7280",
 };
 
-export function BgcStats() {
-  const { data, isLoading } = useBgcStats();
+interface BgcStatsProps {
+  bgcIds?: number[];
+}
+
+export function BgcStats({ bgcIds }: BgcStatsProps = {}) {
+  const { data, isLoading } = useBgcStats({ bgcIds });
 
   if (isLoading) {
     return <Skeleton className="h-[280px] w-full" />;
@@ -70,21 +74,29 @@ export function BgcStats() {
   );
 }
 
-export function BgcStatsActions() {
+interface BgcStatsActionsProps {
+  bgcIds?: number[];
+}
+
+export function BgcStatsActions({ bgcIds }: BgcStatsActionsProps = {}) {
   const activeGenomeId = useSelectionStore((s) => s.activeGenomeId);
   const genomeShortlist = useShortlistStore((s) => s.genomes);
 
-  const assemblyIds =
-    genomeShortlist.length > 0
+  const hasBgcIds = bgcIds != null && bgcIds.length > 0;
+  const bgcIdsStr = hasBgcIds ? bgcIds.join(",") : undefined;
+
+  const assemblyIds = !hasBgcIds
+    ? genomeShortlist.length > 0
       ? genomeShortlist.map((g) => g.id).join(",")
       : activeGenomeId
         ? String(activeGenomeId)
-        : undefined;
+        : undefined
+    : undefined;
 
   return (
     <StatsExportMenu
       onExport={(format) =>
-        exportBgcStats({ assembly_ids: assemblyIds }, format)
+        exportBgcStats({ assembly_ids: assemblyIds, bgc_ids: bgcIdsStr }, format)
       }
     />
   );
