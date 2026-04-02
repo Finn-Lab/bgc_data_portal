@@ -8,6 +8,7 @@ No imports from mgnify_bgcs.
 
 import csv
 import json
+import logging
 import math
 from io import StringIO
 from typing import Optional
@@ -81,6 +82,8 @@ from discovery.api_schemas import (
     SunburstNode,
     TaxonomyNode,
 )
+
+logger = logging.getLogger(__name__)
 
 discovery_router = Router(tags=["Discovery Platform"])
 
@@ -850,36 +853,17 @@ def chemical_query(
     if not body.smiles or not body.smiles.strip():
         raise HttpError(400, "SMILES string is required")
 
+    from discovery.tasks import chemical_similarity_search
+
+    # Dispatch fingerprint computation to Celery worker (where RDKit is available)
+    async_result = chemical_similarity_search.delay(
+        body.smiles.strip(), body.similarity_threshold
+    )
     try:
-        from rdkit import Chem
-        from rdkit.Chem import AllChem, DataStructs
-    except ImportError:
-        raise HttpError(500, "RDKit is not available")
-
-    query_mol = Chem.MolFromSmiles(body.smiles.strip())
-    if query_mol is None:
-        raise HttpError(400, "Invalid SMILES string")
-
-    query_fp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
-
-    # Tanimoto similarity against DashboardNaturalProduct
-    bgc_similarities: dict[int, float] = {}
-    for np_obj in DashboardNaturalProduct.objects.filter(bgc__isnull=False).only(
-        "bgc_id", "smiles"
-    ):
-        if not np_obj.smiles:
-            continue
-        try:
-            mol = Chem.MolFromSmiles(np_obj.smiles)
-            if mol is None:
-                continue
-            fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
-            similarity = DataStructs.TanimotoSimilarity(query_fp, fp)
-            if similarity >= body.similarity_threshold:
-                existing = bgc_similarities.get(np_obj.bgc_id, 0.0)
-                bgc_similarities[np_obj.bgc_id] = max(existing, similarity)
-        except Exception:
-            continue
+        bgc_similarities: dict[int, float] = async_result.get(timeout=120)
+    except Exception as e:
+        logger.error("Chemical similarity search failed: %s", e)
+        raise HttpError(500, "Chemical similarity search failed")
 
     if not bgc_similarities:
         return PaginatedQueryResultResponse(

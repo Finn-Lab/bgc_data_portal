@@ -159,11 +159,12 @@ def _morgan_fp_bytes(smiles: str) -> bytes:
     """Try to compute a Morgan fingerprint; return empty bytes on failure."""
     try:
         from rdkit import Chem
-        from rdkit.Chem import AllChem
+        from rdkit.Chem import rdFingerprintGenerator
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
             return b""
-        fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+        mfpgen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=2048)
+        fp = mfpgen.GetFingerprint(mol)
         return fp.ToBitString().encode("ascii")
     except Exception:
         return b""
