@@ -85,7 +85,7 @@ export function QueryLayout() {
 
       {/* Assembly panels — Roster full height left, Scatter + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="Assembly Roster" className="min-h-[600px] xl:row-span-2" actions={<AssemblySourceBadge />}>
+        <PanelContainer title="Assembly Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2" actions={<AssemblySourceBadge />}>
           <QueryAssemblyRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">

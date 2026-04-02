@@ -101,7 +101,7 @@ export function BgcRoster({ assemblyIdOverride }: BgcRosterProps = {}) {
 
       <div className="overflow-auto flex-1 min-h-0">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="text-xs">Accession</TableHead>
               <TableHead className="text-xs">Class</TableHead>

@@ -105,11 +105,11 @@ export function AssemblyAssessmentView() {
 
       {/* BGC Triad — same layout as ExploreLayout */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="BGC Roster" className="min-h-[600px] xl:row-span-2">
+        <PanelContainer title="BGC Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2">
           <BgcRoster assemblyIdOverride={result.assembly_id} />
         </PanelContainer>
         <div className="flex flex-col gap-4">
-          <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[300px]">
+          <PanelContainer title="BGC Space Map" className="min-h-[300px]">
             <BgcScatter
               assemblyIdsOverride={[result.assembly_id]}
               markerSymbol="star"
@@ -126,9 +126,9 @@ export function AssemblyAssessmentView() {
         <RedundancyMatrix matrix={result.redundancy_matrix} />
       </PanelContainer>
 
-      {/* Real UMAP Chemical Space */}
+      {/* BGC Embeddings Map — real UMAP */}
       {result.chemical_space_points.length > 0 && (
-        <PanelContainer title="BGC Chemical Space (UMAP)" className="min-h-[400px]">
+        <PanelContainer title="BGC Embeddings Map" className="min-h-[400px]">
           <ChemicalSpaceMap
             points={result.chemical_space_points}
             mibigPoints={result.mibig_reference_points}

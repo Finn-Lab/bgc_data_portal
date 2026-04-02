@@ -29,7 +29,7 @@ export function PanelContainer({
         className
       )}
     >
-      <div className="vf-card__content | vf-stack vf-stack--200">
+      <div className="vf-card__content | vf-stack vf-stack--200 flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between">
           <h3 className="vf-card__heading" style={{ margin: 0 }}>{title}</h3>
           <div className="flex items-center gap-2">

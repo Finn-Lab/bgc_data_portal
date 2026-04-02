@@ -46,7 +46,7 @@ export function ExploreLayout() {
 
       {/* Top section: Assembly panels — Roster full height left, Map + Stats stacked right */}
       <div className="grid gap-4 xl:grid-cols-2">
-        <PanelContainer title="Assembly Roster" className="min-h-[600px] xl:row-span-2">
+        <PanelContainer title="Assembly Roster" className="min-h-[600px] max-h-[600px] xl:row-span-2">
           <AssemblyRoster />
         </PanelContainer>
         <div className="flex flex-col gap-4">
