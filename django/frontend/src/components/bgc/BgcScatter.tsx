@@ -5,6 +5,7 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useModeStore } from "@/stores/mode-store";
 import { useQueryStore } from "@/stores/query-store";
+import type { BgcScatterPoint } from "@/api/types";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,6 +63,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
   const assemblyShortlist = useShortlistStore((s) => s.assemblies);
   const resultBgcIds = useQueryStore((s) => s.resultBgcIds);
+  const resultBgcData = useQueryStore((s) => s.resultBgcData);
 
   const defaults = getDefaultAxes(mode);
   const [xAxis, setXAxis] = useState(defaults.x);
@@ -103,14 +105,42 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
         ? (assemblyShortlist.length > 0 || activeAssemblyId != null)
         : hasQueryResults;
 
-  const { data: points, isLoading } = useBgcScatter({
+  // When similarity_score is an axis, the scatter API can't provide it
+  // (it's computed per-query). Use query result data directly instead.
+  const useSimilarityAxis = mode === "query" && (xAxis === "similarity_score" || yAxis === "similarity_score");
+
+  const { data: apiPoints, isLoading: apiLoading } = useBgcScatter({
     xAxis,
     yAxis,
     assemblyIds: assemblyIds as number[] | undefined,
     bgcIds,
     includeMibig: showMibig,
-    enabled: hasData,
+    enabled: hasData && !useSimilarityAxis,
   });
+
+  const queryDerivedPoints = useMemo((): BgcScatterPoint[] | undefined => {
+    if (!useSimilarityAxis || resultBgcData.length === 0) return undefined;
+    const axisValue = (item: typeof resultBgcData[0], axis: string): number => {
+      if (axis === "similarity_score") return item.similarity_score;
+      if (axis === "novelty_score") return item.novelty_score;
+      if (axis === "domain_novelty") return item.domain_novelty;
+      return 0;
+    };
+    return resultBgcData.map((item) => ({
+      id: item.id,
+      x: axisValue(item, xAxis),
+      y: axisValue(item, yAxis),
+      bgc_class: item.classification_l1,
+      is_mibig: false,
+      compound_name: null,
+      novelty_score: item.novelty_score,
+      domain_novelty: item.domain_novelty,
+      similarity_score: item.similarity_score,
+    }));
+  }, [useSimilarityAxis, resultBgcData, xAxis, yAxis]);
+
+  const points = useSimilarityAxis ? queryDerivedPoints : apiPoints;
+  const isLoading = useSimilarityAxis ? false : apiLoading;
 
   const traces = useMemo(() => {
     if (!points?.length) return [];

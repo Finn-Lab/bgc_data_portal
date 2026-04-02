@@ -6,12 +6,14 @@ import { useState, useEffect } from "react";
 
 export function useDomainQuery() {
   const [page, setPage] = useState(1);
-  const [enabled, setEnabled] = useState(false);
   const [sortBy, setSortBy] = useState("novelty_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const conditions = useQueryStore((s) => s.domainConditions);
   const logic = useQueryStore((s) => s.logic);
   const setResultBgcIds = useQueryStore((s) => s.setResultBgcIds);
+  const setResultBgcData = useQueryStore((s) => s.setResultBgcData);
+  const domainQueryTriggered = useQueryStore((s) => s.domainQueryTriggered);
+  const setDomainQueryTriggered = useQueryStore((s) => s.setDomainQueryTriggered);
   const filters = useFilterStore();
 
   const hasConditions = conditions.length > 0;
@@ -36,15 +38,16 @@ export function useDomainQuery() {
           bgc_accession: filters.bgcAccession || undefined,
         }
       ),
-    enabled,
+    enabled: domainQueryTriggered,
   });
 
-  // Store result IDs for assembly aggregation
+  // Store result IDs and data for scatter/assembly aggregation
   useEffect(() => {
     if (query.data) {
       setResultBgcIds(query.data.items.map((r) => r.id));
+      setResultBgcData(query.data.items);
     }
-  }, [query.data, setResultBgcIds]);
+  }, [query.data, setResultBgcIds, setResultBgcData]);
 
   return {
     ...query,
@@ -54,7 +57,7 @@ export function useDomainQuery() {
     setSortBy,
     order,
     setOrder,
-    runQuery: () => setEnabled(true),
+    runQuery: () => setDomainQueryTriggered(true),
     hasConditions,
   };
 }

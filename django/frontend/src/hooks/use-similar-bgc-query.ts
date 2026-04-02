@@ -9,6 +9,7 @@ export function useSimilarBgcQuery() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const sourceId = useQueryStore((s) => s.similarBgcSourceId);
   const setResultBgcIds = useQueryStore((s) => s.setResultBgcIds);
+  const setResultBgcData = useQueryStore((s) => s.setResultBgcData);
 
   const query = useQuery({
     queryKey: ["similar-bgc-query", sourceId, sortBy, order, page],
@@ -25,8 +26,9 @@ export function useSimilarBgcQuery() {
   useEffect(() => {
     if (query.data) {
       setResultBgcIds(query.data.items.map((r) => r.id));
+      setResultBgcData(query.data.items);
     }
-  }, [query.data, setResultBgcIds]);
+  }, [query.data, setResultBgcIds, setResultBgcData]);
 
   return {
     ...query,

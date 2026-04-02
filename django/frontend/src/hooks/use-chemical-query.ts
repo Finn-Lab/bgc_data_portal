@@ -6,12 +6,14 @@ import { useState, useEffect } from "react";
 
 export function useChemicalQuery() {
   const [page, setPage] = useState(1);
-  const [enabled, setEnabled] = useState(false);
   const [sortBy, setSortBy] = useState("similarity_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const smilesQuery = useQueryStore((s) => s.smilesQuery);
   const similarityThreshold = useQueryStore((s) => s.similarityThreshold);
   const setResultBgcIds = useQueryStore((s) => s.setResultBgcIds);
+  const setResultBgcData = useQueryStore((s) => s.setResultBgcData);
+  const chemicalQueryTriggered = useQueryStore((s) => s.chemicalQueryTriggered);
+  const setChemicalQueryTriggered = useQueryStore((s) => s.setChemicalQueryTriggered);
   const filters = useFilterStore();
 
   const hasQuery = smilesQuery.trim().length > 0;
@@ -44,15 +46,16 @@ export function useChemicalQuery() {
           bgc_accession: filters.bgcAccession || undefined,
         }
       ),
-    enabled: enabled && hasQuery,
+    enabled: chemicalQueryTriggered && hasQuery,
   });
 
-  // Store result IDs for assembly aggregation
+  // Store result IDs and data for scatter/assembly aggregation
   useEffect(() => {
     if (query.data) {
       setResultBgcIds(query.data.items.map((r) => r.id));
+      setResultBgcData(query.data.items);
     }
-  }, [query.data, setResultBgcIds]);
+  }, [query.data, setResultBgcIds, setResultBgcData]);
 
   return {
     ...query,
@@ -62,7 +65,7 @@ export function useChemicalQuery() {
     setSortBy,
     order,
     setOrder,
-    runQuery: () => setEnabled(true),
+    runQuery: () => setChemicalQueryTriggered(true),
     hasQuery,
   };
 }
