@@ -104,7 +104,7 @@ export function AssemblyAssessmentView() {
       </PanelContainer>
 
       {/* BGC Triad — same layout as ExploreLayout */}
-      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[300px_280px]">
+      <div className="grid gap-4 xl:grid-cols-2 xl:grid-rows-[450px_420px]">
         <PanelContainer title="BGC Roster" className="xl:row-span-2">
           <BgcRoster assemblyIdOverride={result.assembly_id} />
         </PanelContainer>
