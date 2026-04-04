@@ -99,7 +99,21 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
               </Badge>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">{assembly.accession}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {assembly.url ? (
+              <a
+                href={assembly.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                {assembly.accession}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : (
+              assembly.accession
+            )}
+          </p>
         </div>
 
         <div className="space-y-1 text-xs">

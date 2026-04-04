@@ -57,6 +57,7 @@ class AssemblyDetail(Schema):
     assembly_quality: Optional[float] = None
     isolation_source: str = ""
     biome_path: str = ""
+    url: str = ""
     # Scores
     bgc_count: int = 0
     l1_class_count: int = 0
@@ -319,6 +320,7 @@ class PfamAnnotationOut(Schema):
     envelope_start: int = 0
     envelope_end: int = 0
     e_value: Optional[str] = None
+    url: str = ""
 
 
 class RegionCdsOut(Schema):

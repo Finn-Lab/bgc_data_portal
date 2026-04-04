@@ -47,6 +47,7 @@ export interface AssemblyDetail {
   assembly_quality: number | null;
   isolation_source: string | null;
   biome_path: string;
+  url: string;
   bgc_count: number;
   l1_class_count: number;
   bgc_diversity_score: number;
@@ -245,6 +246,7 @@ export interface PfamAnnotation {
   envelope_start: number;
   envelope_end: number;
   e_value: string | null;
+  url: string;
 }
 
 export interface RegionCds {

@@ -98,6 +98,7 @@ class DashboardAssembly(models.Model):
     assembly_size_mb = models.FloatField(null=True, blank=True)
     assembly_quality = models.FloatField(null=True, blank=True)
     isolation_source = models.CharField(max_length=255, blank=True, default="")
+    url = models.URLField(max_length=512, blank=True, default="")
 
     # Scores (denormalized from GenomeScore)
     bgc_count = models.IntegerField(default=0)
@@ -429,6 +430,7 @@ class BgcDomain(models.Model):
     start_position = models.IntegerField(default=0)
     end_position = models.IntegerField(default=0)
     score = models.FloatField(null=True, blank=True)
+    url = models.URLField(max_length=512, blank=True, default="")
 
     class Meta:
         db_table = "discovery_bgc_domain"

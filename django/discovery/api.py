@@ -274,6 +274,7 @@ def assembly_detail(request, assembly_id: int):
         assembly_quality=assembly.assembly_quality,
         isolation_source=assembly.isolation_source,
         biome_path=assembly.biome_path,
+        url=assembly.url,
         bgc_count=assembly.bgc_count,
         l1_class_count=assembly.l1_class_count,
         bgc_diversity_score=assembly.bgc_diversity_score,
@@ -526,6 +527,7 @@ def bgc_region(request, bgc_id: int):
                     envelope_start=bd.start_position,
                     envelope_end=bd.end_position,
                     e_value=str(bd.score) if bd.score is not None else None,
+                    url=bd.url,
                 )
             )
 

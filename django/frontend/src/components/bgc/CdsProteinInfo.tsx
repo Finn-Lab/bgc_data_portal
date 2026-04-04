@@ -105,14 +105,18 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
                 {cds.pfam.map((pf, i) => (
                   <TableRow key={`${pf.accession}-${i}`}>
                     <TableCell className="text-[10px] px-1.5 py-1">
-                      <a
-                        href={`https://www.ebi.ac.uk/interpro/entry/pfam/${pf.accession}/`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        {pf.accession}
-                      </a>
+                      {pf.url ? (
+                        <a
+                          href={pf.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          {pf.accession}
+                        </a>
+                      ) : (
+                        pf.accession
+                      )}
                     </TableCell>
                     <TableCell className="text-[10px] px-1.5 py-1">{pf.description}</TableCell>
                     <TableCell className="text-[10px] px-1.5 py-1">{pf.go_slim || "—"}</TableCell>

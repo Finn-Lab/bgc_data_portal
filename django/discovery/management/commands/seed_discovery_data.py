@@ -246,6 +246,7 @@ class Command(BaseCommand):
                     f"https://www.dsmz.de/collection/catalogue/details/culture/DSM-{random.randint(1000, 99999)}"
                     if is_ts else ""
                 ),
+                url=f"https://www.ncbi.nlm.nih.gov/datasets/genome/DISC_ERZ{i:07d}/",
                 assembly_size_mb=gsm,
                 assembly_quality=gq,
                 isolation_source=random.choice(_ISOLATION_SOURCES),
@@ -487,6 +488,7 @@ class Command(BaseCommand):
                         start_position=prot_pos,
                         end_position=prot_pos + dom_len,
                         score=round(random.uniform(10.0, 300.0), 1),
+                        url=f"https://www.ebi.ac.uk/interpro/entry/pfam/{acc}/",
                     ))
                     prot_pos += dom_len + random.randint(5, 30)
 
