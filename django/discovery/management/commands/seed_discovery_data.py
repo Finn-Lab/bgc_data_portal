@@ -30,13 +30,17 @@ from discovery.models import (
     DashboardBgcClass,
     DashboardCds,
     DashboardContig,
+    DashboardDetector,
     DashboardDomain,
     DashboardGCF,
     DashboardMibigReference,
     DashboardNaturalProduct,
+    DashboardRegion,
     PrecomputedStats,
     ProteinEmbedding,
+    RegionAccessionAlias,
 )
+from discovery.services.ingestion.region_assignment import RegionAssigner
 
 
 # ── Reference data ───────────────────────────────────────────────────────────
@@ -190,13 +194,16 @@ class Command(BaseCommand):
             self.stdout.write("Clearing discovery tables...")
             # Delete in FK-safe order
             for model in [
+                RegionAccessionAlias,
                 CdsSequence, BgcDomain, DashboardCds,
                 BgcEmbedding, ProteinEmbedding,
                 DashboardNaturalProduct, DashboardMibigReference,
                 DashboardBgc,
+                DashboardRegion,
                 ContigSequence, DashboardContig,
                 DashboardGCF, DashboardAssembly,
                 DashboardBgcClass, DashboardDomain, PrecomputedStats,
+                DashboardDetector,
                 AssemblySource,
             ]:
                 model.objects.all().delete()
@@ -354,9 +361,39 @@ class Command(BaseCommand):
             f"{len(contig_seqs)} ContigSequence rows."
         )
 
+        # ── 2.8. DashboardDetector ────────────────────────────────────
+        self.stdout.write("Creating detectors...")
+        # version_sort_key: major*1_000_000 + minor*1_000 + patch
+        _SEED_DETECTORS = [
+            ("antiSMASH v7.1", "antiSMASH", "7.1.0", "ANT", 7_001_000),
+            ("antiSMASH v6.0", "antiSMASH", "6.0.0", "ANT", 6_000_000),
+            ("GECCO v0.9.8", "GECCO", "0.9.8", "GEC", 9_008),
+            ("SanntiS v0.1.0", "SanntiS", "0.1.0", "SAN", 1_000),
+        ]
+        detector_objs = {}
+        for name, tool, version, code, sort_key in _SEED_DETECTORS:
+            det = DashboardDetector.objects.create(
+                name=name, tool=tool, version=version,
+                tool_name_code=code, version_sort_key=sort_key,
+            )
+            detector_objs[name] = det
+        self.stdout.write(f"  {len(detector_objs)} DashboardDetector rows.")
+
         # ── 3. DashboardBgc ─────────────────────────────────────────────
+        self.stdout.write("Creating BGCs with region assignment...")
         all_bgcs = []
         bgc_counter = 0
+        assigner = RegionAssigner()
+
+        # Detector pool (weighted: mostly latest antiSMASH, some GECCO/SanntiS)
+        _det_pool = [
+            ("antiSMASH v7.1", 0.50),
+            ("antiSMASH v6.0", 0.15),
+            ("GECCO v0.9.8", 0.20),
+            ("SanntiS v0.1.0", 0.15),
+        ]
+        _det_names = [d[0] for d in _det_pool]
+        _det_weights = [d[1] for d in _det_pool]
 
         for assembly in assemblies:
             n_bgcs = random.randint(3, 12)
@@ -380,10 +417,23 @@ class Command(BaseCommand):
                 contig_idx = bi // 4
                 contig_obj, _ = contig_map[(assembly.source_assembly_id, contig_idx)]
 
+                # Pick a detector
+                det_name = random.choices(_det_names, weights=_det_weights, k=1)[0]
+                det = detector_objs[det_name]
+
+                # Assign region and get structured accession
+                region_id, bgc_number, accession = assigner.assign(
+                    contig_id=contig_obj.id,
+                    start=start,
+                    end=start + bgc_size,
+                    detector_id=det.id,
+                    tool_code=det.tool_name_code,
+                )
+
                 all_bgcs.append(DashboardBgc(
                     assembly=assembly,
                     contig=contig_obj,
-                    bgc_accession=f"MGYB{10000 + bgc_counter:012d}",
+                    bgc_accession=accession,
                     contig_accession=f"contig_{assembly.source_assembly_id}_{contig_idx}",
                     start_position=start,
                     end_position=start + bgc_size,
@@ -403,7 +453,10 @@ class Command(BaseCommand):
                     umap_y=uy,
                     gcf_id=gcf.id,
                     distance_to_gcf_representative=round(random.uniform(0.0, 0.5), 4),
-                    detector_names="antiSMASH",
+                    detector=det,
+                    detector_names=det.tool,
+                    region_id=region_id,
+                    bgc_number=bgc_number,
                     source_bgc_id=20000 + bgc_counter,
                     source_contig_id=30000 + bgc_counter,
                 ))
@@ -411,6 +464,7 @@ class Command(BaseCommand):
 
         DashboardBgc.objects.bulk_create(all_bgcs)
         self.stdout.write(f"  {len(all_bgcs)} DashboardBgc rows.")
+        self.stdout.write(f"  {DashboardRegion.objects.count()} DashboardRegion rows.")
 
         # Update assembly bgc_count and l1_class_count
         for assembly in assemblies:
@@ -603,16 +657,31 @@ class Command(BaseCommand):
             for contig, raw_seq in zip(mibig_contigs, mibig_contig_seqs_data)
         ])
 
+        # Create MIBiG detector
+        mibig_det = DashboardDetector.objects.create(
+            name="MIBiG v3.1", tool="MIBiG", version="3.1.0",
+            tool_name_code="MIB", version_sort_key=3_001_000,
+        )
+
         # Create MIBiG BGC entries with contigs linked
         mibig_bgcs = []
         for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
             ux, uy = _clustered_umap(bgc_class, jitter=1.5)
             bgc_size = random.randint(10000, 80000)
             start = random.randint(1000, 50000)
+
+            region_id, bgc_number, accession = assigner.assign(
+                contig_id=mibig_contigs[i].id,
+                start=start,
+                end=start + bgc_size,
+                detector_id=mibig_det.id,
+                tool_code=mibig_det.tool_name_code,
+            )
+
             mibig_bgcs.append(DashboardBgc(
                 assembly=mibig_assembly,
                 contig=mibig_contigs[i],
-                bgc_accession=f"MIBIG_{compound.upper().replace(' ', '_')[:20]}",
+                bgc_accession=accession,
                 contig_accession=mibig_contigs[i].accession,
                 start_position=start,
                 end_position=start + bgc_size,
@@ -625,7 +694,10 @@ class Command(BaseCommand):
                 is_validated=True,
                 umap_x=ux,
                 umap_y=uy,
+                detector=mibig_det,
                 detector_names="MIBiG",
+                region_id=region_id,
+                bgc_number=bgc_number,
                 source_bgc_id=50000 + i,
                 source_contig_id=80000 + i,
             ))

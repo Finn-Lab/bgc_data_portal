@@ -90,8 +90,10 @@ def _version_sort_key(version_str: str) -> int:
     for segment in version_str.split("."):
         digits = "".join(c for c in segment if c.isdigit())
         parts.append(int(digits) if digits else 0)
-    parts = (parts + [0, 0, 0, 0])[:4]
-    return parts[0] * 10**9 + parts[1] * 10**6 + parts[2] * 10**3 + parts[3]
+    # Encode as major*1_000_000 + minor*1_000 + patch.
+    # Fits in PositiveIntegerField (max 2_147_483_647) for versions up to 2147.x.x.
+    parts = (parts + [0, 0, 0])[:3]
+    return parts[0] * 1_000_000 + parts[1] * 1_000 + parts[2]
 
 
 def _generate_tool_name_code(tool: str, existing_codes: set[str]) -> str:
