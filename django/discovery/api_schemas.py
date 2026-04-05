@@ -76,6 +76,23 @@ class AssemblyScatterPoint(Schema):
     is_type_strain: bool = False
 
 
+# ── Detector / Region schemas ─────────────────────────────────────────────────
+
+
+class DetectorOut(Schema):
+    id: int
+    tool: str
+    version: str
+    tool_name_code: str
+
+
+class RegionOut(Schema):
+    id: int
+    accession: str
+    start_position: int
+    end_position: int
+
+
 # ── BGC schemas ───────────────────────────────────────────────────────────────
 
 
@@ -92,6 +109,8 @@ class BgcRosterItem(Schema):
     nearest_mibig_accession: Optional[str] = None
     nearest_mibig_distance: Optional[float] = None
     assembly_accession: Optional[str] = None
+    detector: Optional[DetectorOut] = None
+    region_accession: Optional[str] = None
 
 
 class PaginatedBgcRosterResponse(Schema):
@@ -146,6 +165,8 @@ class BgcDetail(Schema):
     domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
     natural_products: list[NaturalProductSummary] = []
+    detector: Optional[DetectorOut] = None
+    region_accession: Optional[str] = None
 
 
 class BgcScatterPoint(Schema):

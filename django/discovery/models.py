@@ -201,6 +201,109 @@ class ContigSequence(models.Model):
         return f"Sequence for {self.contig_id}"
 
 
+# ── Detector ──────────────────────────────────────────────────────────────────
+
+
+class DashboardDetector(models.Model):
+    """BGC detection tool + version lookup.
+
+    ``tool_name_code`` is a stable 3-letter uppercase code derived from ``tool``
+    (e.g. "ANT" for antiSMASH).  ``version_sort_key`` is a monotonically
+    increasing integer so that ``ORDER BY version_sort_key DESC`` yields the
+    latest version without parsing version strings in SQL.
+    """
+
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(
+        max_length=255,
+        unique=True,
+        db_index=True,
+        help_text='Human-readable label, e.g. "antiSMASH v7.1"',
+    )
+    tool = models.CharField(max_length=255, help_text='Tool name, e.g. "antiSMASH"')
+    version = models.CharField(max_length=50, help_text='Semver string, e.g. "7.1.0"')
+    tool_name_code = models.CharField(
+        max_length=3,
+        help_text='3-letter uppercase code, e.g. "ANT"',
+    )
+    version_sort_key = models.PositiveIntegerField(
+        default=0,
+        help_text="Monotonic integer for DB-level version ordering",
+    )
+
+    class Meta:
+        db_table = "discovery_detector"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["tool", "version"],
+                name="uniq_detector_tool_version",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+# ── Aggregated Region ─────────────────────────────────────────────────────────
+
+
+class DashboardRegion(models.Model):
+    """Aggregated genomic region on a contig where one or more BGC predictions
+    overlap.  The region accession (``MGYB{id:08}``) is the first component of
+    the structured BGC accession.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    contig = models.ForeignKey(
+        DashboardContig,
+        on_delete=models.CASCADE,
+        related_name="regions",
+        db_index=True,
+    )
+    start_position = models.IntegerField()
+    end_position = models.IntegerField()
+
+    @property
+    def accession(self):
+        return f"MGYB{self.id:08}"
+
+    class Meta:
+        db_table = "discovery_region"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contig", "start_position", "end_position"],
+                name="uniq_region_contig_pos",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["contig", "start_position", "end_position"],
+                name="idx_region_contig_pos",
+            ),
+        ]
+
+    def __str__(self):
+        return self.accession
+
+
+class RegionAccessionAlias(models.Model):
+    """Maps old region accessions to the surviving region after a merge."""
+
+    id = models.AutoField(primary_key=True)
+    alias_accession = models.CharField(max_length=50, unique=True, db_index=True)
+    region = models.ForeignKey(
+        DashboardRegion,
+        on_delete=models.CASCADE,
+        related_name="aliases",
+    )
+
+    class Meta:
+        db_table = "discovery_region_accession_alias"
+
+    def __str__(self):
+        return f"{self.alias_accession} → {self.region.accession}"
+
+
 # ── BGC ─────────────────────────────────────────────────────────────────────────
 
 
@@ -264,8 +367,33 @@ class DashboardBgc(models.Model):
     gcf_id = models.IntegerField(null=True, blank=True, db_index=True)
     distance_to_gcf_representative = models.FloatField(null=True, blank=True)
 
-    # Detector info (comma-separated names)
-    detector_names = models.CharField(max_length=255, blank=True, default="")
+    # Detector info
+    detector_names = models.CharField(
+        max_length=255, blank=True, default="",
+        help_text="DEPRECATED — use detector FK instead. Kept for backward compat.",
+    )
+    detector = models.ForeignKey(
+        DashboardDetector,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bgcs",
+        db_index=True,
+    )
+
+    # Region / accession
+    region = models.ForeignKey(
+        DashboardRegion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="bgcs",
+        db_index=True,
+    )
+    bgc_number = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="2-digit incremental within region + detector",
+    )
 
     # Cross-references to mgnify_bgcs (integers, NOT Django FKs)
     source_bgc_id = models.BigIntegerField(unique=True, db_index=True)

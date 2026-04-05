@@ -54,6 +54,7 @@ from discovery.api_schemas import (
     BgcStatsResponse,
     ChemicalQueryRequest,
     CoreDomain,
+    DetectorOut,
     AssemblyStatsResponse,
     PaginatedBgcRosterResponse,
     DomainArchitectureItem,
@@ -166,8 +167,29 @@ def _apply_assembly_filters(
         qs = qs.filter(biome_path__icontains=biome_lineage)
     if bgc_accession:
         bgc_accession = bgc_accession.strip()
-        if bgc_accession.upper().startswith("MGYB"):
+        upper = bgc_accession.upper()
+        if "." in upper and upper.startswith("MGYB"):
+            # Structured accession: exact match
             qs = qs.filter(bgcs__bgc_accession__iexact=bgc_accession).distinct()
+        elif upper.startswith("MGYB") and "." not in upper:
+            # Region-only accession: match BGCs in that region
+            from discovery.models import DashboardRegion, RegionAccessionAlias
+
+            region_ids = set()
+            try:
+                region_pk = int(upper.lstrip("MGYB"))
+                region_ids.add(region_pk)
+            except ValueError:
+                pass
+            # Also check aliases
+            alias_qs = RegionAccessionAlias.objects.filter(
+                alias_accession__iexact=upper
+            ).values_list("region_id", flat=True)
+            region_ids.update(alias_qs)
+            if region_ids:
+                qs = qs.filter(bgcs__region_id__in=region_ids).distinct()
+            else:
+                qs = qs.filter(bgcs__bgc_accession__icontains=bgc_accession).distinct()
         else:
             qs = qs.filter(bgcs__bgc_accession__icontains=bgc_accession).distinct()
     if assembly_accession:
@@ -175,8 +197,23 @@ def _apply_assembly_filters(
     return qs
 
 
-def _apply_bgc_filters(qs, *, assembly_ids: Optional[str] = None):
-    """Apply common BGC filters to a DashboardBgc queryset."""
+def _apply_bgc_filters(
+    qs,
+    *,
+    assembly_ids: Optional[str] = None,
+    tools: Optional[str] = None,
+    include_all_versions: bool = False,
+):
+    """Apply common BGC filters to a DashboardBgc queryset.
+
+    Parameters
+    ----------
+    tools:
+        Comma-separated tool names to filter by (e.g. "antiSMASH,GECCO").
+    include_all_versions:
+        If False (default), only the latest detector version per tool per
+        contig is returned.
+    """
     if assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
@@ -185,6 +222,17 @@ def _apply_bgc_filters(qs, *, assembly_ids: Optional[str] = None):
             qs = qs.none()
     else:
         qs = qs.none()
+
+    if tools:
+        tool_list = [t.strip() for t in tools.split(",") if t.strip()]
+        if tool_list:
+            qs = qs.filter(detector__tool__in=tool_list)
+
+    if not include_all_versions:
+        from discovery.querysets import latest_version_bgcs
+
+        qs = latest_version_bgcs(qs)
+
     return qs
 
 
@@ -314,9 +362,13 @@ def bgc_roster(
     order: str = "desc",
     page: int = 1,
     page_size: int = 25,
+    tools: Optional[str] = None,
+    include_all_versions: bool = False,
 ):
     qs = DashboardBgc.objects.select_related("assembly")
-    qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+    qs = _apply_bgc_filters(
+        qs, assembly_ids=assembly_ids, tools=tools, include_all_versions=include_all_versions,
+    )
 
     sort_map = {
         "novelty_score": "novelty_score",
@@ -419,7 +471,9 @@ def assembly_scatter(
 @discovery_router.get("/bgcs/{bgc_id}/", response=BgcDetail)
 def bgc_detail(request, bgc_id: int):
     try:
-        bgc = DashboardBgc.objects.select_related("assembly", "assembly__source").get(id=bgc_id)
+        bgc = DashboardBgc.objects.select_related(
+            "assembly", "assembly__source", "detector", "region",
+        ).get(id=bgc_id)
     except DashboardBgc.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
@@ -467,6 +521,17 @@ def bgc_detail(request, bgc_id: int):
             )
         )
 
+    detector_out = None
+    if bgc.detector:
+        detector_out = DetectorOut(
+            id=bgc.detector.id,
+            tool=bgc.detector.tool,
+            version=bgc.detector.version,
+            tool_name_code=bgc.detector.tool_name_code,
+        )
+
+    region_acc = bgc.region.accession if bgc.region else None
+
     return BgcDetail(
         id=bgc.id,
         accession=bgc.bgc_accession,
@@ -483,6 +548,8 @@ def bgc_detail(request, bgc_id: int):
         domain_architecture=domain_arch,
         parent_assembly=parent,
         natural_products=np_items,
+        detector=detector_out,
+        region_accession=region_acc,
     )
 
 
@@ -1179,13 +1246,17 @@ def bgc_stats(
     request,
     assembly_ids: Optional[str] = None,
     bgc_ids: Optional[str] = None,
+    tools: Optional[str] = None,
+    include_all_versions: bool = False,
 ):
     qs = DashboardBgc.objects.all()
     if bgc_ids:
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
     else:
-        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+        qs = _apply_bgc_filters(
+            qs, assembly_ids=assembly_ids, tools=tools, include_all_versions=include_all_versions,
+        )
     return compute_bgc_stats(qs)
 
 
@@ -1233,13 +1304,17 @@ def bgc_stats_export(
     format: str = "json",
     assembly_ids: Optional[str] = None,
     bgc_ids: Optional[str] = None,
+    tools: Optional[str] = None,
+    include_all_versions: bool = False,
 ):
     qs = DashboardBgc.objects.all()
     if bgc_ids:
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
     else:
-        qs = _apply_bgc_filters(qs, assembly_ids=assembly_ids)
+        qs = _apply_bgc_filters(
+            qs, assembly_ids=assembly_ids, tools=tools, include_all_versions=include_all_versions,
+        )
     stats = compute_bgc_stats(qs)
 
     if format == "tsv":
