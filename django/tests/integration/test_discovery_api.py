@@ -1,21 +1,24 @@
-"""Integration tests for the Discovery Platform API endpoints."""
+"""Integration tests for the Discovery Platform API endpoints.
+
+All data is seeded using discovery models directly — no mgnify_bgcs dependencies.
+"""
 
 import json
 
+import numpy as np
 import pytest
 from django.test import Client
 
-from mgnify_bgcs.models import Assembly, Bgc, BgcClass, BgcBgcClass, Contig, Domain, Protein, Cds, ProteinDomain, GeneCaller
 from discovery.models import (
-    BgcScore,
-    GCF,
-    GCFMembership,
-    GenomeScore,
-    MibigReference,
-    NaturalProduct,
+    BgcEmbedding,
+    DashboardAssembly,
+    DashboardBgc,
+    DashboardBgcClass,
+    DashboardContig,
+    DashboardDomain,
+    DashboardMibigReference,
+    DashboardNaturalProduct,
 )
-
-import numpy as np
 
 
 @pytest.fixture
@@ -23,87 +26,95 @@ def api_client():
     return Client()
 
 
-def _make_assembly(accession, family="Streptomycetaceae", is_type_strain=False):
-    return Assembly.objects.create(
-        accession=accession,
-        taxonomy_kingdom="Bacteria",
-        taxonomy_phylum="Actinomycetota",
-        taxonomy_class="Actinomycetes",
-        taxonomy_order="Streptomycetales",
-        taxonomy_family=family,
-        taxonomy_genus="Streptomyces",
-        taxonomy_species="Streptomyces coelicolor",
-        organism_name=f"S. coelicolor {accession}",
-        is_type_strain=is_type_strain,
-        assembly_size_mb=8.5,
-        assembly_quality=0.95,
+def _make_assembly(accession, taxonomy_path, is_type_strain=False, **kwargs):
+    defaults = {
+        "organism_name": f"Organism {accession}",
+        "dominant_taxonomy_path": taxonomy_path,
+        "dominant_taxonomy_label": f"Label {accession}",
+        "biome_path": "root.Environmental.Terrestrial.Soil",
+        "assembly_size_mb": 8.5,
+        "assembly_quality": 0.95,
+        "is_type_strain": is_type_strain,
+        "bgc_count": 0,
+        "l1_class_count": 0,
+        "bgc_diversity_score": 0.6,
+        "bgc_novelty_score": 0.4,
+        "bgc_density": 0.3,
+        "taxonomic_novelty": 0.5,
+    }
+    defaults.update(kwargs)
+    return DashboardAssembly.objects.create(
+        assembly_accession=accession,
+        source_assembly_id=abs(hash(accession)) % 1_000_000,
+        **defaults,
     )
 
 
-def _make_bgc(assembly, idx=0, class_name="Polyketide"):
-    contig = Contig.objects.create(
+def _make_contig(assembly, idx=0, taxonomy_path=""):
+    return DashboardContig.objects.create(
         assembly=assembly,
-        sequence_sha256=f"test_sha_{assembly.accession}_{idx}",
-        mgyc=f"MGYC_test_{assembly.accession}_{idx}",
-        length=100000,
-        sequence="ACGT" * 25000,
+        accession=f"CONTIG_{assembly.assembly_accession}_{idx}",
+        length=100_000,
+        taxonomy_path=taxonomy_path or assembly.dominant_taxonomy_path,
+        source_contig_id=abs(hash(f"{assembly.pk}_{idx}")) % 1_000_000,
     )
-    bgc = Bgc.objects.create(
+
+
+def _make_bgc(assembly, contig, idx=0, class_l1="Polyketide"):
+    return DashboardBgc.objects.create(
+        assembly=assembly,
         contig=contig,
-        identifier=f"test_bgc_{assembly.accession}_{idx}",
+        bgc_accession=f"MGYB{abs(hash(f'{assembly.pk}_{idx}')):08d}.ANT.1.01",
+        contig_accession=contig.accession,
         start_position=1000,
         end_position=20000,
-        embedding=np.random.randn(1152).astype(np.float32).tolist(),
-        metadata={"umap_x_coord": 1.0 + idx, "umap_y_coord": 2.0 + idx},
-    )
-    bc, _ = BgcClass.objects.get_or_create(name=class_name)
-    BgcBgcClass.objects.create(bgc=bgc, bgc_class=bc)
-    return bgc
-
-
-def _score_assembly(assembly, bgcs):
-    GenomeScore.objects.create(
-        assembly=assembly,
-        bgc_count=len(bgcs),
-        bgc_diversity_score=0.6,
-        bgc_novelty_score=0.4,
-        bgc_density=0.3,
-        taxonomic_novelty=0.5,
-        assembly_quality=0.9,
-        l1_class_count=2,
-    )
-
-
-def _score_bgc(bgc, classification_l1="Polyketide"):
-    BgcScore.objects.create(
-        bgc=bgc,
+        classification_path=class_l1,
+        classification_l1=class_l1,
         novelty_score=0.35,
         domain_novelty=0.2,
+        size_kb=19.0,
         nearest_mibig_accession="BGC0000001",
         nearest_mibig_distance=0.65,
-        size_kb=19.0,
-        classification_l1=classification_l1,
+        umap_x=1.0 + idx,
+        umap_y=2.0 + idx,
+        source_bgc_id=abs(hash(f"bgc_{assembly.pk}_{idx}")) % 1_000_000,
     )
 
 
 @pytest.fixture
 def seeded_data():
-    """Create a minimal test dataset."""
-    a1 = _make_assembly("TEST_ERZ001", family="Streptomycetaceae", is_type_strain=True)
-    a2 = _make_assembly("TEST_ERZ002", family="Pseudomonadaceae")
+    """Create a minimal test dataset using discovery models exclusively."""
+    tax_strepto = "Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces"
+    tax_pseudo = "Bacteria.Pseudomonadota.Gammaproteobacteria.Pseudomonadales.Pseudomonadaceae.Pseudomonas"
 
-    bgc1 = _make_bgc(a1, 0, "Polyketide")
-    bgc2 = _make_bgc(a1, 1, "NRP")
-    bgc3 = _make_bgc(a2, 0, "RiPP")
+    a1 = _make_assembly("TEST_ERZ001", tax_strepto, is_type_strain=True)
+    a2 = _make_assembly("TEST_ERZ002", tax_pseudo)
 
-    _score_assembly(a1, [bgc1, bgc2])
-    _score_assembly(a2, [bgc3])
+    c1 = _make_contig(a1, 0, tax_strepto)
+    c2 = _make_contig(a2, 0, tax_pseudo)
 
-    _score_bgc(bgc1, "Polyketide")
-    _score_bgc(bgc2, "NRP")
-    _score_bgc(bgc3, "RiPP")
+    bgc1 = _make_bgc(a1, c1, 0, "Polyketide")
+    bgc2 = _make_bgc(a1, c1, 1, "NRP")
+    bgc3 = _make_bgc(a2, c2, 0, "RiPP")
 
-    MibigReference.objects.create(
+    # Update assembly bgc_count
+    a1.bgc_count = 2
+    a1.l1_class_count = 2
+    a1.save()
+    a2.bgc_count = 1
+    a2.l1_class_count = 1
+    a2.save()
+
+    # Embeddings for similarity queries
+    vec1 = np.random.randn(1152).astype(np.float32).tolist()
+    vec2 = np.random.randn(1152).astype(np.float32).tolist()
+    vec3 = np.random.randn(1152).astype(np.float32).tolist()
+    BgcEmbedding.objects.create(bgc=bgc1, vector=vec1)
+    BgcEmbedding.objects.create(bgc=bgc2, vector=vec2)
+    BgcEmbedding.objects.create(bgc=bgc3, vector=vec3)
+
+    # MIBiG reference
+    DashboardMibigReference.objects.create(
         accession="BGC0000001",
         compound_name="erythromycin",
         bgc_class="Polyketide",
@@ -111,7 +122,8 @@ def seeded_data():
         umap_y=3.0,
     )
 
-    NaturalProduct.objects.create(
+    # Natural product
+    DashboardNaturalProduct.objects.create(
         name="test_compound",
         smiles="CC(=O)O",
         chemical_class_l1="Polyketide",
@@ -119,11 +131,18 @@ def seeded_data():
         bgc=bgc1,
     )
 
+    # BGC class catalog
+    DashboardBgcClass.objects.create(name="Polyketide", bgc_count=2)
+    DashboardBgcClass.objects.create(name="NRP", bgc_count=1)
+    DashboardBgcClass.objects.create(name="RiPP", bgc_count=1)
+
+    # Domain catalog
+    DashboardDomain.objects.create(acc="PF00109", name="Beta-ketoacyl synthase", ref_db="Pfam", bgc_count=1)
+
     return {
         "assemblies": [a1, a2],
         "bgcs": [bgc1, bgc2, bgc3],
     }
-
 
 
 @pytest.mark.django_db
@@ -149,7 +168,7 @@ class TestAssemblyRoster:
         assert data["items"][0]["is_type_strain"] is True
 
     def test_taxonomy_filter(self, api_client, seeded_data):
-        r = api_client.get("/api/dashboard/assemblies/?taxonomy_family=Pseudomonadaceae")
+        r = api_client.get("/api/dashboard/assemblies/?taxonomy_path=Bacteria.Pseudomonadota")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
 
@@ -249,21 +268,30 @@ class TestSimilarBgcQuery:
     def test_finds_similar(self, api_client, seeded_data):
         bid = seeded_data["bgcs"][0].id
         r = api_client.post(
-            f"/api/dashboard/query/similar-bgc/{bid}/?max_distance=2.0&w_similarity=0.4&w_novelty=0.3&w_completeness=0.15&w_domain_novelty=0.15",
+            f"/api/dashboard/query/similar-bgc/{bid}/?max_distance=2.0",
             content_type="application/json",
         )
         assert r.status_code == 200
         data = json.loads(r.content)
         assert "items" in data
-        # All items should not include the source BGC
         assert all(item["id"] != bid for item in data["items"])
 
-    def test_404_for_missing_bgc(self, api_client, seeded_data):
+    def test_400_for_missing_embedding(self, api_client, seeded_data):
+        # Create a BGC without an embedding
+        a = seeded_data["assemblies"][0]
+        c = a.contigs.first()
+        bgc = DashboardBgc.objects.create(
+            assembly=a, contig=c,
+            bgc_accession="MGYB_NO_EMB.ANT.1.01",
+            contig_accession=c.accession,
+            start_position=1, end_position=100,
+            source_bgc_id=999999,
+        )
         r = api_client.post(
-            "/api/dashboard/query/similar-bgc/99999/?w_similarity=0.4&w_novelty=0.3&w_completeness=0.15&w_domain_novelty=0.15",
+            f"/api/dashboard/query/similar-bgc/{bgc.id}/?max_distance=2.0",
             content_type="application/json",
         )
-        assert r.status_code == 404
+        assert r.status_code == 400
 
 
 @pytest.mark.django_db

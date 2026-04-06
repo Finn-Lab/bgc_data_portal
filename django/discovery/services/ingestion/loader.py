@@ -10,8 +10,10 @@ Expected directory layout::
       detectors.tsv
       assemblies.tsv
       contigs.tsv
+      contig_sequences.tsv  (optional)
       bgcs.tsv
-      cds.tsv              (optional)
+      cds.tsv               (optional)
+      cds_sequences.tsv     (optional)
       domains.tsv           (optional)
       embeddings_bgc.tsv    (optional)
       natural_products.tsv  (optional)
@@ -34,6 +36,8 @@ from discovery.models import (
     AssemblySource,
     BgcDomain,
     BgcEmbedding,
+    CdsSequence,
+    ContigSequence,
     DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
@@ -249,6 +253,47 @@ def load_contigs(
     return lookup
 
 
+def load_contig_sequences(data_dir: Path, contig_lookup: dict[str, int]) -> int:
+    """Load contig_sequences.tsv → ContigSequence.
+
+    Each row contains a base64-encoded zlib-compressed nucleotide sequence.
+    The loader base64-decodes and stores the raw zlib bytes directly.
+
+    Returns row count.
+    """
+    path = data_dir / "contig_sequences.tsv"
+    if not path.exists():
+        logger.info("contig_sequences.tsv not found, skipping")
+        return 0
+
+    batch: list[ContigSequence] = []
+    total = 0
+
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            contig_acc = row["contig_accession"]
+            contig_id = contig_lookup.get(contig_acc)
+            if contig_id is None:
+                logger.warning("Unknown contig %s for sequence, skipping", contig_acc)
+                continue
+
+            raw_zlib = base64.b64decode(row["sequence_base64"])
+            batch.append(ContigSequence(contig_id=contig_id, data=raw_zlib))
+
+            if len(batch) >= BATCH_SIZE:
+                ContigSequence.objects.bulk_create(batch, ignore_conflicts=True)
+                total += len(batch)
+                batch.clear()
+
+    if batch:
+        ContigSequence.objects.bulk_create(batch, ignore_conflicts=True)
+        total += len(batch)
+
+    logger.info("Loaded %d contig sequences", total)
+    return total
+
+
 def load_bgcs(
     data_dir: Path,
     contig_lookup: dict[str, int],
@@ -397,6 +442,50 @@ def load_cds(data_dir: Path, bgc_lookup: dict[int, int]) -> dict[tuple[int, str]
     for cds in DashboardCds.objects.select_related("bgc").only("id", "protein_id_str", "bgc__source_bgc_id"):
         cds_lookup[(cds.bgc.source_bgc_id, cds.protein_id_str)] = cds.id
     return cds_lookup
+
+
+def load_cds_sequences(
+    data_dir: Path,
+    cds_lookup: dict[tuple[int, str], int],
+) -> int:
+    """Load cds_sequences.tsv → CdsSequence.
+
+    Each row contains a base64-encoded zlib-compressed amino acid sequence.
+    The loader base64-decodes and stores the raw zlib bytes directly.
+
+    Returns row count.
+    """
+    path = data_dir / "cds_sequences.tsv"
+    if not path.exists():
+        logger.info("cds_sequences.tsv not found, skipping")
+        return 0
+
+    batch: list[CdsSequence] = []
+    total = 0
+
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            src_bgc = int(row["source_bgc_id"])
+            protein_id = row["protein_id_str"]
+            cds_id = cds_lookup.get((src_bgc, protein_id))
+            if cds_id is None:
+                continue
+
+            raw_zlib = base64.b64decode(row["sequence_base64"])
+            batch.append(CdsSequence(cds_id=cds_id, data=raw_zlib))
+
+            if len(batch) >= BATCH_SIZE:
+                CdsSequence.objects.bulk_create(batch, ignore_conflicts=True)
+                total += len(batch)
+                batch.clear()
+
+    if batch:
+        CdsSequence.objects.bulk_create(batch, ignore_conflicts=True)
+        total += len(batch)
+
+    logger.info("Loaded %d CDS sequences", total)
+    return total
 
 
 def load_domains(
@@ -728,11 +817,17 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # 3. Contigs
     contig_lookup = load_contigs(data_dir, assembly_lookup)
 
+    # 3.5. Contig sequences
+    load_contig_sequences(data_dir, contig_lookup)
+
     # 4. BGCs + regions
     bgc_lookup = load_bgcs(data_dir, contig_lookup, detector_lookup, assembly_lookup)
 
     # 5. CDS
     cds_lookup = load_cds(data_dir, bgc_lookup)
+
+    # 5.5. CDS sequences
+    load_cds_sequences(data_dir, cds_lookup)
 
     # 6. Domains
     load_domains(data_dir, bgc_lookup, cds_lookup)

@@ -666,6 +666,71 @@ def bgc_region(request, bgc_id: int):
     )
 
 
+@discovery_router.get("/bgcs/{bgc_id}/download/")
+def download_bgc(request, bgc_id: int, format: str = "gbk"):
+    """Download a single BGC in GBK, FNA, FAA, or JSON format."""
+    valid_formats = {"gbk", "fna", "faa", "json"}
+    fmt = format.lower()
+    if fmt not in valid_formats:
+        raise HttpError(400, f"Invalid format '{format}'. Use: {', '.join(sorted(valid_formats))}")
+
+    try:
+        bgc = (
+            DashboardBgc.objects.select_related("assembly", "contig", "contig__seq")
+            .prefetch_related("cds_list", "cds_list__seq", "bgc_domains")
+            .get(id=bgc_id)
+        )
+    except DashboardBgc.DoesNotExist:
+        raise HttpError(404, "BGC not found")
+
+    accession = bgc.bgc_accession
+
+    if fmt == "gbk":
+        from discovery.services.gbk import build_bgc_genbank_record
+        from io import StringIO
+        from Bio import SeqIO
+
+        record = build_bgc_genbank_record(bgc)
+        handle = StringIO()
+        SeqIO.write([record], handle, "genbank")
+        content = handle.getvalue()
+        return HttpResponse(
+            content,
+            content_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{accession}.gbk"'},
+        )
+
+    if fmt == "fna":
+        from discovery.services.export import build_bgc_fna
+
+        content = build_bgc_fna(bgc)
+        return HttpResponse(
+            content,
+            content_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{accession}.fna"'},
+        )
+
+    if fmt == "faa":
+        from discovery.services.export import build_bgc_faa
+
+        content = build_bgc_faa(bgc)
+        return HttpResponse(
+            content,
+            content_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{accession}.faa"'},
+        )
+
+    # json
+    from discovery.services.export import build_bgc_json
+
+    data = build_bgc_json(bgc)
+    return HttpResponse(
+        json.dumps(data, indent=2),
+        content_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{accession}.json"'},
+    )
+
+
 @discovery_router.get("/bgc-scatter/", response=list[BgcScatterPoint])
 def bgc_scatter(
     request,

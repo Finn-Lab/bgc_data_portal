@@ -1,9 +1,11 @@
 """
 factory_boy DjangoModelFactory definitions for discovery app models.
 
+All factories create discovery models directly — no mgnify_bgcs dependencies.
+
 Usage:
-    from tests.factories.discovery_models import GCFFactory
-    gcf = GCFFactory()
+    from tests.factories.discovery_models import DashboardAssemblyFactory
+    assembly = DashboardAssemblyFactory()
 """
 
 import random
@@ -13,14 +15,16 @@ import numpy as np
 from factory.django import DjangoModelFactory
 
 from discovery.models import (
-    GCF,
-    GCFMembership,
-    NaturalProduct,
-    MibigReference,
-    GenomeScore,
-    BgcScore,
+    BgcEmbedding,
+    DashboardAssembly,
+    DashboardBgc,
+    DashboardBgcClass,
+    DashboardContig,
+    DashboardDomain,
+    DashboardGCF,
+    DashboardMibigReference,
+    DashboardNaturalProduct,
 )
-from tests.factories.models import AssemblyFactory, BgcFactory
 
 
 def _embedding() -> list:
@@ -119,39 +123,145 @@ _SMILES_POOL = [
 ]
 
 
-class GCFFactory(DjangoModelFactory):
+# ── Core model factories ─────────────────────────────────────────────────────
+
+
+class DashboardAssemblyFactory(DjangoModelFactory):
     class Meta:
-        model = GCF
+        model = DashboardAssembly
+        django_get_or_create = ("assembly_accession",)
+
+    assembly_accession = factory.Sequence(lambda n: f"GCA_TEST_{n:06d}")
+    organism_name = factory.LazyFunction(
+        lambda: random.choice([
+            "Streptomyces coelicolor",
+            "Streptomyces griseus",
+            "Amycolatopsis mediterranei",
+            "Bacillus subtilis",
+            "Pseudomonas fluorescens",
+        ])
+    )
+    source_assembly_id = factory.Sequence(lambda n: n + 1)
+    assembly_type = 2  # genome
+    dominant_taxonomy_path = "Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces"
+    dominant_taxonomy_label = factory.LazyAttribute(lambda o: o.organism_name)
+    biome_path = "root.Environmental.Terrestrial.Soil"
+    is_type_strain = False
+    assembly_size_mb = factory.LazyFunction(lambda: round(random.uniform(4.0, 12.0), 2))
+    assembly_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
+
+    # Denormalized scores
+    bgc_count = factory.LazyFunction(lambda: random.randint(1, 30))
+    l1_class_count = factory.LazyFunction(lambda: random.randint(1, 7))
+    bgc_diversity_score = factory.LazyFunction(lambda: round(random.betavariate(3, 2), 4))
+    bgc_novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
+    bgc_density = factory.LazyFunction(lambda: round(random.betavariate(2, 3), 4))
+    taxonomic_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 4), 4))
+    pctl_diversity = factory.LazyFunction(lambda: round(random.uniform(0, 100), 1))
+    pctl_novelty = factory.LazyFunction(lambda: round(random.uniform(0, 100), 1))
+    pctl_density = factory.LazyFunction(lambda: round(random.uniform(0, 100), 1))
+
+
+class DashboardContigFactory(DjangoModelFactory):
+    class Meta:
+        model = DashboardContig
+
+    assembly = factory.SubFactory(DashboardAssemblyFactory)
+    accession = factory.Sequence(lambda n: f"MGYC_TEST_{n:08d}")
+    length = factory.LazyFunction(lambda: random.randint(50_000, 1_000_000))
+    taxonomy_path = "Bacteria.Actinomycetota.Actinomycetia.Streptomycetales.Streptomycetaceae.Streptomyces"
+    source_contig_id = factory.Sequence(lambda n: n + 1)
+
+
+class DashboardBgcFactory(DjangoModelFactory):
+    class Meta:
+        model = DashboardBgc
+        exclude = ("_classification",)
+
+    assembly = factory.SubFactory(DashboardAssemblyFactory)
+    contig = factory.SubFactory(DashboardContigFactory, assembly=factory.SelfAttribute("..assembly"))
+    bgc_accession = factory.Sequence(lambda n: f"MGYB{n:08d}.ANT.1.01")
+    contig_accession = factory.LazyAttribute(lambda o: o.contig.accession)
+    start_position = factory.LazyFunction(lambda: random.randint(1000, 50_000))
+    end_position = factory.LazyAttribute(lambda o: o.start_position + random.randint(5000, 80_000))
+    source_bgc_id = factory.Sequence(lambda n: n + 1)
+
+    # Classification
+    @factory.lazy_attribute
+    def _classification(self):
+        l1 = random.choice(list(_NP_CLASSES.keys()))
+        l2 = random.choice(list(_NP_CLASSES[l1].keys()))
+        l3 = random.choice(_NP_CLASSES[l1][l2])
+        return l1, l2, l3
+
+    @factory.lazy_attribute
+    def classification_l1(self):
+        return self._classification[0]
+
+    @factory.lazy_attribute
+    def classification_l2(self):
+        return self._classification[1]
+
+    @factory.lazy_attribute
+    def classification_l3(self):
+        return self._classification[2] or ""
+
+    @factory.lazy_attribute
+    def classification_path(self):
+        parts = [self.classification_l1, self.classification_l2]
+        if self.classification_l3:
+            parts.append(self.classification_l3)
+        return ".".join(parts)
+
+    # Scores
+    novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
+    domain_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 6), 4))
+    size_kb = factory.LazyFunction(lambda: round(random.uniform(5.0, 120.0), 2))
+    nearest_mibig_distance = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 4))
+
+    @factory.lazy_attribute
+    def nearest_mibig_accession(self):
+        return f"BGC{random.randint(1, 2500):07d}" if self.nearest_mibig_distance < 0.5 else ""
+
+    # Flags
+    is_partial = False
+    is_validated = factory.LazyFunction(lambda: random.random() < 0.05)
+    is_mibig = False
+
+    # UMAP
+    umap_x = factory.LazyFunction(lambda: round(random.uniform(-10, 10), 4))
+    umap_y = factory.LazyFunction(lambda: round(random.uniform(-10, 10), 4))
+
+
+# ── Related model factories ──────────────────────────────────────────────────
+
+
+class DashboardGCFFactory(DjangoModelFactory):
+    class Meta:
+        model = DashboardGCF
         django_get_or_create = ("family_id",)
 
     family_id = factory.Sequence(lambda n: f"GCF_{n:06d}")
-    representative_bgc = factory.SubFactory(BgcFactory)
+    representative_bgc = factory.SubFactory(DashboardBgcFactory)
     member_count = factory.LazyFunction(lambda: random.randint(3, 50))
     known_chemistry_annotation = factory.LazyFunction(
-        lambda: random.choice([None, None, "polyketide synthase", "NRPS", "lanthipeptide", "siderophore"])
+        lambda: random.choice(["", "", "polyketide synthase", "NRPS", "lanthipeptide", "siderophore"])
     )
     mibig_accession = factory.LazyFunction(
-        lambda: f"BGC{random.randint(1, 2500):07d}" if random.random() < 0.3 else None
+        lambda: f"BGC{random.randint(1, 2500):07d}" if random.random() < 0.3 else ""
     )
+    mean_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
+    mibig_count = factory.LazyFunction(lambda: random.randint(0, 5))
 
 
-class GCFMembershipFactory(DjangoModelFactory):
+class DashboardNaturalProductFactory(DjangoModelFactory):
     class Meta:
-        model = GCFMembership
-
-    gcf = factory.SubFactory(GCFFactory)
-    bgc = factory.SubFactory(BgcFactory)
-    distance_to_representative = factory.LazyFunction(lambda: round(random.uniform(0.0, 0.5), 4))
-
-
-class NaturalProductFactory(DjangoModelFactory):
-    class Meta:
-        model = NaturalProduct
+        model = DashboardNaturalProduct
         exclude = ("_np_class",)
 
     name = factory.Faker("word")
     smiles = factory.LazyFunction(lambda: random.choice(_SMILES_POOL))
-    bgc = factory.SubFactory(BgcFactory)
+    bgc = factory.SubFactory(DashboardBgcFactory)
 
     @factory.lazy_attribute
     def _np_class(self):
@@ -170,7 +280,7 @@ class NaturalProductFactory(DjangoModelFactory):
 
     @factory.lazy_attribute
     def chemical_class_l3(self):
-        return self._np_class[2]
+        return self._np_class[2] or ""
 
     @factory.lazy_attribute
     def producing_organism(self):
@@ -178,13 +288,13 @@ class NaturalProductFactory(DjangoModelFactory):
             "Streptomyces coelicolor", "Streptomyces griseus",
             "Amycolatopsis mediterranei", "Bacillus subtilis",
             "Pseudomonas fluorescens", "Myxococcus xanthus",
-            None,
+            "",
         ])
 
 
-class MibigReferenceFactory(DjangoModelFactory):
+class DashboardMibigReferenceFactory(DjangoModelFactory):
     class Meta:
-        model = MibigReference
+        model = DashboardMibigReference
         django_get_or_create = ("accession",)
         exclude = ("_compound_info",)
 
@@ -212,50 +322,31 @@ class MibigReferenceFactory(DjangoModelFactory):
         return round(random.uniform(-10, 10), 4)
 
 
-class AssemblyScoreFactory(DjangoModelFactory):
+class BgcEmbeddingFactory(DjangoModelFactory):
     class Meta:
-        model = GenomeScore
+        model = BgcEmbedding
 
-    assembly = factory.SubFactory(AssemblyFactory)
-    bgc_count = factory.LazyFunction(lambda: random.randint(1, 30))
-    bgc_diversity_score = factory.LazyFunction(lambda: round(random.betavariate(3, 2), 4))
-    bgc_novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
-    bgc_density = factory.LazyFunction(lambda: round(random.betavariate(2, 3), 4))
-    taxonomic_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 4), 4))
-    assembly_quality = factory.LazyFunction(lambda: round(random.betavariate(8, 2), 4))
-    l1_class_count = factory.LazyFunction(lambda: random.randint(1, 7))
+    bgc = factory.SubFactory(DashboardBgcFactory)
+    vector = factory.LazyFunction(_embedding)
 
 
-class BgcScoreFactory(DjangoModelFactory):
+class DashboardBgcClassFactory(DjangoModelFactory):
     class Meta:
-        model = BgcScore
+        model = DashboardBgcClass
+        django_get_or_create = ("name",)
 
-    bgc = factory.SubFactory(BgcFactory)
-    novelty_score = factory.LazyFunction(lambda: round(random.betavariate(2, 5), 4))
-    domain_novelty = factory.LazyFunction(lambda: round(random.betavariate(2, 6), 4))
-    nearest_mibig_distance = factory.LazyFunction(lambda: round(random.uniform(0.0, 1.0), 4))
-    size_kb = factory.LazyFunction(lambda: round(random.uniform(5.0, 120.0), 2))
-    is_validated = factory.LazyFunction(lambda: random.random() < 0.05)
+    name = factory.LazyFunction(
+        lambda: random.choice(["Polyketide", "NRP", "Alkaloid", "RiPP", "Terpene", "Saccharide", "Other"])
+    )
+    bgc_count = factory.LazyFunction(lambda: random.randint(1, 500))
 
-    @factory.lazy_attribute
-    def nearest_mibig_accession(self):
-        return f"BGC{random.randint(1, 2500):07d}" if self.nearest_mibig_distance < 0.5 else None
 
-    @factory.lazy_attribute
-    def classification_l1(self):
-        return random.choice(["Polyketide", "NRP", "Alkaloid", "RiPP", "Saccharide", "Other", "Terpene"])
+class DashboardDomainFactory(DjangoModelFactory):
+    class Meta:
+        model = DashboardDomain
+        django_get_or_create = ("acc",)
 
-    @factory.lazy_attribute
-    def classification_l2(self):
-        l1 = self.classification_l1
-        if l1 in _NP_CLASSES:
-            return random.choice(list(_NP_CLASSES[l1].keys()))
-        return None
-
-    @factory.lazy_attribute
-    def classification_l3(self):
-        l1 = self.classification_l1
-        l2 = self.classification_l2
-        if l1 in _NP_CLASSES and l2 in _NP_CLASSES.get(l1, {}):
-            return random.choice(_NP_CLASSES[l1][l2])
-        return None
+    acc = factory.Sequence(lambda n: f"PF{n:05d}")
+    name = factory.Faker("word")
+    ref_db = "Pfam"
+    bgc_count = factory.LazyFunction(lambda: random.randint(1, 200))
