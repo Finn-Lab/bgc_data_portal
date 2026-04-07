@@ -129,8 +129,8 @@ export function AssemblyAssessmentView() {
         <PanelContainer title="BGC Embeddings Map" className="min-h-[400px]">
           <ChemicalSpaceMap
             points={result.chemical_space_points}
-            mibigPoints={result.mibig_reference_points}
-            meanMibigDistance={result.mean_nearest_mibig_distance}
+            validatedPoints={result.validated_reference_points}
+            meanValidatedDistance={result.mean_nearest_validated_distance}
             sparseFraction={result.sparse_fraction}
           />
         </PanelContainer>

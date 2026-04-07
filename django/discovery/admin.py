@@ -7,7 +7,6 @@ from .models import (
     BgcDomain,
     DashboardGCF,
     DashboardNaturalProduct,
-    DashboardMibigReference,
     DashboardBgcClass,
     DashboardDomain,
     PrecomputedStats,
@@ -36,7 +35,7 @@ class DashboardBgcAdmin(admin.ModelAdmin):
 
 @admin.register(DashboardGCF)
 class DashboardGCFAdmin(admin.ModelAdmin):
-    list_display = ("family_id", "member_count", "known_chemistry_annotation", "mibig_accession")
+    list_display = ("family_id", "member_count", "known_chemistry_annotation", "validated_accession")
     search_fields = ("family_id", "known_chemistry_annotation")
 
 
@@ -44,12 +43,6 @@ class DashboardGCFAdmin(admin.ModelAdmin):
 class DashboardNaturalProductAdmin(admin.ModelAdmin):
     list_display = ("name", "np_class_path")
     search_fields = ("name", "smiles")
-
-
-@admin.register(DashboardMibigReference)
-class DashboardMibigReferenceAdmin(admin.ModelAdmin):
-    list_display = ("accession", "compound_name", "bgc_class")
-    search_fields = ("accession", "compound_name")
 
 
 @admin.register(DashboardBgcClass)

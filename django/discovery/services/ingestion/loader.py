@@ -17,8 +17,6 @@ Expected directory layout::
       domains.tsv           (optional)
       embeddings_bgc.tsv    (optional)
       natural_products.tsv  (optional)
-      mibig_references.tsv  (optional)
-      gcf.tsv               (optional)
 """
 
 from __future__ import annotations
@@ -29,8 +27,7 @@ import logging
 import struct
 from pathlib import Path
 
-from django.db import connection, transaction
-from django.db.models import Avg, Count, F, Q
+from django.db.models import Avg, Count
 from django.db.models.expressions import RawSQL
 
 from discovery.models import (
@@ -46,11 +43,8 @@ from discovery.models import (
     DashboardContig,
     DashboardDetector,
     DashboardDomain,
-    DashboardGCF,
-    DashboardMibigReference,
     DashboardNaturalProduct,
     DashboardRegion,
-    PrecomputedStats,
     RegionAccessionAlias,
 )
 
@@ -69,8 +63,6 @@ ALL_DISCOVERY_TABLES = [
     "discovery_cds_sequence",
     "discovery_cds",
     "discovery_natural_product",
-    "discovery_mibig_reference",
-    "discovery_gcf",
     "discovery_precomputed_stats",
     "discovery_bgc",
     "discovery_region",
@@ -363,6 +355,16 @@ def load_bgcs(
 
             assembly_id = contig_to_assembly.get(contig_id)
 
+            # Support both old (nearest_mibig_*) and new (nearest_validated_*) column names
+            nearest_val_acc = row.get(
+                "nearest_validated_accession",
+                row.get("nearest_mibig_accession", ""),
+            )
+            raw_dist = row.get(
+                "nearest_validated_distance",
+                row.get("nearest_mibig_distance", ""),
+            )
+
             batch.append(
                 DashboardBgc(
                     assembly_id=assembly_id,
@@ -374,13 +376,13 @@ def load_bgcs(
                     novelty_score=float(row.get("novelty_score", 0)),
                     domain_novelty=float(row.get("domain_novelty", 0)),
                     size_kb=float(row.get("size_kb", 0)),
-                    nearest_mibig_accession=row.get("nearest_mibig_accession", ""),
-                    nearest_mibig_distance=float(row["nearest_mibig_distance"]) if row.get("nearest_mibig_distance") else None,
+                    nearest_validated_accession=nearest_val_acc,
+                    nearest_validated_distance=float(raw_dist) if raw_dist else None,
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
-                    is_mibig=row.get("is_mibig", "").lower() in ("true", "1"),
                     umap_x=float(row.get("umap_x", 0)),
                     umap_y=float(row.get("umap_y", 0)),
+                    gene_cluster_family=row.get("gene_cluster_family", ""),
                     detector_id=detector_id,
                     region_id=region_id,
                     bgc_number=bgc_number,
@@ -650,101 +652,6 @@ def load_natural_products(
     return total
 
 
-def load_mibig_references(
-    data_dir: Path,
-    bgc_lookup: dict[tuple[str, int, int, str], int],
-) -> int:
-    """Load mibig_references.tsv → DashboardMibigReference."""
-    path = data_dir / "mibig_references.tsv"
-    if not path.exists():
-        logger.info("mibig_references.tsv not found, skipping")
-        return 0
-
-    batch: list[DashboardMibigReference] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            embedding = None
-            if row.get("embedding_base64"):
-                raw = base64.b64decode(row["embedding_base64"])
-                embedding = list(struct.unpack(f"<{len(raw)//4}f", raw))
-
-            dashboard_bgc_id = None
-            if row.get("contig_sha256") and row.get("bgc_start"):
-                dashboard_bgc_id = _resolve_bgc_key(row, bgc_lookup)
-
-            batch.append(
-                DashboardMibigReference(
-                    accession=row["accession"],
-                    compound_name=row.get("compound_name", ""),
-                    bgc_class=row.get("bgc_class", ""),
-                    umap_x=float(row.get("umap_x", 0)),
-                    umap_y=float(row.get("umap_y", 0)),
-                    embedding=embedding,
-                    dashboard_bgc_id=dashboard_bgc_id,
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                DashboardMibigReference.objects.bulk_create(batch, ignore_conflicts=True)
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        DashboardMibigReference.objects.bulk_create(batch, ignore_conflicts=True)
-        total += len(batch)
-
-    logger.info("Loaded %d MIBiG references", total)
-    return total
-
-
-def load_gcf(
-    data_dir: Path,
-    bgc_lookup: dict[tuple[str, int, int, str], int],
-) -> int:
-    """Load gcf.tsv → DashboardGCF."""
-    path = data_dir / "gcf.tsv"
-    if not path.exists():
-        logger.info("gcf.tsv not found, skipping")
-        return 0
-
-    batch: list[DashboardGCF] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            rep_id = None
-            if row.get("contig_sha256") and row.get("bgc_start"):
-                rep_id = _resolve_bgc_key(row, bgc_lookup)
-
-            batch.append(
-                DashboardGCF(
-                    family_id=row["family_id"],
-                    representative_bgc_id=rep_id,
-                    member_count=int(row.get("member_count", 0)),
-                    known_chemistry_annotation=row.get("known_chemistry_annotation", ""),
-                    mibig_accession=row.get("mibig_accession", ""),
-                    mean_novelty=float(row.get("mean_novelty", 0)),
-                    mibig_count=int(row.get("mibig_count", 0)),
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                DashboardGCF.objects.bulk_create(batch, ignore_conflicts=True)
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        DashboardGCF.objects.bulk_create(batch, ignore_conflicts=True)
-        total += len(batch)
-
-    logger.info("Loaded %d GCFs", total)
-    return total
-
-
 # ── Post-load computations ────────────────────────────────────────────────────
 
 
@@ -874,13 +781,7 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # 8. Natural products
     load_natural_products(data_dir, bgc_lookup)
 
-    # 9. MIBiG references
-    load_mibig_references(data_dir, bgc_lookup)
-
-    # 10. GCFs
-    load_gcf(data_dir, bgc_lookup)
-
-    # 11–12. Post-load computations
+    # 9–10. Post-load computations
     if not skip_stats:
         compute_assembly_scores()
         compute_catalog_counts()

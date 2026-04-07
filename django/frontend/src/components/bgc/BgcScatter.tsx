@@ -60,7 +60,7 @@ interface BgcScatterProps {
 }
 
 export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId, markerSymbol }: BgcScatterProps = {}) {
-  const [showMibig, setShowMibig] = useState(true);
+  const [showValidated, setShowValidated] = useState(true);
   const mode = useModeStore((s) => s.mode);
   const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
@@ -120,7 +120,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
     yAxis,
     assemblyIds: assemblyIds as number[] | undefined,
     bgcIds,
-    includeMibig: showMibig,
+    includeValidated: showValidated,
     enabled: hasData && !useSimilarityAxis,
   });
 
@@ -137,7 +137,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
       x: axisValue(item, xAxis),
       y: axisValue(item, yAxis),
       bgc_class: item.classification_path?.split('.')[0] || 'Other',
-      is_mibig: false,
+      is_validated: false,
       compound_name: null,
       novelty_score: item.novelty_score,
       domain_novelty: item.domain_novelty,
@@ -151,8 +151,8 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
   const traces = useMemo(() => {
     if (!points?.length) return [];
 
-    const mibigPts = points.filter((p) => p.is_mibig);
-    const bgcPts = points.filter((p) => !p.is_mibig);
+    const validatedPts = points.filter((p) => p.is_validated);
+    const bgcPts = points.filter((p) => !p.is_validated);
 
     // Group BGC points by class
     const groups = new Map<string, typeof bgcPts>();
@@ -168,16 +168,16 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
 
     const result: Plotly.Data[] = [];
 
-    // MIBiG reference trace
-    if (mibigPts.length > 0 && showMibig) {
+    // Validated reference trace
+    if (validatedPts.length > 0 && showValidated) {
       result.push({
         type: "scatter" as const,
         mode: "markers" as const,
-        name: "MIBiG references",
-        x: mibigPts.map((p) => p.x),
-        y: mibigPts.map((p) => p.y),
-        customdata: mibigPts.map((p) => p.id),
-        text: mibigPts.map((p) => p.compound_name ?? p.bgc_class),
+        name: "Validated references",
+        x: validatedPts.map((p) => p.x),
+        y: validatedPts.map((p) => p.y),
+        customdata: validatedPts.map((p) => p.id),
+        text: validatedPts.map((p) => p.compound_name ?? p.bgc_class),
         hoverinfo: "text" as const,
         marker: {
           symbol: "triangle-up",
@@ -238,7 +238,7 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
     }
 
     return result;
-  }, [points, activeBgcId, showMibig, highlightBgcId]);
+  }, [points, activeBgcId, showValidated, highlightBgcId]);
 
   const handleClick = useCallback(
     (event: Plotly.PlotMouseEvent) => {
@@ -297,12 +297,12 @@ export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId
           </SelectContent>
         </Select>
         <Checkbox
-          id="show-mibig"
-          checked={showMibig}
-          onCheckedChange={(v) => setShowMibig(v === true)}
+          id="show-validated"
+          checked={showValidated}
+          onCheckedChange={(v) => setShowValidated(v === true)}
         />
-        <Label htmlFor="show-mibig" className="text-xs cursor-pointer">
-          Show MIBiG references
+        <Label htmlFor="show-validated" className="text-xs cursor-pointer">
+          Show validated references
         </Label>
       </div>
       <Plot

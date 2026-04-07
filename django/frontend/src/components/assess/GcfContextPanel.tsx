@@ -52,7 +52,7 @@ export function GcfContextPanel({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Family" value={gcfContext.family_id} />
         <Stat label="Members" value={gcfContext.member_count.toString()} />
-        <Stat label="MIBiG" value={gcfContext.mibig_count > 0 ? "Yes" : "No"} />
+        <Stat label="Validated" value={gcfContext.validated_count > 0 ? "Yes" : "No"} />
         <Stat label="Mean Novelty" value={gcfContext.mean_novelty.toFixed(3)} />
       </div>
 

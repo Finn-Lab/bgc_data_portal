@@ -139,14 +139,14 @@ def build_bgc_json(bgc: DashboardBgc) -> dict:
         "scores": {
             "novelty_score": bgc.novelty_score,
             "domain_novelty": bgc.domain_novelty,
-            "nearest_mibig_accession": bgc.nearest_mibig_accession,
-            "nearest_mibig_distance": bgc.nearest_mibig_distance,
+            "nearest_validated_accession": bgc.nearest_validated_accession,
+            "nearest_validated_distance": bgc.nearest_validated_distance,
         },
         "flags": {
             "is_partial": bgc.is_partial,
             "is_validated": bgc.is_validated,
-            "is_mibig": bgc.is_mibig,
         },
+        "gene_cluster_family": bgc.gene_cluster_family,
         "umap": {"x": bgc.umap_x, "y": bgc.umap_y},
         "cds": cds_items,
         "domains": domain_items,

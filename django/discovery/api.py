@@ -37,7 +37,6 @@ from discovery.models import (
     DashboardDomain,
     DashboardGCF,
     DashboardAssembly,
-    DashboardMibigReference,
     DashboardNaturalProduct,
     PrecomputedStats,
 )
@@ -63,7 +62,7 @@ from discovery.api_schemas import (
     AssemblyDetail,
     AssemblyRosterItem,
     AssemblyScatterPoint,
-    MibigReferencePoint,
+    ValidatedReferencePoint,
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
@@ -340,8 +339,8 @@ def assembly_bgc_roster(request, assembly_id: int):
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            nearest_mibig_accession=bgc.nearest_mibig_accession or None,
-            nearest_mibig_distance=bgc.nearest_mibig_distance,
+            nearest_validated_accession=bgc.nearest_validated_accession or None,
+            nearest_validated_distance=bgc.nearest_validated_distance,
         )
         for bgc in bgcs
     ]
@@ -387,8 +386,8 @@ def bgc_roster(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            nearest_mibig_accession=bgc.nearest_mibig_accession or None,
-            nearest_mibig_distance=bgc.nearest_mibig_distance,
+            nearest_validated_accession=bgc.nearest_validated_accession or None,
+            nearest_validated_distance=bgc.nearest_validated_distance,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
         )
         for bgc in page_qs
@@ -528,8 +527,8 @@ def bgc_detail(request, bgc_id: int):
         novelty_score=bgc.novelty_score,
         domain_novelty=bgc.domain_novelty,
         is_partial=bgc.is_partial,
-        nearest_mibig_accession=bgc.nearest_mibig_accession or None,
-        nearest_mibig_distance=bgc.nearest_mibig_distance,
+        nearest_validated_accession=bgc.nearest_validated_accession or None,
+        nearest_validated_distance=bgc.nearest_validated_distance,
         is_validated=bgc.is_validated,
         domain_architecture=domain_arch,
         parent_assembly=parent,
@@ -722,7 +721,7 @@ def bgc_scatter(
     request,
     x_axis: str = "novelty_score",
     y_axis: str = "domain_novelty",
-    include_mibig: bool = True,
+    include_validated: bool = True,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
     bgc_ids: Optional[str] = None,
@@ -758,32 +757,13 @@ def bgc_scatter(
             x=getattr(bgc, x_axis, 0.0) or 0.0,
             y=getattr(bgc, y_axis, 0.0) or 0.0,
             bgc_class=bgc.classification_path.split(".")[0] if bgc.classification_path else "",
-            is_mibig=False,
+            is_validated=bgc.is_validated,
             compound_name=None,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
         )
         for bgc in qs
     ]
-
-    if include_mibig:
-        mibig_refs = DashboardMibigReference.objects.select_related("dashboard_bgc").all()
-        for ref in mibig_refs:
-            db_bgc = ref.dashboard_bgc
-            x_val = getattr(db_bgc, x_axis, 0.0) if db_bgc else 0.0
-            y_val = getattr(db_bgc, y_axis, 0.0) if db_bgc else 0.0
-            points.append(
-                BgcScatterPoint(
-                    id=ref.id,
-                    x=x_val or 0.0,
-                    y=y_val or 0.0,
-                    bgc_class=ref.bgc_class,
-                    is_mibig=True,
-                    compound_name=ref.compound_name,
-                    novelty_score=db_bgc.novelty_score if db_bgc else 0.0,
-                    domain_novelty=db_bgc.domain_novelty if db_bgc else 0.0,
-                )
-            )
 
     return points
 

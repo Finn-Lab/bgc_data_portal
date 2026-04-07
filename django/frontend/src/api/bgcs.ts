@@ -10,7 +10,7 @@ export function fetchBgcRegion(bgcId: number) {
 }
 
 export interface BgcScatterParams {
-  include_mibig?: boolean;
+  include_validated?: boolean;
   bgc_class?: string;
   assembly_ids?: string;
   bgc_ids?: string;

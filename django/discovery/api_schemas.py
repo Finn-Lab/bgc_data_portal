@@ -96,8 +96,8 @@ class BgcRosterItem(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_mibig_accession: Optional[str] = None
-    nearest_mibig_distance: Optional[float] = None
+    nearest_validated_accession: Optional[str] = None
+    nearest_validated_distance: Optional[float] = None
     assembly_accession: Optional[str] = None
     detector: Optional[DetectorOut] = None
     region_accession: Optional[str] = None
@@ -142,8 +142,8 @@ class BgcDetail(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_mibig_accession: Optional[str] = None
-    nearest_mibig_distance: Optional[float] = None
+    nearest_validated_accession: Optional[str] = None
+    nearest_validated_distance: Optional[float] = None
     is_validated: bool = False
     domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
@@ -157,17 +157,16 @@ class BgcScatterPoint(Schema):
     x: float
     y: float
     bgc_class: str = ""
-    is_mibig: bool = False
+    is_validated: bool = False
     compound_name: Optional[str] = None
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     similarity_score: Optional[float] = None
 
 
-class MibigReferencePoint(Schema):
+class ValidatedReferencePoint(Schema):
     accession: str
-    compound_name: str
-    bgc_class: str
+    classification_path: str = ""
     umap_x: float
     umap_y: float
 
@@ -394,7 +393,7 @@ class BgcNoveltyItem(Schema):
     bgc_id: int
     accession: str
     classification_path: str = ""
-    novelty_vs_mibig: float = 0.0
+    novelty_vs_validated: float = 0.0
     novelty_vs_db: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
@@ -406,7 +405,7 @@ class RedundancyCell(Schema):
     classification_path: str = ""
     gcf_family_id: Optional[str] = None
     gcf_member_count: int = 0
-    gcf_has_mibig: bool = False
+    gcf_has_validated: bool = False
     gcf_has_type_strain: bool = False
     status: str = "novel_gcf"  # "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain"
 
@@ -417,7 +416,7 @@ class AssessChemicalSpacePoint(Schema):
     umap_x: float
     umap_y: float
     classification_path: str = ""
-    nearest_mibig_distance: float = 0.0
+    nearest_validated_distance: float = 0.0
     is_sparse: bool = False
 
 
@@ -446,8 +445,8 @@ class AssemblyAssessmentResponse(Schema):
     redundancy_matrix: list[RedundancyCell] = []
     # Chemical space
     chemical_space_points: list[AssessChemicalSpacePoint] = []
-    mibig_reference_points: list[MibigReferencePoint] = []
-    mean_nearest_mibig_distance: float = 0.0
+    validated_reference_points: list[ValidatedReferencePoint] = []
+    mean_nearest_validated_distance: float = 0.0
     sparse_fraction: float = 0.0
     # Radar chart reference data
     radar_references: list[RadarReference] = []
@@ -474,7 +473,6 @@ class GcfMemberPoint(Schema):
     umap_x: float
     umap_y: float
     is_type_strain: bool = False
-    distance_to_representative: float = 0.0
     accession: str = ""
 
 
@@ -482,10 +480,10 @@ class GcfContext(Schema):
     gcf_id: int
     family_id: str
     member_count: int = 0
-    mibig_count: int = 0
+    validated_count: int = 0
     mean_novelty: float = 0.0
     known_chemistry_annotation: Optional[str] = None
-    mibig_accession: Optional[str] = None
+    validated_accession: Optional[str] = None
     domain_frequency: list[GcfDomainFrequency] = []
     taxonomy_distribution: list[GcfTaxonomyCount] = []
     member_points: list[GcfMemberPoint] = []
@@ -507,12 +505,12 @@ class NoveltyDecomposition(Schema):
 
 class AssessNearestNeighborPoint(Schema):
     bgc_id: Optional[int] = None
-    mibig_accession: Optional[str] = None
+    validated_accession: Optional[str] = None
     umap_x: float = 0.0
     umap_y: float = 0.0
     distance: float = 0.0
     label: str = ""
-    is_mibig: bool = False
+    is_validated: bool = False
 
 
 class BgcAssessmentResponse(Schema):
@@ -530,8 +528,8 @@ class BgcAssessmentResponse(Schema):
     # Chemical space
     submitted_point: Optional[AssessChemicalSpacePoint] = None
     nearest_neighbors: list[AssessNearestNeighborPoint] = []
-    mibig_reference_points: list[MibigReferencePoint] = []
+    validated_reference_points: list[ValidatedReferencePoint] = []
     # Domain architecture for comparison
     submitted_domains: list[DomainArchitectureItem] = []
-    nearest_mibig_accession: Optional[str] = None
-    nearest_mibig_bgc_id: Optional[int] = None
+    nearest_validated_accession: Optional[str] = None
+    nearest_validated_bgc_id: Optional[int] = None

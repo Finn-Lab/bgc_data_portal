@@ -65,6 +65,16 @@ def assess_bgc(self, bgc_id: int) -> bool:
     return True
 
 
+@shared_task(name="discovery.tasks.recompute_scores", bind=True, acks_late=True)
+def recompute_scores_task(self) -> bool:
+    """Recompute all discovery scores (novelty, assembly, GCF, catalogs, UMAP)."""
+    from discovery.services.scores import recompute_all_scores
+
+    recompute_all_scores()
+    log.info("Score recomputation complete (task %s)", self.request.id)
+    return True
+
+
 @shared_task(name="discovery.tasks.chemical_similarity_search", bind=True, acks_late=True)
 def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -> dict[int, float]:
     """Compute Tanimoto similarity of a SMILES query against all DashboardNaturalProduct records.

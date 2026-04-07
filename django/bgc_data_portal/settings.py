@@ -134,6 +134,9 @@ CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND")
 CELERY_RESULT_EXPIRES = int(os.getenv("CELERY_RESULT_EXPIRES", "3600"))
 CELERY_IGNORE_RESULT = False
 CELERY_STORE_NULL_RESULT = True
+CELERY_TASK_ROUTES = {
+    "discovery.tasks.recompute_scores": {"queue": "scores"},
+}
 
 
 # REST Framework

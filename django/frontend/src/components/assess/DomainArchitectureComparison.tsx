@@ -6,17 +6,17 @@ import type { RegionCds } from "@/api/types";
 
 interface DomainArchitectureComparisonProps {
   bgcId: number;
-  nearestMibigBgcId: number | null;
-  nearestMibigAccession: string | null;
+  nearestValidatedBgcId: number | null;
+  nearestValidatedAccession: string | null;
 }
 
 export function DomainArchitectureComparison({
   bgcId,
-  nearestMibigBgcId,
-  nearestMibigAccession,
+  nearestValidatedBgcId,
+  nearestValidatedAccession,
 }: DomainArchitectureComparisonProps) {
   const submittedRegion = useBgcRegion(bgcId);
-  const mibigRegion = useBgcRegion(nearestMibigBgcId);
+  const validatedRegion = useBgcRegion(nearestValidatedBgcId);
 
   const [selectedCds, setSelectedCds] = useState<string | null>(null);
 
@@ -52,33 +52,33 @@ export function DomainArchitectureComparison({
         />
       </div>
 
-      {/* Nearest MIBiG region */}
-      {nearestMibigBgcId && (
+      {/* Nearest Validated region */}
+      {nearestValidatedBgcId && (
         <div>
           <p className="mb-1 text-xs font-medium">
-            Nearest MIBiG: {nearestMibigAccession || "Unknown"}
+            Nearest Validated: {nearestValidatedAccession || "Unknown"}
           </p>
-          {mibigRegion.isLoading ? (
+          {validatedRegion.isLoading ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
-          ) : mibigRegion.data ? (
+          ) : validatedRegion.data ? (
             <RegionPlot
-              data={mibigRegion.data}
+              data={validatedRegion.data}
               onCdsClick={handleCdsClick}
               selectedCdsId={selectedCds}
             />
           ) : (
             <p className="py-2 text-xs text-muted-foreground">
-              Region data not available for MIBiG reference.
+              Region data not available for validated reference.
             </p>
           )}
         </div>
       )}
 
-      {!nearestMibigBgcId && nearestMibigAccession && (
+      {!nearestValidatedBgcId && nearestValidatedAccession && (
         <p className="text-xs text-muted-foreground">
-          Nearest MIBiG: {nearestMibigAccession} (region data not available)
+          Nearest Validated: {nearestValidatedAccession} (region data not available)
         </p>
       )}
     </div>

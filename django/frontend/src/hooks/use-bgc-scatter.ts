@@ -7,7 +7,7 @@ export function useBgcScatter(options: {
   yAxis?: string;
   assemblyIds?: number[];
   bgcIds?: number[];
-  includeMibig?: boolean;
+  includeValidated?: boolean;
   enabled?: boolean;
 }) {
   const {
@@ -15,14 +15,14 @@ export function useBgcScatter(options: {
     yAxis,
     assemblyIds,
     bgcIds,
-    includeMibig = true,
+    includeValidated = true,
     enabled = true,
   } = options;
 
   const bgcClass = useFilterStore((s) => s.bgcClass);
 
   const params: BgcScatterParams = {
-    include_mibig: includeMibig,
+    include_validated: includeValidated,
     bgc_class: bgcClass || undefined,
     assembly_ids: assemblyIds?.join(",") || undefined,
     bgc_ids: bgcIds?.join(",") || undefined,

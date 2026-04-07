@@ -1,5 +1,5 @@
 import Plot from "react-plotly.js";
-import type { AssessChemicalSpacePoint, MibigReferencePoint } from "@/api/types";
+import type { AssessChemicalSpacePoint, ValidatedReferencePoint } from "@/api/types";
 
 const BGC_CLASS_COLORS: Record<string, string> = {
   Polyketide: "#3b82f6",
@@ -13,34 +13,34 @@ const BGC_CLASS_COLORS: Record<string, string> = {
 
 interface ChemicalSpaceMapProps {
   points: AssessChemicalSpacePoint[];
-  mibigPoints: MibigReferencePoint[];
-  meanMibigDistance: number;
+  validatedPoints: ValidatedReferencePoint[];
+  meanValidatedDistance: number;
   sparseFraction: number;
 }
 
 export function ChemicalSpaceMap({
   points,
-  mibigPoints,
-  meanMibigDistance,
+  validatedPoints,
+  meanValidatedDistance,
   sparseFraction,
 }: ChemicalSpaceMapProps) {
   const traces: Plotly.Data[] = [];
 
-  // MIBiG references (grey triangles, low opacity)
-  if (mibigPoints.length > 0) {
+  // Validated references (grey triangles, low opacity)
+  if (validatedPoints.length > 0) {
     traces.push({
       type: "scatter",
       mode: "markers",
-      x: mibigPoints.map((p) => p.umap_x),
-      y: mibigPoints.map((p) => p.umap_y),
+      x: validatedPoints.map((p) => p.umap_x),
+      y: validatedPoints.map((p) => p.umap_y),
       marker: {
         symbol: "triangle-up",
         size: 5,
         color: "rgba(150,150,150,0.3)",
       },
-      text: mibigPoints.map((p) => `${p.accession} (${p.compound_name})`),
+      text: validatedPoints.map((p) => `${p.accession} (${p.compound_name})`),
       hoverinfo: "text",
-      name: "MIBiG references",
+      name: "Validated references",
     });
   }
 
@@ -61,7 +61,7 @@ export function ChemicalSpaceMap({
       },
       text: points.map(
         (p) =>
-          `${p.accession}<br>${p.classification_path}<br>MIBiG dist: ${p.nearest_mibig_distance.toFixed(3)}${p.is_sparse ? "<br>(sparse region)" : ""}`
+          `${p.accession}<br>${p.classification_path}<br>Validated dist: ${p.nearest_validated_distance.toFixed(3)}${p.is_sparse ? "<br>(sparse region)" : ""}`
       ),
       hoverinfo: "text",
       name: "Assembly BGCs",
@@ -72,7 +72,7 @@ export function ChemicalSpaceMap({
     <div>
       <div className="mb-2 flex gap-4 text-xs text-muted-foreground">
         <span>
-          Mean MIBiG distance: <strong>{meanMibigDistance.toFixed(3)}</strong>
+          Mean validated distance: <strong>{meanValidatedDistance.toFixed(3)}</strong>
         </span>
         <span>
           In sparse regions: <strong>{(sparseFraction * 100).toFixed(0)}%</strong>

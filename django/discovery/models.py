@@ -13,7 +13,7 @@ hierarchical queries (``<@``, ``@>``, ``subpath``, ``nlevel``) when cast to ``lt
 import zlib
 
 from django.db import models
-from pgvector.django import HalfVectorField, HnswIndex, VectorField
+from pgvector.django import HalfVectorField, HnswIndex
 
 
 # ── Assembly source lookup ─────────────────────────────────────────────────────
@@ -325,21 +325,24 @@ class DashboardBgc(models.Model):
     novelty_score = models.FloatField(default=0.0)
     domain_novelty = models.FloatField(default=0.0)
     size_kb = models.FloatField(default=0.0)
-    nearest_mibig_accession = models.CharField(max_length=50, blank=True, default="")
-    nearest_mibig_distance = models.FloatField(null=True, blank=True)
+    nearest_validated_accession = models.CharField(max_length=50, blank=True, default="")
+    nearest_validated_distance = models.FloatField(null=True, blank=True)
 
     # Flags
     is_partial = models.BooleanField(default=False)
     is_validated = models.BooleanField(default=False)
-    is_mibig = models.BooleanField(default=False)
 
     # UMAP coordinates (proper columns, not JSON)
     umap_x = models.FloatField(default=0.0)
     umap_y = models.FloatField(default=0.0)
 
-    # GCF placement (integer FK-by-value to DashboardGCF.id)
-    gcf_id = models.IntegerField(null=True, blank=True, db_index=True)
-    distance_to_gcf_representative = models.FloatField(null=True, blank=True)
+    # Gene Cluster Family — ltree dot-path
+    gene_cluster_family = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        help_text="ltree dot-path, e.g. GCF_001.SubFamily_A",
+    )
 
     # Detector info
     detector = models.ForeignKey(
@@ -381,6 +384,7 @@ class DashboardBgc(models.Model):
             models.Index(fields=["-size_kb"], name="idx_db_size_desc"),
             models.Index(fields=["assembly", "-novelty_score"], name="idx_db_assembly_novelty"),
             models.Index(fields=["umap_x", "umap_y"], name="idx_db_umap"),
+            models.Index(fields=["gene_cluster_family"], name="idx_db_gcf_path"),
         ]
 
     def __str__(self):
@@ -553,7 +557,7 @@ class BgcDomain(models.Model):
 
 
 class DashboardGCF(models.Model):
-    """Gene Cluster Family — self-contained copy for the dashboard."""
+    """Gene Cluster Family — materialized from DashboardBgc.gene_cluster_family ltree."""
 
     id = models.AutoField(primary_key=True)
     family_id = models.CharField(max_length=255, unique=True, db_index=True)
@@ -566,9 +570,9 @@ class DashboardGCF(models.Model):
     )
     member_count = models.IntegerField(default=0)
     known_chemistry_annotation = models.CharField(max_length=255, blank=True, default="")
-    mibig_accession = models.CharField(max_length=255, blank=True, default="")
+    validated_accession = models.CharField(max_length=255, blank=True, default="")
     mean_novelty = models.FloatField(default=0.0)
-    mibig_count = models.IntegerField(default=0)
+    validated_count = models.IntegerField(default=0)
 
     class Meta:
         db_table = "discovery_gcf"
@@ -616,46 +620,6 @@ class DashboardNaturalProduct(models.Model):
 
     def __str__(self):
         return self.name
-
-
-# ── MIBiG Reference ──────────────────────────────────────────────────────────────
-
-
-class DashboardMibigReference(models.Model):
-    """MIBiG reference cluster — known chemistry landmark in UMAP space."""
-
-    id = models.AutoField(primary_key=True)
-    accession = models.CharField(max_length=50, unique=True, db_index=True)
-    compound_name = models.CharField(max_length=255)
-    bgc_class = models.CharField(max_length=100)
-    umap_x = models.FloatField()
-    umap_y = models.FloatField()
-
-    # Full-precision embedding (only ~200 rows, precision matters for reference lookups)
-    embedding = VectorField(dimensions=1152, null=True, blank=True)
-
-    dashboard_bgc = models.OneToOneField(
-        DashboardBgc,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="mibig_ref",
-    )
-
-    class Meta:
-        db_table = "discovery_mibig_reference"
-        indexes = [
-            HnswIndex(
-                fields=["embedding"],
-                name="idx_mibig_emb_hnsw",
-                opclasses=["vector_cosine_ops"],
-                m=16,
-                ef_construction=512,
-            ),
-        ]
-
-    def __str__(self):
-        return f"{self.accession} ({self.compound_name})"
 
 
 # ── Catalog tables with precomputed counts ───────────────────────────────────────

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import type {
   AssessChemicalSpacePoint,
   AssessNearestNeighborPoint,
-  MibigReferencePoint,
+  ValidatedReferencePoint,
 } from "@/api/types";
 
 // Match BgcScatter.tsx color scheme exactly
@@ -22,33 +22,33 @@ const BGC_CLASS_COLORS: Record<string, string> = {
 interface BgcChemicalSpaceMapProps {
   submittedPoint: AssessChemicalSpacePoint | null;
   neighbors: AssessNearestNeighborPoint[];
-  mibigPoints: MibigReferencePoint[];
+  validatedPoints: ValidatedReferencePoint[];
 }
 
 export function BgcChemicalSpaceMap({
   submittedPoint,
   neighbors,
-  mibigPoints,
+  validatedPoints,
 }: BgcChemicalSpaceMapProps) {
-  const [showMibig, setShowMibig] = useState(true);
+  const [showValidated, setShowValidated] = useState(true);
   const traces: Plotly.Data[] = [];
 
-  // MIBiG background — grey triangles matching BgcScatter
-  if (showMibig && mibigPoints.length > 0) {
+  // Validated background — grey triangles matching BgcScatter
+  if (showValidated && validatedPoints.length > 0) {
     traces.push({
       type: "scatter",
       mode: "markers",
-      x: mibigPoints.map((p) => p.umap_x),
-      y: mibigPoints.map((p) => p.umap_y),
+      x: validatedPoints.map((p) => p.umap_x),
+      y: validatedPoints.map((p) => p.umap_y),
       marker: { symbol: "triangle-up", size: 5, color: "#d1d5db", opacity: 0.7 },
-      text: mibigPoints.map((p) => `${p.accession} (${p.compound_name})`),
+      text: validatedPoints.map((p) => `${p.accession} (${p.compound_name})`),
       hoverinfo: "text",
-      name: "MIBiG references",
+      name: "Validated references",
     });
   }
 
   // DB nearest neighbors — colored by BGC class
-  const dbNeighbors = neighbors.filter((n) => !n.is_mibig);
+  const dbNeighbors = neighbors.filter((n) => !n.is_validated);
   if (dbNeighbors.length > 0) {
     traces.push({
       type: "scatter",
@@ -68,23 +68,23 @@ export function BgcChemicalSpaceMap({
     });
   }
 
-  // MIBiG nearest neighbors (labeled, orange triangles)
-  const mibigNeighbors = neighbors.filter((n) => n.is_mibig);
-  if (mibigNeighbors.length > 0) {
+  // Validated nearest neighbors (labeled, orange triangles)
+  const validatedNeighbors = neighbors.filter((n) => n.is_validated);
+  if (validatedNeighbors.length > 0) {
     traces.push({
       type: "scatter",
       mode: "markers+text",
-      x: mibigNeighbors.map((n) => n.umap_x),
-      y: mibigNeighbors.map((n) => n.umap_y),
+      x: validatedNeighbors.map((n) => n.umap_x),
+      y: validatedNeighbors.map((n) => n.umap_y),
       marker: { symbol: "triangle-up", size: 10, color: "#f97316" },
-      text: mibigNeighbors.map((n) => n.label),
+      text: validatedNeighbors.map((n) => n.label),
       textposition: "top center",
       textfont: { size: 8 },
-      hovertext: mibigNeighbors.map(
+      hovertext: validatedNeighbors.map(
         (n) => `${n.label}<br>Distance: ${n.distance.toFixed(4)}`
       ),
       hoverinfo: "text",
-      name: "Nearest MIBiG",
+      name: "Nearest Validated",
     });
   }
 
@@ -111,12 +111,12 @@ export function BgcChemicalSpaceMap({
     <div>
       <div className="mb-2 flex items-center gap-2">
         <Checkbox
-          id="show-mibig-assess"
-          checked={showMibig}
-          onCheckedChange={(v) => setShowMibig(v === true)}
+          id="show-validated-assess"
+          checked={showValidated}
+          onCheckedChange={(v) => setShowValidated(v === true)}
         />
-        <Label htmlFor="show-mibig-assess" className="text-xs">
-          Show MIBiG references
+        <Label htmlFor="show-validated-assess" className="text-xs">
+          Show validated references
         </Label>
       </div>
       <Plot

@@ -25,8 +25,6 @@ data_dir/
   domains.tsv              # optional
   embeddings_bgc.tsv       # optional
   natural_products.tsv     # optional
-  mibig_references.tsv     # optional
-  gcf.tsv                  # optional
 ```
 
 All files are **tab-separated** with a header row. Encoding: UTF-8.  
@@ -57,18 +55,15 @@ Files are loaded in strict dependency order. Each step resolves foreign keys usi
                                                           bgc_end + detector_name from step 4)
 8.   natural_products.tsv   →  DashboardNaturalProduct (needs contig_sha256 + bgc_start +
                                                           bgc_end + detector_name from step 4)
-9.   mibig_references.tsv   →  DashboardMibigReference (needs contig_sha256 + bgc_start +
-                                                          bgc_end + detector_name from step 4,
-                                                          optional)
-10.  gcf.tsv                →  DashboardGCF            (needs contig_sha256 + bgc_start +
-                                                          bgc_end + detector_name from step 4,
-                                                          optional)
 ```
 
 After loading, two post-load computations run (unless `--skip-stats`):
 
 - **Assembly scores** — `bgc_count`, `l1_class_count`, `bgc_novelty_score` aggregated from loaded BGCs.
 - **Catalog counts** — `DashboardBgcClass` and `DashboardDomain` tables rebuilt from BGC/domain data.
+
+> **Note:** GCF membership is derived from the `gene_cluster_family` ltree field on BGCs.
+> The `DashboardGCF` table is materialized by the `recompute_all_scores` command, not loaded from TSV.
 
 ---
 
@@ -88,6 +83,7 @@ Hierarchical fields use **dot-delimited** paths. Dots separate hierarchy levels.
 | `taxonomy_path` | `Bacteria.Actinomycetota.Actinomycetia` |
 | `classification_path` | `Polyketide.Macrolide.14_membered` |
 | `np_class_path` | `Polyketide.Macrolide.Erythromycin` |
+| `gene_cluster_family` | `GCF_001.SubFamily_A` |
 
 Replace spaces with underscores. Empty string means "unknown" or "not applicable".
 
@@ -237,11 +233,11 @@ One row per BGC prediction. Each BGC belongs to a contig and was detected by a s
 | `novelty_score` | float | no | Novelty score (default 0.0) | `0.85` |
 | `domain_novelty` | float | no | Domain-level novelty (default 0.0) | `0.72` |
 | `size_kb` | float | no | BGC size in kilobases (default 0.0) | `35.0` |
-| `nearest_mibig_accession` | string | no | Closest MIBiG cluster | `BGC0000001` |
-| `nearest_mibig_distance` | float | no | Distance to nearest MIBiG (nullable) | `0.15` |
+| `nearest_validated_accession` | string | no | Closest validated BGC accession | `BGC0000001` |
+| `nearest_validated_distance` | float | no | Distance to nearest validated BGC (nullable) | `0.15` |
 | `is_partial` | boolean | no | `true`/`1` if on contig edge | `false` |
-| `is_validated` | boolean | no | `true`/`1` if experimentally validated | `false` |
-| `is_mibig` | boolean | no | `true`/`1` if this IS a MIBiG entry | `false` |
+| `is_validated` | boolean | no | `true`/`1` if experimentally validated (MIBiG BGCs are validated) | `false` |
+| `gene_cluster_family` | string | no | ltree dot-path for GCF hierarchy | `GCF_001.SubFamily_A` |
 | `umap_x` | float | no | UMAP x coordinate (default 0.0) | `-3.45` |
 | `umap_y` | float | no | UMAP y coordinate (default 0.0) | `7.82` |
 
@@ -395,48 +391,6 @@ encoded = base64.b64encode(raw_bytes).decode("ascii")
 
 ---
 
-### 9. `mibig_references.tsv` (optional)
-
-Known chemistry landmarks for UMAP visualization (~200 rows typically).
-
-| Column | Type | Required | Description | Example |
-|--------|------|----------|-------------|---------|
-| `accession` | string | **yes** | MIBiG accession (unique) | `BGC0000001` |
-| `compound_name` | string | no | Compound name | `erythromycin` |
-| `bgc_class` | string | no | BGC class label | `Polyketide` |
-| `umap_x` | float | no | UMAP x coordinate (default 0.0) | `-2.5` |
-| `umap_y` | float | no | UMAP y coordinate (default 0.0) | `4.1` |
-| `embedding_base64` | string | no | Base64-encoded float32 vector (1152-dim) | `AAAA...` |
-| `contig_sha256` | string | no | Contig SHA-256 (identifies linked BGC, nullable) | `a1b2c3d4e5f6...` |
-| `bgc_start` | integer | no | BGC start position (identifies linked BGC, nullable) | `10000` |
-| `bgc_end` | integer | no | BGC end position (identifies linked BGC, nullable) | `45000` |
-| `detector_name` | string | no | Detector name (identifies linked BGC, nullable) | `antiSMASH v7.1` |
-
-**Uniqueness:** `accession` must be unique.
-
-> **Note:** MIBiG embeddings use **full-precision** VectorField (not half), since there are few rows and precision matters for reference lookups.
-
----
-
-### 10. `gcf.tsv` (optional)
-
-Gene Cluster Families.
-
-| Column | Type | Required | Description | Example |
-|--------|------|----------|-------------|---------|
-| `family_id` | string | **yes** | Family identifier (unique) | `GCF_000001` |
-| `contig_sha256` | string | no | Contig SHA-256 (identifies representative BGC, nullable) | `a1b2c3d4e5f6...` |
-| `bgc_start` | integer | no | BGC start position (identifies representative BGC, nullable) | `10000` |
-| `bgc_end` | integer | no | BGC end position (identifies representative BGC, nullable) | `45000` |
-| `detector_name` | string | no | Detector name (identifies representative BGC, nullable) | `antiSMASH v7.1` |
-| `member_count` | integer | no | Number of BGCs in family (default 0) | `15` |
-| `known_chemistry_annotation` | string | no | Known chemistry label | `erythromycin-like` |
-| `mibig_accession` | string | no | Associated MIBiG accession | `BGC0000001` |
-| `mean_novelty` | float | no | Average novelty score of members (default 0.0) | `0.65` |
-| `mibig_count` | integer | no | Count of MIBiG members (default 0) | `2` |
-
-**Uniqueness:** `family_id` must be unique.
-
 ---
 
 ## Region Assignment (Auto-Computed)
@@ -512,8 +466,6 @@ These fields are populated automatically after all TSV files are loaded. Your pi
 | `bgcs.tsv` | `(contig, start_position, end_position, detector)` |
 | `cds_sequences.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` (PK = CDS FK) |
 | `domains.tsv` | `(bgc, domain_acc, cds, start_position, end_position)` |
-| `mibig_references.tsv` | `accession` |
-| `gcf.tsv` | `family_id` |
 
 ### Foreign Key Resolution
 
@@ -529,12 +481,68 @@ These fields are populated automatically after all TSV files are loaded. Your pi
 | `domains.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` | in-memory lookup | `DashboardCds` (nullable) |
 | `embeddings_bgc.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
 | `natural_products.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
-| `mibig_references.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` (nullable) |
-| `gcf.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` (nullable) |
 
 ### Conflict Handling
 
-All `bulk_create` calls for BGCs, CDS, domains, embeddings, natural products, MIBiG refs, and GCFs use `ignore_conflicts=True`. Duplicate rows (by unique constraint) are silently skipped, making the pipeline **idempotent** for re-runs.
+All `bulk_create` calls for BGCs, CDS, domains, embeddings, and natural products use `ignore_conflicts=True`. Duplicate rows (by unique constraint) are silently skipped, making the pipeline **idempotent** for re-runs.
+
+---
+
+## Score Recomputation
+
+After loading, run the `recompute_all_scores` management command to compute all derived scores:
+
+```bash
+python manage.py recompute_all_scores --sync        # synchronous
+python manage.py recompute_all_scores               # dispatch to Celery 'scores' queue
+```
+
+This command computes:
+
+| Score | Target | Algorithm |
+|-------|--------|-----------|
+| `novelty_score` | `DashboardBgc` | Cosine distance to nearest validated (`is_validated=True`) BGC via `BgcEmbedding` HNSW index |
+| `domain_novelty` | `DashboardBgc` | Fraction of domains unique to this BGC (not found in any other BGC) |
+| `nearest_validated_accession` | `DashboardBgc` | Accession of the nearest validated BGC |
+| `nearest_validated_distance` | `DashboardBgc` | Distance to nearest validated BGC |
+| `bgc_count`, `l1_class_count`, `bgc_novelty_score` | `DashboardAssembly` | Count/avg aggregations from BGCs |
+| `bgc_density` | `DashboardAssembly` | `bgc_count / assembly_size_mb` |
+| `bgc_diversity_score` | `DashboardAssembly` | `l1_class_count / total_known_classes` |
+| `pctl_novelty`, `pctl_diversity`, `pctl_density` | `DashboardAssembly` | `PERCENT_RANK()` window function |
+| `DashboardGCF` table | `DashboardGCF` | Rebuilt from `gene_cluster_family` ltree grouping on BGCs |
+| `DashboardBgcClass`, `DashboardDomain` | Catalog tables | Rebuilt from BGC/domain data |
+| UMAP coordinates | `DashboardBgc.umap_x/y` | Transform via saved UMAP model (if available) |
+
+### UMAP Model Training
+
+```bash
+python manage.py train_umap_model --n-samples 50000 --stratify-by-gcf --apply
+```
+
+Trains a PCA + UMAP pipeline on sampled BGC embeddings, saves the model to `UMAPTransform`, and optionally transforms all embeddings.
+
+---
+
+## Gene Cluster Families (GCF)
+
+GCF membership is stored on `DashboardBgc.gene_cluster_family` as an ltree dot-path (e.g. `GCF_001.SubFamily_A`).
+The `DashboardGCF` table is a materialized view rebuilt by `recompute_all_scores`:
+
+- Groups BGCs by `gene_cluster_family` (excluding empty values)
+- `family_id` = the ltree path string
+- `member_count` = count of BGCs in the group
+- `representative_bgc` = BGC with lowest `novelty_score`
+- `mean_novelty` = average novelty of members
+- `validated_count` = count of `is_validated=True` members
+- `validated_accession` = accession of first validated member
+
+---
+
+## Validated BGCs and MIBiG
+
+MIBiG BGCs are a particular case of validated BGCs. All MIBiG entries should have `is_validated=True` in `bgcs.tsv`. The dashboard domain logic operates around validated BGCs generically — MIBiG BGCs are simply validated BGCs whose assembly source is "MIBiG".
+
+The `DashboardMibigReference` model has been removed. Validated BGCs serve as reference points in chemical space visualization.
 
 ---
 
@@ -546,6 +554,7 @@ The following model data is **not** part of the TSV pipeline and requires separa
 |------|-------|-------|
 | Protein embeddings | `ProteinEmbedding` | Separate from BGC embeddings |
 | Precomputed stats | `PrecomputedStats` | Populated by query-time aggregation service |
-| Assembly percentile ranks | `DashboardAssembly.pctl_*` | Not set by loader |
-| Assembly diversity/density scores | `DashboardAssembly.bgc_diversity_score`, etc. | Not set by loader |
+| GCF table | `DashboardGCF` | Materialized by `recompute_all_scores` from `gene_cluster_family` field |
+| Assembly percentile ranks | `DashboardAssembly.pctl_*` | Computed by `recompute_all_scores` |
+| Assembly diversity/density | `DashboardAssembly.bgc_diversity_score`, etc. | Computed by `recompute_all_scores` |
 | Domain URLs | `BgcDomain.url` | Not set by loader |

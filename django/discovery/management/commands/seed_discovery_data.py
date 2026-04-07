@@ -33,7 +33,6 @@ from discovery.models import (
     DashboardDetector,
     DashboardDomain,
     DashboardGCF,
-    DashboardMibigReference,
     DashboardNaturalProduct,
     DashboardRegion,
     PrecomputedStats,
@@ -192,7 +191,7 @@ class Command(BaseCommand):
                 RegionAccessionAlias,
                 CdsSequence, BgcDomain, DashboardCds,
                 BgcEmbedding, ProteinEmbedding,
-                DashboardNaturalProduct, DashboardMibigReference,
+                DashboardNaturalProduct,
                 DashboardBgc,
                 DashboardRegion,
                 ContigSequence, DashboardContig,
@@ -258,26 +257,10 @@ class Command(BaseCommand):
         DashboardAssembly.objects.bulk_create(assemblies)
         self.stdout.write(f"  {len(assemblies)} DashboardAssembly rows.")
 
-        # ── 2. DashboardGCF ─────────────────────────────────────────────
+        # ── 2. GCF family paths (assigned to BGCs, table rebuilt later) ──
         n_gcfs = max(5, n_assemblies // 4)
-        gcf_list = []
-        for gi in range(n_gcfs):
-            has_mibig = random.random() < 0.3
-            gcf_list.append(DashboardGCF(
-                family_id=f"GCF_{gi:06d}",
-                member_count=0,
-                known_chemistry_annotation=(
-                    random.choice(_MIBIG_COMPOUNDS)[0] if has_mibig else ""
-                ),
-                mibig_accession=(
-                    f"BGC{gi + 1:07d}" if has_mibig else ""
-                ),
-                mean_novelty=round(random.uniform(0.1, 0.8), 4),
-                mibig_count=1 if has_mibig else 0,
-            ))
-        DashboardGCF.objects.bulk_create(gcf_list)
-        gcf_list = list(DashboardGCF.objects.all())
-        self.stdout.write(f"  {len(gcf_list)} DashboardGCF rows.")
+        gcf_family_paths = [f"GCF_{gi:06d}" for gi in range(n_gcfs)]
+        self.stdout.write(f"  {n_gcfs} GCF family paths prepared.")
 
         # ── 2.5. DashboardContig + ContigSequence ──────────────────────
         self.stdout.write("Creating contigs with sequences...")
@@ -377,7 +360,7 @@ class Command(BaseCommand):
                 if nearest_dist < 0.6:
                     nearest_acc = f"BGC{random.randint(1, len(_MIBIG_COMPOUNDS)):07d}"
 
-                gcf = random.choice(gcf_list)
+                gcf_path = random.choice(gcf_family_paths)
                 contig_idx = bi // 4
                 contig_obj, _ = contig_map[(assembly.assembly_accession, contig_idx)]
 
@@ -406,15 +389,13 @@ class Command(BaseCommand):
                     novelty_score=round(random.betavariate(2, 5), 4),
                     domain_novelty=round(random.betavariate(2, 6), 4),
                     size_kb=round(bgc_size / 1000.0, 2),
-                    nearest_mibig_accession=nearest_acc,
-                    nearest_mibig_distance=nearest_dist,
+                    nearest_validated_accession=nearest_acc,
+                    nearest_validated_distance=nearest_dist,
                     is_partial=random.random() < 0.2,
                     is_validated=random.random() < 0.03,
-                    is_mibig=False,
                     umap_x=ux,
                     umap_y=uy,
-                    gcf_id=gcf.id,
-                    distance_to_gcf_representative=round(random.uniform(0.0, 0.5), 4),
+                    gene_cluster_family=gcf_path,
                     detector=det,
                     region_id=region_id,
                     bgc_number=bgc_number,
@@ -432,14 +413,7 @@ class Command(BaseCommand):
             assembly.l1_class_count = len({b.classification_path.split(".")[0] for b in bgcs if b.classification_path})
         DashboardAssembly.objects.bulk_update(assemblies, ["bgc_count", "l1_class_count"])
 
-        # Update GCF member counts + representative BGC
-        for gcf in gcf_list:
-            members = DashboardBgc.objects.filter(gcf_id=gcf.id)
-            gcf.member_count = members.count()
-            rep = members.order_by("distance_to_gcf_representative").first()
-            if rep:
-                gcf.representative_bgc = rep
-        DashboardGCF.objects.bulk_update(gcf_list, ["member_count", "representative_bgc"])
+        # GCF table will be rebuilt after all BGCs are created (step 9.5)
 
         # ── 4. DashboardCds + BgcDomain (CDS with domain hits) ─────────
         self.stdout.write("Creating CDS and domain architecture...")
@@ -582,8 +556,8 @@ class Command(BaseCommand):
         DashboardNaturalProduct.objects.bulk_create(nps)
         self.stdout.write(f"  {len(nps)} DashboardNaturalProduct rows.")
 
-        # ── 8. DashboardMibigReference (with dashboard_bgc link) ───────
-        self.stdout.write("Creating MIBiG references...")
+        # ── 8. Validated (MIBiG) BGCs ─────────────────────────────────
+        self.stdout.write("Creating validated (MIBiG) BGCs...")
         # Create MIBiG contigs first (one per compound for simplicity)
         mibig_assembly = assemblies[0]  # attach to first assembly for simplicity
         mibig_contigs = []
@@ -642,10 +616,10 @@ class Command(BaseCommand):
                 novelty_score=0.0,
                 domain_novelty=0.0,
                 size_kb=round(bgc_size / 1000.0, 2),
-                is_mibig=True,
                 is_validated=True,
                 umap_x=ux,
                 umap_y=uy,
+                gene_cluster_family=f"MIBiG.{bgc_class}",
                 detector=mibig_det,
                 region_id=region_id,
                 bgc_number=bgc_number,
@@ -691,20 +665,7 @@ class Command(BaseCommand):
             for cds in mibig_cds_list
         ])
 
-        mibig_refs = []
-        for i, (compound, bgc_class) in enumerate(_MIBIG_COMPOUNDS):
-            mibig_refs.append(DashboardMibigReference(
-                accession=f"BGC{i + 1:07d}",
-                compound_name=compound,
-                bgc_class=bgc_class,
-                umap_x=mibig_bgcs[i].umap_x,
-                umap_y=mibig_bgcs[i].umap_y,
-                embedding=np.random.randn(1152).astype(np.float32).tolist(),
-                dashboard_bgc=mibig_bgcs[i],
-            ))
-        DashboardMibigReference.objects.bulk_create(mibig_refs)
-
-        # Create embeddings for MIBiG BGCs too
+        # Create embeddings for MIBiG BGCs
         mibig_embs = [
             BgcEmbedding(
                 bgc=bgc,
@@ -715,9 +676,8 @@ class Command(BaseCommand):
         BgcEmbedding.objects.bulk_create(mibig_embs)
 
         self.stdout.write(
-            f"  {len(mibig_refs)} DashboardMibigReference rows "
-            f"(linked to {len(mibig_bgcs)} MIBiG DashboardBgc rows, "
-            f"{len(mibig_cds_list)} MIBiG CDS rows)."
+            f"  {len(mibig_bgcs)} MIBiG DashboardBgc rows (is_validated=True), "
+            f"{len(mibig_cds_list)} MIBiG CDS rows."
         )
 
         # ── 9. DashboardBgcClass + DashboardDomain (precomputed counts)
@@ -740,6 +700,13 @@ class Command(BaseCommand):
             f"  {len(bgc_class_objs)} DashboardBgcClass, "
             f"{len(domain_objs)} DashboardDomain rows."
         )
+
+        # ── 9.5. Rebuild GCF table from gene_cluster_family ───────────
+        self.stdout.write("Rebuilding GCF table from gene_cluster_family...")
+        from discovery.services.scores import _rebuild_gcf_table
+        _rebuild_gcf_table()
+        gcf_count = DashboardGCF.objects.count()
+        self.stdout.write(f"  {gcf_count} DashboardGCF rows.")
 
         # ── 10. Percentile ranks (SQL window functions) ─────────────────
         self.stdout.write("Computing percentile ranks...")
@@ -772,8 +739,8 @@ class Command(BaseCommand):
 
         # Enrich bgc_global with sparse_threshold
         all_dists = list(
-            DashboardBgc.objects.filter(nearest_mibig_distance__isnull=False)
-            .values_list("nearest_mibig_distance", flat=True)[:10000]
+            DashboardBgc.objects.filter(nearest_validated_distance__isnull=False)
+            .values_list("nearest_validated_distance", flat=True)[:10000]
         )
         sparse_threshold = float(np.percentile(all_dists, 75)) if all_dists else 0.5
         bgc_stats["sparse_threshold"] = sparse_threshold
@@ -814,15 +781,14 @@ class Command(BaseCommand):
             f"  DashboardAssembly:        {len(assemblies)}\n"
             f"  DashboardContig:          {total_contigs}\n"
             f"  ContigSequence:           {total_contigs}\n"
-            f"  DashboardBgc:             {total_bgcs} ({len(mibig_bgcs)} MIBiG)\n"
+            f"  DashboardBgc:             {total_bgcs} ({len(mibig_bgcs)} validated/MIBiG)\n"
             f"  DashboardCds:             {total_cds}\n"
             f"  CdsSequence:              {total_cds}\n"
             f"  BgcDomain:                {len(all_domains)}\n"
             f"  BgcEmbedding:             {len(bgc_embeddings) + len(mibig_embs)}\n"
             f"  ProteinEmbedding:         {len(prot_embeddings)}\n"
-            f"  DashboardGCF:             {len(gcf_list)}\n"
+            f"  DashboardGCF:             {gcf_count}\n"
             f"  DashboardNaturalProduct:  {len(nps)}\n"
-            f"  DashboardMibigReference:  {len(mibig_refs)}\n"
             f"  DashboardBgcClass:        {len(bgc_class_objs)}\n"
             f"  DashboardDomain:          {len(domain_objs)}\n"
             f"  PrecomputedStats:         2"

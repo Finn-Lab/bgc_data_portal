@@ -116,8 +116,8 @@ export function BgcAssessmentView() {
         <PanelContainer title="Domain Architecture Comparison">
           <DomainArchitectureComparison
             bgcId={result.bgc_id}
-            nearestMibigBgcId={result.nearest_mibig_bgc_id}
-            nearestMibigAccession={result.nearest_mibig_accession}
+            nearestValidatedBgcId={result.nearest_validated_bgc_id}
+            nearestValidatedAccession={result.nearest_validated_accession}
           />
         </PanelContainer>
       )}
@@ -138,7 +138,7 @@ export function BgcAssessmentView() {
           <BgcChemicalSpaceMap
             submittedPoint={result.submitted_point}
             neighbors={result.nearest_neighbors}
-            mibigPoints={result.mibig_reference_points}
+            validatedPoints={result.validated_reference_points}
           />
         </PanelContainer>
       )}

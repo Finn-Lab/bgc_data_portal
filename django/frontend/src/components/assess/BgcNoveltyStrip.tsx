@@ -37,7 +37,7 @@ export function BgcNoveltyStrip({ bgcNovelty }: BgcNoveltyStripProps) {
           },
           text: sorted.map(
             (b) =>
-              `${b.classification_path}<br>vs DB: ${b.novelty_vs_db.toFixed(3)}<br>vs MIBiG: ${b.novelty_vs_mibig.toFixed(3)}`
+              `${b.classification_path}<br>vs DB: ${b.novelty_vs_db.toFixed(3)}<br>vs Validated: ${b.novelty_vs_validated.toFixed(3)}`
           ),
           hoverinfo: "text",
         },

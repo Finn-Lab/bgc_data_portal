@@ -137,14 +137,14 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Domain Novelty</h3>
           <p className="vf-summary__text font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
         </article>
-        {bgc.nearest_mibig_accession && (
+        {bgc.nearest_validated_accession && (
           <article className="vf-summary">
-            <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Nearest MIBiG</h3>
+            <h3 className="vf-summary__title" style={{ fontSize: "0.75rem" }}>Nearest Validated</h3>
             <p className="vf-summary__text font-mono font-medium">
-              {bgc.nearest_mibig_accession}
+              {bgc.nearest_validated_accession}
             </p>
             <p className="vf-summary__text text-muted-foreground">
-              dist: {bgc.nearest_mibig_distance?.toFixed(3)}
+              dist: {bgc.nearest_validated_distance?.toFixed(3)}
             </p>
           </article>
         )}

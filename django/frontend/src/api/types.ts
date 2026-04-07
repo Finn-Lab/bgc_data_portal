@@ -67,8 +67,8 @@ export interface BgcRosterItem {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_mibig_accession: string | null;
-  nearest_mibig_distance: number | null;
+  nearest_validated_accession: string | null;
+  nearest_validated_distance: number | null;
   assembly_accession: string | null;
 }
 
@@ -111,8 +111,8 @@ export interface BgcDetail {
   novelty_score: number;
   domain_novelty: number;
   is_partial: boolean;
-  nearest_mibig_accession: string | null;
-  nearest_mibig_distance: number | null;
+  nearest_validated_accession: string | null;
+  nearest_validated_distance: number | null;
   is_validated: boolean;
   domain_architecture: DomainArchitectureItem[];
   parent_assembly: ParentAssemblySummary | null;
@@ -124,14 +124,14 @@ export interface BgcScatterPoint {
   x: number;
   y: number;
   bgc_class: string;
-  is_mibig: boolean;
+  is_validated: boolean;
   compound_name: string | null;
   novelty_score: number;
   domain_novelty: number;
   similarity_score: number | null;
 }
 
-export interface MibigReferencePoint {
+export interface ValidatedReferencePoint {
   accession: string;
   compound_name: string;
   bgc_class: string;
@@ -348,7 +348,7 @@ export interface BgcNoveltyItem {
   bgc_id: number;
   accession: string;
   classification_path: string;
-  novelty_vs_mibig: number;
+  novelty_vs_validated: number;
   novelty_vs_db: number;
   domain_novelty: number;
   is_partial: boolean;
@@ -360,7 +360,7 @@ export interface RedundancyCell {
   classification_path: string;
   gcf_family_id: string | null;
   gcf_member_count: number;
-  gcf_has_mibig: boolean;
+  gcf_has_validated: boolean;
   gcf_has_type_strain: boolean;
   status: "novel_gcf" | "known_gcf_no_type_strain" | "known_gcf_type_strain";
 }
@@ -371,7 +371,7 @@ export interface AssessChemicalSpacePoint {
   umap_x: number;
   umap_y: number;
   classification_path: string;
-  nearest_mibig_distance: number;
+  nearest_validated_distance: number;
   is_sparse: boolean;
 }
 
@@ -393,8 +393,8 @@ export interface AssemblyAssessmentResult {
   bgc_novelty_breakdown: BgcNoveltyItem[];
   redundancy_matrix: RedundancyCell[];
   chemical_space_points: AssessChemicalSpacePoint[];
-  mibig_reference_points: MibigReferencePoint[];
-  mean_nearest_mibig_distance: number;
+  validated_reference_points: ValidatedReferencePoint[];
+  mean_nearest_validated_distance: number;
   sparse_fraction: number;
   radar_references: RadarReference[];
 }
@@ -420,7 +420,6 @@ export interface GcfMemberPoint {
   umap_x: number;
   umap_y: number;
   is_type_strain: boolean;
-  distance_to_representative: number;
   accession: string;
 }
 
@@ -428,10 +427,10 @@ export interface GcfContext {
   gcf_id: number;
   family_id: string;
   member_count: number;
-  mibig_count: number;
+  validated_count: number;
   mean_novelty: number;
   known_chemistry_annotation: string | null;
-  mibig_accession: string | null;
+  validated_accession: string | null;
   domain_frequency: GcfDomainFrequency[];
   taxonomy_distribution: GcfTaxonomyCount[];
   member_points: GcfMemberPoint[];
@@ -453,12 +452,12 @@ export interface NoveltyDecomposition {
 
 export interface AssessNearestNeighborPoint {
   bgc_id: number | null;
-  mibig_accession: string | null;
+  validated_accession: string | null;
   umap_x: number;
   umap_y: number;
   distance: number;
   label: string;
-  is_mibig: boolean;
+  is_validated: boolean;
 }
 
 export interface BgcAssessmentResult {
@@ -472,8 +471,8 @@ export interface BgcAssessmentResult {
   novelty: NoveltyDecomposition;
   submitted_point: AssessChemicalSpacePoint | null;
   nearest_neighbors: AssessNearestNeighborPoint[];
-  mibig_reference_points: MibigReferencePoint[];
+  validated_reference_points: ValidatedReferencePoint[];
   submitted_domains: DomainArchitectureItem[];
-  nearest_mibig_accession: string | null;
-  nearest_mibig_bgc_id: number | null;
+  nearest_validated_accession: string | null;
+  nearest_validated_bgc_id: number | null;
 }

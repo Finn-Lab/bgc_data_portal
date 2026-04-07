@@ -17,7 +17,6 @@ from discovery.models import (
     DashboardBgc,
     DashboardGCF,
     DashboardAssembly,
-    DashboardMibigReference,
     PrecomputedStats,
 )
 
@@ -82,7 +81,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
             "bgc_id": bgc.id,
             "accession": bgc.bgc_accession,
             "classification_path": bgc.classification_path,
-            "novelty_vs_mibig": round(bgc.nearest_mibig_distance or 0.0, 4),
+            "novelty_vs_validated": round(bgc.nearest_validated_distance or 0.0, 4),
             "novelty_vs_db": round(bgc.novelty_score, 4),
             "domain_novelty": round(bgc.domain_novelty, 4),
             "is_partial": bgc.is_partial,
@@ -94,7 +93,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
     # ── Redundancy matrix ────────────────────────────────────────────────
     redundancy_matrix = []
     for bgc in bgcs:
-        if bgc.gcf_id is None:
+        if not bgc.gene_cluster_family:
             redundancy_matrix.append(
                 {
                     "bgc_id": bgc.id,
@@ -102,34 +101,32 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
                     "classification_path": bgc.classification_path,
                     "gcf_family_id": None,
                     "gcf_member_count": 0,
-                    "gcf_has_mibig": False,
+                    "gcf_has_validated": False,
                     "gcf_has_type_strain": False,
                     "status": "novel_gcf",
                 }
             )
             continue
 
-        try:
-            gcf = DashboardGCF.objects.get(pk=bgc.gcf_id)
-        except DashboardGCF.DoesNotExist:
+        gcf = DashboardGCF.objects.filter(family_id=bgc.gene_cluster_family).first()
+        if gcf is None:
             redundancy_matrix.append(
                 {
                     "bgc_id": bgc.id,
                     "accession": bgc.bgc_accession,
                     "classification_path": bgc.classification_path,
-                    "gcf_family_id": None,
+                    "gcf_family_id": bgc.gene_cluster_family,
                     "gcf_member_count": 0,
-                    "gcf_has_mibig": False,
+                    "gcf_has_validated": False,
                     "gcf_has_type_strain": False,
                     "status": "novel_gcf",
                 }
             )
             continue
 
-        has_mibig = bool(gcf.mibig_accession)
-        # Check if any co-member's assembly is a type strain
+        has_validated = gcf.validated_count > 0
         has_type_strain = DashboardBgc.objects.filter(
-            gcf_id=gcf.id, assembly__is_type_strain=True
+            gene_cluster_family=gcf.family_id, assembly__is_type_strain=True
         ).exclude(id=bgc.id).exists()
 
         status = "known_gcf_type_strain" if has_type_strain else "known_gcf_no_type_strain"
@@ -141,7 +138,7 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
                 "classification_path": bgc.classification_path,
                 "gcf_family_id": gcf.family_id,
                 "gcf_member_count": gcf.member_count,
-                "gcf_has_mibig": has_mibig,
+                "gcf_has_validated": has_validated,
                 "gcf_has_type_strain": has_type_strain,
                 "status": status,
             }
@@ -153,12 +150,12 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
         bgc_stats = PrecomputedStats.objects.get(key="bgc_global")
         sparse_threshold = bgc_stats.data.get("sparse_threshold", 0.5)
     except PrecomputedStats.DoesNotExist:
-        all_mibig_dists = list(
+        all_validated_dists = list(
             DashboardBgc.objects.filter(
-                nearest_mibig_distance__isnull=False
-            ).values_list("nearest_mibig_distance", flat=True)[:10_000]
+                nearest_validated_distance__isnull=False
+            ).values_list("nearest_validated_distance", flat=True)[:10_000]
         )
-        sparse_threshold = float(np.percentile(all_mibig_dists, 75)) if all_mibig_dists else 0.5
+        sparse_threshold = float(np.percentile(all_validated_dists, 75)) if all_validated_dists else 0.5
 
     chemical_space_points = [
         {
@@ -167,22 +164,22 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
             "umap_x": bgc.umap_x,
             "umap_y": bgc.umap_y,
             "classification_path": bgc.classification_path,
-            "nearest_mibig_distance": round(bgc.nearest_mibig_distance or 0.0, 4),
-            "is_sparse": (bgc.nearest_mibig_distance or 0.0) > sparse_threshold,
+            "nearest_validated_distance": round(bgc.nearest_validated_distance or 0.0, 4),
+            "is_sparse": (bgc.nearest_validated_distance or 0.0) > sparse_threshold,
         }
         for bgc in bgcs
     ]
 
-    mibig_points = list(
-        DashboardMibigReference.objects.values(
-            "accession", "compound_name", "bgc_class", "umap_x", "umap_y"
+    validated_ref_points = list(
+        DashboardBgc.objects.filter(is_validated=True).values(
+            "bgc_accession", "classification_path", "umap_x", "umap_y"
         )
     )
 
     sparse_count = sum(1 for p in chemical_space_points if p["is_sparse"])
     sparse_fraction = sparse_count / max(len(chemical_space_points), 1)
-    mean_mibig_dist = (
-        np.mean([p["nearest_mibig_distance"] for p in chemical_space_points])
+    mean_validated_dist = (
+        np.mean([p["nearest_validated_distance"] for p in chemical_space_points])
         if chemical_space_points
         else 0.0
     )
@@ -219,8 +216,8 @@ def compute_assembly_assessment(assembly_id: int) -> dict:
         "bgc_novelty_breakdown": bgc_novelty_breakdown,
         "redundancy_matrix": redundancy_matrix,
         "chemical_space_points": chemical_space_points,
-        "mibig_reference_points": mibig_points,
-        "mean_nearest_mibig_distance": round(float(mean_mibig_dist), 4),
+        "validated_reference_points": validated_ref_points,
+        "mean_nearest_validated_distance": round(float(mean_validated_dist), 4),
         "sparse_fraction": round(sparse_fraction, 4),
         "radar_references": radar_references,
     }
@@ -240,16 +237,30 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
 
     # ── GCF placement ────────────────────────────────────────────────────
     gcf_context = None
-    distance_to_rep = bgc.distance_to_gcf_representative
+    distance_to_rep = None
     is_novel_singleton = False
 
-    if bgc.gcf_id is not None:
-        try:
-            gcf = DashboardGCF.objects.get(pk=bgc.gcf_id)
+    if bgc.gene_cluster_family:
+        gcf = DashboardGCF.objects.filter(family_id=bgc.gene_cluster_family).first()
+        if gcf:
             gcf_context = _build_gcf_context(gcf, bgc)
-        except DashboardGCF.DoesNotExist:
+            # Compute distance to representative via embedding if available
+            if gcf.representative_bgc_id:
+                try:
+                    bgc_emb = BgcEmbedding.objects.get(bgc=bgc)
+                    rep_emb = BgcEmbedding.objects.filter(bgc_id=gcf.representative_bgc_id).first()
+                    if rep_emb:
+                        dist_qs = (
+                            BgcEmbedding.objects.filter(bgc_id=gcf.representative_bgc_id)
+                            .annotate(distance=CosineDistance("vector", bgc_emb.vector))
+                            .values_list("distance", flat=True)
+                            .first()
+                        )
+                        distance_to_rep = float(dist_qs) if dist_qs is not None else None
+                except BgcEmbedding.DoesNotExist:
+                    pass
+        else:
             is_novel_singleton = True
-            distance_to_rep = None
     else:
         # Try nearest-neighbor GCF placement via embedding
         try:
@@ -260,7 +271,6 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
                 distance_to_rep = dist
             else:
                 is_novel_singleton = True
-                distance_to_rep = None
         except BgcEmbedding.DoesNotExist:
             is_novel_singleton = True
 
@@ -314,26 +324,26 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "umap_x": bgc.umap_x,
         "umap_y": bgc.umap_y,
         "classification_path": classification_path,
-        "nearest_mibig_distance": round(bgc.nearest_mibig_distance or 0.0, 4),
+        "nearest_validated_distance": round(bgc.nearest_validated_distance or 0.0, 4),
         "is_sparse": False,
     }
 
     nearest_neighbors = _find_nearest_neighbors(bgc, k=20)
-    mibig_points = list(
-        DashboardMibigReference.objects.values(
-            "accession", "compound_name", "bgc_class", "umap_x", "umap_y"
+    validated_ref_points = list(
+        DashboardBgc.objects.filter(is_validated=True).values(
+            "bgc_accession", "classification_path", "umap_x", "umap_y"
         )
     )
 
-    # ── Nearest MIBiG for domain comparison ──────────────────────────────
-    nearest_mibig_accession = bgc.nearest_mibig_accession or None
-    nearest_mibig_bgc_id = None
-    if nearest_mibig_accession:
-        mibig_ref = DashboardMibigReference.objects.filter(
-            accession=nearest_mibig_accession
-        ).first()
-        if mibig_ref and mibig_ref.dashboard_bgc_id:
-            nearest_mibig_bgc_id = mibig_ref.dashboard_bgc_id
+    # ── Nearest validated BGC for domain comparison ──────────────────────
+    nearest_validated_accession = bgc.nearest_validated_accession or None
+    nearest_validated_bgc_id = None
+    if nearest_validated_accession:
+        ref_bgc = DashboardBgc.objects.filter(
+            bgc_accession=nearest_validated_accession
+        ).values_list("id", flat=True).first()
+        if ref_bgc:
+            nearest_validated_bgc_id = ref_bgc
 
     return {
         "bgc_id": bgc.id,
@@ -346,10 +356,10 @@ def compute_bgc_assessment(bgc_id: int) -> dict:
         "novelty": novelty,
         "submitted_point": submitted_point,
         "nearest_neighbors": nearest_neighbors,
-        "mibig_reference_points": mibig_points,
+        "validated_reference_points": validated_ref_points,
         "submitted_domains": submitted_domains,
-        "nearest_mibig_accession": nearest_mibig_accession,
-        "nearest_mibig_bgc_id": nearest_mibig_bgc_id,
+        "nearest_validated_accession": nearest_validated_accession,
+        "nearest_validated_bgc_id": nearest_validated_bgc_id,
     }
 
 
@@ -397,7 +407,9 @@ def find_similar_assemblies(assembly_id: int, k: int = 10) -> list[int]:
 
 def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
     """Build the GCF context panel data."""
-    members = DashboardBgc.objects.filter(gcf_id=gcf.id).select_related("assembly")
+    members = DashboardBgc.objects.filter(
+        gene_cluster_family=gcf.family_id
+    ).select_related("assembly")
 
     member_points = []
     novelty_values = []
@@ -414,9 +426,6 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
                 "umap_x": mbgc.umap_x,
                 "umap_y": mbgc.umap_y,
                 "is_type_strain": is_ts,
-                "distance_to_representative": round(
-                    mbgc.distance_to_gcf_representative or 0.0, 4
-                ),
                 "accession": mbgc.bgc_accession,
             }
         )
@@ -438,10 +447,10 @@ def _build_gcf_context(gcf: DashboardGCF, exclude_bgc: DashboardBgc) -> dict:
         "gcf_id": gcf.id,
         "family_id": gcf.family_id,
         "member_count": gcf.member_count,
-        "mibig_count": gcf.mibig_count,
+        "validated_count": gcf.validated_count,
         "mean_novelty": round(np.mean(novelty_values) if novelty_values else 0.0, 4),
         "known_chemistry_annotation": gcf.known_chemistry_annotation or None,
-        "mibig_accession": gcf.mibig_accession or None,
+        "validated_accession": gcf.validated_accession or None,
         "domain_frequency": domain_frequency,
         "taxonomy_distribution": taxonomy_distribution,
         "member_points": member_points,
@@ -550,10 +559,10 @@ def _compute_novelty_decomposition(
     except BgcEmbedding.DoesNotExist:
         pass
 
-    # Chemistry novelty
+    # Chemistry novelty (distance to nearest validated BGC)
     chemistry_novelty = 0.0
-    if bgc.nearest_mibig_distance is not None:
-        chemistry_novelty = min(bgc.nearest_mibig_distance, 1.0)
+    if bgc.nearest_validated_distance is not None:
+        chemistry_novelty = min(bgc.nearest_validated_distance, 1.0)
 
     # Architecture novelty: fraction of domains not found in any other DB BGC
     architecture_novelty = 0.0
@@ -575,7 +584,7 @@ def _compute_novelty_decomposition(
 
 
 def _find_nearest_neighbors(bgc: DashboardBgc, k: int = 20) -> list[dict]:
-    """Find K nearest DB BGCs and MIBiG references to a BGC."""
+    """Find K nearest BGCs (including validated ones) by embedding distance."""
     neighbors: list[dict] = []
 
     try:
@@ -583,7 +592,6 @@ def _find_nearest_neighbors(bgc: DashboardBgc, k: int = 20) -> list[dict]:
     except BgcEmbedding.DoesNotExist:
         return neighbors
 
-    # Nearest DB BGCs via embedding table
     nearest_bgcs = (
         BgcEmbedding.objects.exclude(bgc=bgc)
         .annotate(distance=CosineDistance("vector", bgc_emb.vector))
@@ -594,31 +602,12 @@ def _find_nearest_neighbors(bgc: DashboardBgc, k: int = 20) -> list[dict]:
         neighbors.append(
             {
                 "bgc_id": nb.bgc.id,
-                "mibig_accession": None,
+                "validated_accession": nb.bgc.bgc_accession if nb.bgc.is_validated else None,
                 "umap_x": nb.bgc.umap_x,
                 "umap_y": nb.bgc.umap_y,
                 "distance": round(float(nb.distance), 4),
                 "label": nb.bgc.bgc_accession,
-                "is_mibig": False,
-            }
-        )
-
-    # Nearest MIBiG references
-    nearest_mibig = (
-        DashboardMibigReference.objects.filter(embedding__isnull=False)
-        .annotate(distance=CosineDistance("embedding", bgc_emb.vector))
-        .order_by("distance")[:5]
-    )
-    for mr in nearest_mibig:
-        neighbors.append(
-            {
-                "bgc_id": None,
-                "mibig_accession": mr.accession,
-                "umap_x": mr.umap_x,
-                "umap_y": mr.umap_y,
-                "distance": round(float(mr.distance), 4),
-                "label": f"{mr.accession} ({mr.compound_name})",
-                "is_mibig": True,
+                "is_validated": nb.bgc.is_validated,
             }
         )
 
