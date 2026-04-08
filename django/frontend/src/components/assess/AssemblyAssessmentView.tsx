@@ -19,6 +19,7 @@ import { toast } from "sonner";
 
 export function AssemblyAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
+  const isUploaded = useAssessStore((s) => s.isUploaded);
   const { isLoading, isError, result, retry } = useAssemblyAssessment();
 
   if (isLoading) {
@@ -58,23 +59,27 @@ export function AssemblyAssessmentView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const ok = useShortlistStore.getState().addAssembly({
-                id: result.assembly_id,
-                label: result.organism_name || result.accession,
-              });
-              if (ok) toast.success("Added to assembly shortlist");
-              else toast.error("Shortlist full (max 20)");
-            }}
-          >
-            <ListPlus className="mr-1 h-3 w-3" />
-            Add to Shortlist
-          </Button>
+          {!isUploaded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const ok = useShortlistStore.getState().addAssembly({
+                  id: result.assembly_id,
+                  label: result.organism_name || result.accession,
+                });
+                if (ok) toast.success("Added to assembly shortlist");
+                else toast.error("Shortlist full (max 20)");
+              }}
+            >
+              <ListPlus className="mr-1 h-3 w-3" />
+              Add to Shortlist
+            </Button>
+          )}
           <AssessmentExportButton />
-          <CrossModeActions assetType="assembly" assetId={result.assembly_id} />
+          {!isUploaded && (
+            <CrossModeActions assetType="assembly" assetId={result.assembly_id} />
+          )}
         </div>
       </div>
 

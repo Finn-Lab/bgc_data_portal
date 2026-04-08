@@ -13,8 +13,10 @@ interface AssessState {
   taskId: string | null;
   status: "idle" | "pending" | "success" | "error";
   result: AssemblyAssessmentResult | BgcAssessmentResult | null;
+  isUploaded: boolean;
 
   startAssessment: (type: AssessAssetType, id: number, label: string) => void;
+  startUploadAssessment: (type: AssessAssetType, label: string) => void;
   setTaskId: (taskId: string) => void;
   setResult: (result: AssemblyAssessmentResult | BgcAssessmentResult) => void;
   setStatus: (status: "idle" | "pending" | "success" | "error") => void;
@@ -28,6 +30,7 @@ export const useAssessStore = create<AssessState>((set) => ({
   taskId: null,
   status: "idle",
   result: null,
+  isUploaded: false,
 
   startAssessment: (type, id, label) =>
     set({
@@ -37,6 +40,18 @@ export const useAssessStore = create<AssessState>((set) => ({
       taskId: null,
       status: "idle",
       result: null,
+      isUploaded: false,
+    }),
+
+  startUploadAssessment: (type, label) =>
+    set({
+      assetType: type,
+      assetId: null,
+      assetLabel: label,
+      taskId: null,
+      status: "idle",
+      result: null,
+      isUploaded: true,
     }),
 
   setTaskId: (taskId) => set({ taskId, status: "pending" }),
@@ -51,5 +66,6 @@ export const useAssessStore = create<AssessState>((set) => ({
       taskId: null,
       status: "idle",
       result: null,
+      isUploaded: false,
     }),
 }));

@@ -19,6 +19,7 @@ import { toast } from "sonner";
 export function BgcAssessmentView() {
   const assetLabel = useAssessStore((s) => s.assetLabel);
   const assetId = useAssessStore((s) => s.assetId);
+  const isUploaded = useAssessStore((s) => s.isUploaded);
   const { isLoading, isError, result, retry } = useBgcAssessment();
 
   const assessBgcIds = useMemo(() => {
@@ -70,23 +71,27 @@ export function BgcAssessmentView() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const ok = useShortlistStore.getState().addBgc({
-                id: result.bgc_id,
-                label: result.accession,
-              });
-              if (ok) toast.success("Added to BGC shortlist");
-              else toast.error("Shortlist full (max 20)");
-            }}
-          >
-            <ListPlus className="mr-1 h-3 w-3" />
-            Add to Shortlist
-          </Button>
+          {!isUploaded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const ok = useShortlistStore.getState().addBgc({
+                  id: result.bgc_id,
+                  label: result.accession,
+                });
+                if (ok) toast.success("Added to BGC shortlist");
+                else toast.error("Shortlist full (max 20)");
+              }}
+            >
+              <ListPlus className="mr-1 h-3 w-3" />
+              Add to Shortlist
+            </Button>
+          )}
           <AssessmentExportButton />
-          <CrossModeActions assetType="bgc" assetId={assetId!} />
+          {!isUploaded && (
+            <CrossModeActions assetType="bgc" assetId={assetId!} />
+          )}
         </div>
       </div>
 

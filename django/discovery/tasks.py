@@ -16,6 +16,7 @@ from discovery.cache_utils import set_job_cache
 log = logging.getLogger(__name__)
 
 ASSESSMENT_TTL = 86_400  # 24 hours
+UPLOAD_ASSESSMENT_TTL = 14_400  # 4 hours
 CHEMICAL_QUERY_TTL = 3_600  # 1 hour
 
 
@@ -62,6 +63,76 @@ def assess_bgc(self, bgc_id: int) -> bool:
         timeout=ASSESSMENT_TTL,
     )
     log.info("BGC assessment completed for BGC %s (task %s)", bgc_id, task_id)
+    return True
+
+
+@shared_task(name="discovery.tasks.assess_uploaded_bgc", bind=True, acks_late=True)
+def assess_uploaded_bgc(self, upload_key: str) -> bool:
+    """Run a full BGC assessment on uploaded (cached) data."""
+    from django.core.cache import cache
+
+    task_id = self.request.id
+    search_key = f"assess_upload_bgc:{upload_key}"
+
+    set_job_cache(search_key=search_key, task_id=task_id, timeout=UPLOAD_ASSESSMENT_TTL)
+
+    uploaded_data = cache.get(upload_key)
+    if not uploaded_data:
+        set_job_cache(
+            search_key=search_key,
+            results={"error": "Upload expired — please re-upload"},
+            task_id=task_id,
+            timeout=UPLOAD_ASSESSMENT_TTL,
+        )
+        log.warning("Upload key %s expired before assessment (task %s)", upload_key, task_id)
+        return False
+
+    from discovery.services.uploaded_assessment import compute_uploaded_bgc_assessment
+
+    result = compute_uploaded_bgc_assessment(uploaded_data)
+
+    set_job_cache(
+        search_key=search_key,
+        results=result,
+        task_id=task_id,
+        timeout=UPLOAD_ASSESSMENT_TTL,
+    )
+    log.info("Uploaded BGC assessment completed (task %s)", task_id)
+    return True
+
+
+@shared_task(name="discovery.tasks.assess_uploaded_assembly", bind=True, acks_late=True)
+def assess_uploaded_assembly(self, upload_key: str) -> bool:
+    """Run a full assembly assessment on uploaded (cached) data."""
+    from django.core.cache import cache
+
+    task_id = self.request.id
+    search_key = f"assess_upload_assembly:{upload_key}"
+
+    set_job_cache(search_key=search_key, task_id=task_id, timeout=UPLOAD_ASSESSMENT_TTL)
+
+    uploaded_data = cache.get(upload_key)
+    if not uploaded_data:
+        set_job_cache(
+            search_key=search_key,
+            results={"error": "Upload expired — please re-upload"},
+            task_id=task_id,
+            timeout=UPLOAD_ASSESSMENT_TTL,
+        )
+        log.warning("Upload key %s expired before assessment (task %s)", upload_key, task_id)
+        return False
+
+    from discovery.services.uploaded_assessment import compute_uploaded_assembly_assessment
+
+    result = compute_uploaded_assembly_assessment(uploaded_data)
+
+    set_job_cache(
+        search_key=search_key,
+        results=result,
+        task_id=task_id,
+        timeout=UPLOAD_ASSESSMENT_TTL,
+    )
+    log.info("Uploaded assembly assessment completed (task %s)", task_id)
     return True
 
 

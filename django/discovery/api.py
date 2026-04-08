@@ -1628,3 +1628,60 @@ def export_assessment(request, task_id: str):
     response = HttpResponse(content, content_type="application/json")
     response["Content-Disposition"] = f'attachment; filename="assessment_{task_id[:8]}.json"'
     return response
+
+
+@discovery_router.post(
+    "/assess/upload/",
+    response={202: AssessmentAccepted},
+    tags=["Assessment"],
+)
+def upload_for_assessment(request):
+    """Upload a tar.gz of TSV files for ephemeral asset evaluation.
+
+    Expects a multipart form with:
+    - ``type``: ``"bgc"`` or ``"assembly"``
+    - ``file``: the tar.gz archive
+    """
+    from uuid import uuid4
+
+    from django.core.cache import cache
+
+    from discovery.services.upload_parser import (
+        UploadValidationError,
+        parse_assembly_upload,
+        parse_bgc_upload,
+    )
+
+    upload_type = request.POST.get("type", "").strip()
+    if upload_type not in ("bgc", "assembly"):
+        raise HttpError(400, "type must be 'bgc' or 'assembly'")
+
+    uploaded_file = request.FILES.get("file")
+    if not uploaded_file:
+        raise HttpError(400, "No file provided")
+    if uploaded_file.size > 10 * 1024 * 1024:
+        raise HttpError(400, "File too large (max 10 MB)")
+
+    tar_bytes = uploaded_file.read()
+
+    try:
+        if upload_type == "bgc":
+            parsed = parse_bgc_upload(tar_bytes)
+        else:
+            parsed = parse_assembly_upload(tar_bytes)
+    except UploadValidationError as e:
+        raise HttpError(400, str(e))
+
+    upload_key = f"upload:{uuid4().hex}"
+    cache.set(upload_key, parsed, 14_400)  # 4h TTL
+
+    if upload_type == "bgc":
+        from discovery.tasks import assess_uploaded_bgc
+
+        result = assess_uploaded_bgc.delay(upload_key)
+    else:
+        from discovery.tasks import assess_uploaded_assembly
+
+        result = assess_uploaded_assembly.delay(upload_key)
+
+    return 202, AssessmentAccepted(task_id=result.id, asset_type=upload_type)
