@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Upload, FileArchive, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUploadAssessment } from "@/hooks/use-upload-assessment";
 
 type UploadType = "bgc" | "assembly";
@@ -39,21 +40,19 @@ export function UploadForEvaluation() {
       </h3>
 
       {/* Type selector */}
-      <div className="flex gap-2">
-        {(["bgc", "assembly"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setUploadType(t)}
-            className={`flex-1 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
-              uploadType === t
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-input hover:bg-accent"
-            }`}
-          >
-            {t === "bgc" ? "Single BGC" : "Assembly"}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={uploadType}
+        onValueChange={(v) => setUploadType(v as UploadType)}
+      >
+        <TabsList className="w-full">
+          <TabsTrigger value="bgc" className="flex-1 text-xs">
+            Single BGC
+          </TabsTrigger>
+          <TabsTrigger value="assembly" className="flex-1 text-xs">
+            Assembly
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {/* Drop zone */}
       <div
