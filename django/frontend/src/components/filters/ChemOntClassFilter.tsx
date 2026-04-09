@@ -90,7 +90,7 @@ export function ChemOntClassFilter() {
   }
 
   return (
-    <div className="space-y-2 min-w-0 overflow-hidden">
+    <div className="space-y-2 min-w-0">
       <span className="text-sm font-medium">ChemOnt Chemical Class</span>
       <div className="max-h-48 overflow-auto min-w-0">
         {(chemontClasses ?? []).map((node) => (
