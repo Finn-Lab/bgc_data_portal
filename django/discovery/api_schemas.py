@@ -125,10 +125,19 @@ class ParentAssemblySummary(Schema):
     is_type_strain: bool = False
 
 
-class ChemOntClassSummary(Schema):
+class ChemOntAnnotationNode(Schema):
+    """A node in a ChemOnt classification tree for a natural product.
+
+    Each node is a directly-annotated ChemOnt term with its probability.
+    ``children`` holds more specific sub-classifications that were also
+    annotated on the same natural product.
+    """
+
     chemont_id: str
     name: str
-    probability: float
+    depth: int = 0
+    probability: float | None = None
+    children: list["ChemOntAnnotationNode"] = []
 
 
 class NaturalProductSummary(Schema):
@@ -138,7 +147,7 @@ class NaturalProductSummary(Schema):
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-    chemont_classes: list[ChemOntClassSummary] = []
+    chemont_classes: list[ChemOntAnnotationNode] = []
 
 
 class BgcDetail(Schema):

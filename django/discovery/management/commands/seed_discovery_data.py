@@ -76,41 +76,105 @@ _NP_CLASSES = {
     "Alkaloid": {"Indole": ["Ergoline"], "Isoquinoline": ["Benzylisoquinoline"]},
 }
 
-# Real ChemOnt ontology IDs, names, and base probabilities per BGC class.
-# Hierarchy: Chemical entities (9999999) → Organic compounds (0000000) → ...
-_CHEMONT_POOL = {
+# ChemOnt lineage paths per BGC class.
+# Each lineage is a root-to-leaf path through the ontology hierarchy.
+# Format: list of (chemont_id, name, base_probability) ordered general→specific.
+# The seeder picks 1–2 lineages per NP and annotates all nodes along each path.
+#
+# Real hierarchy (from ChemOnt_2_1.obo):
+#   Chemical entities (9999999) → Organic compounds (0000000)
+#     → Phenylpropanoids and polyketides (0000261) → Macrolides (0000147) → Epothilones (0000161)
+#     → Organic acids (0000264) → Carboxylic acids (0000265) → Amino acids, peptides (0000013)
+#       → Peptides (0000348) → Cyclic peptides (0001995) → Diketopiperazines (0002356)
+#     → Lipids (0000012) → Prenol lipids (0000259) → Sesquiterpenoids (0001550)
+#     → Alkaloids (0000279) → Indoles (0000211)
+
+_CHEMONT_LINEAGES = {
     "Polyketide": [
-        ("CHEMONTID:0000147", "Macrolides and analogues", 0.92),
-        ("CHEMONTID:0000261", "Phenylpropanoids and polyketides", 0.88),
-        ("CHEMONTID:0000161", "Epothilones and analogues", 0.75),
-        ("CHEMONTID:0000050", "Lactones", 0.80),
-        ("CHEMONTID:0000145", "Coumarins and derivatives", 0.70),
+        [   # Organic compounds → Phenylpropanoids → Macrolides → Epothilones
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000261", "Phenylpropanoids and polyketides", 0.90),
+            ("CHEMONTID:0000147", "Macrolides and analogues", 0.85),
+            ("CHEMONTID:0000161", "Epothilones and analogues", 0.72),
+        ],
+        [   # Organic compounds → Phenylpropanoids → Coumarins
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000261", "Phenylpropanoids and polyketides", 0.91),
+            ("CHEMONTID:0000145", "Coumarins and derivatives", 0.78),
+        ],
+        [   # Organic compounds → Phenylpropanoids → Macrolides (stop here)
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000261", "Phenylpropanoids and polyketides", 0.88),
+            ("CHEMONTID:0000147", "Macrolides and analogues", 0.82),
+        ],
     ],
     "NRP": [
-        ("CHEMONTID:0001995", "Cyclic peptides", 0.93),
-        ("CHEMONTID:0001994", "Cyclic depsipeptides", 0.88),
-        ("CHEMONTID:0000348", "Peptides", 0.85),
-        ("CHEMONTID:0001961", "Depsipeptides", 0.82),
-        ("CHEMONTID:0002356", "Diketopiperazines", 0.78),
+        [   # Organic compounds → Organic acids → Carboxylic acids → AA/peptides → Peptides → Cyclic peptides
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000264", "Organic acids and derivatives", 0.96),
+            ("CHEMONTID:0000265", "Carboxylic acids and derivatives", 0.93),
+            ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.90),
+            ("CHEMONTID:0000348", "Peptides", 0.87),
+            ("CHEMONTID:0001995", "Cyclic peptides", 0.80),
+        ],
+        [   # → Cyclic peptides → Cyclic depsipeptides
+            ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.92),
+            ("CHEMONTID:0000348", "Peptides", 0.88),
+            ("CHEMONTID:0001995", "Cyclic peptides", 0.83),
+            ("CHEMONTID:0001994", "Cyclic depsipeptides", 0.75),
+        ],
+        [   # → Cyclic peptides → Diketopiperazines
+            ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.91),
+            ("CHEMONTID:0000348", "Peptides", 0.86),
+            ("CHEMONTID:0001995", "Cyclic peptides", 0.81),
+            ("CHEMONTID:0002356", "Diketopiperazines", 0.70),
+        ],
     ],
     "RiPP": [
-        ("CHEMONTID:0001995", "Cyclic peptides", 0.90),
-        ("CHEMONTID:0000348", "Peptides", 0.87),
-        ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.80),
-        ("CHEMONTID:0000095", "Thiazoles", 0.72),
+        [   # AA/peptides → Peptides → Cyclic peptides
+            ("CHEMONTID:0000013", "Amino acids, peptides, and analogues", 0.93),
+            ("CHEMONTID:0000348", "Peptides", 0.88),
+            ("CHEMONTID:0001995", "Cyclic peptides", 0.78),
+        ],
+        [   # Organoheterocyclic → Thiazoles
+            ("CHEMONTID:0000002", "Organoheterocyclic compounds", 0.90),
+            ("CHEMONTID:0000095", "Thiazoles", 0.74),
+        ],
     ],
     "Terpene": [
-        ("CHEMONTID:0001550", "Sesquiterpenoids", 0.91),
-        ("CHEMONTID:0001551", "Diterpenoids", 0.88),
-        ("CHEMONTID:0001549", "Monoterpenoids", 0.85),
-        ("CHEMONTID:0000259", "Prenol lipids", 0.80),
-        ("CHEMONTID:0001283", "Terpene lactones", 0.75),
+        [   # Organic compounds → Lipids → Prenol lipids → Sesquiterpenoids
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000012", "Lipids and lipid-like molecules", 0.95),
+            ("CHEMONTID:0000259", "Prenol lipids", 0.90),
+            ("CHEMONTID:0001550", "Sesquiterpenoids", 0.82),
+        ],
+        [   # → Prenol lipids → Diterpenoids → Cembrane diterpenoids
+            ("CHEMONTID:0000012", "Lipids and lipid-like molecules", 0.96),
+            ("CHEMONTID:0000259", "Prenol lipids", 0.91),
+            ("CHEMONTID:0001551", "Diterpenoids", 0.84),
+            ("CHEMONTID:0000008", "Cembrane diterpenoids", 0.70),
+        ],
+        [   # → Prenol lipids → Monoterpenoids
+            ("CHEMONTID:0000012", "Lipids and lipid-like molecules", 0.96),
+            ("CHEMONTID:0000259", "Prenol lipids", 0.92),
+            ("CHEMONTID:0001549", "Monoterpenoids", 0.80),
+        ],
     ],
     "Alkaloid": [
-        ("CHEMONTID:0000279", "Alkaloids and derivatives", 0.93),
-        ("CHEMONTID:0000211", "Indoles and derivatives", 0.85),
-        ("CHEMONTID:0000058", "Morphinans", 0.78),
-        ("CHEMONTID:0000492", "Tropane alkaloids", 0.75),
+        [   # Organic compounds → Alkaloids → Tropane alkaloids
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000279", "Alkaloids and derivatives", 0.92),
+            ("CHEMONTID:0000492", "Tropane alkaloids", 0.78),
+        ],
+        [   # Organic compounds → Alkaloids → Morphinans
+            ("CHEMONTID:0000000", "Organic compounds", 0.99),
+            ("CHEMONTID:0000279", "Alkaloids and derivatives", 0.90),
+            ("CHEMONTID:0000058", "Morphinans", 0.74),
+        ],
+        [   # Organoheterocyclic → Indoles
+            ("CHEMONTID:0000002", "Organoheterocyclic compounds", 0.95),
+            ("CHEMONTID:0000211", "Indoles and derivatives", 0.82),
+        ],
     ],
 }
 
@@ -598,19 +662,26 @@ class Command(BaseCommand):
         self.stdout.write(f"  {len(nps)} DashboardNaturalProduct rows.")
 
         # ── 7b. NaturalProductChemOntClass ────────────────────────────
+        # For each NP, pick 1–2 ontology lineages and annotate every node
+        # along each path so the hierarchy builder produces realistic trees.
         self.stdout.write("Creating ChemOnt classifications...")
         chemont_rows = []
         for np_obj in nps:
             bgc_class = np_obj.bgc.classification_path.split(".")[0] if np_obj.bgc.classification_path else ""
-            pool = _CHEMONT_POOL.get(bgc_class, _CHEMONT_POOL["Polyketide"])
-            n_classes = random.randint(1, min(3, len(pool)))
-            for chemont_id, chemont_name, base_prob in random.sample(pool, n_classes):
-                chemont_rows.append(NaturalProductChemOntClass(
-                    natural_product=np_obj,
-                    chemont_id=chemont_id,
-                    chemont_name=chemont_name,
-                    probability=round(max(0.1, min(1.0, base_prob + random.uniform(-0.1, 0.05))), 3),
-                ))
+            lineages = _CHEMONT_LINEAGES.get(bgc_class, _CHEMONT_LINEAGES["Polyketide"])
+            n_lineages = random.randint(1, min(2, len(lineages)))
+            seen_ids: set[str] = set()
+            for lineage in random.sample(lineages, n_lineages):
+                for chemont_id, chemont_name, base_prob in lineage:
+                    if chemont_id in seen_ids:
+                        continue  # shared ancestor across lineages
+                    seen_ids.add(chemont_id)
+                    chemont_rows.append(NaturalProductChemOntClass(
+                        natural_product=np_obj,
+                        chemont_id=chemont_id,
+                        chemont_name=chemont_name,
+                        probability=round(max(0.1, min(1.0, base_prob + random.uniform(-0.08, 0.04))), 3),
+                    ))
         NaturalProductChemOntClass.objects.bulk_create(chemont_rows, ignore_conflicts=True)
         self.stdout.write(f"  {len(chemont_rows)} NaturalProductChemOntClass rows.")
 

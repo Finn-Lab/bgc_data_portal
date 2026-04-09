@@ -65,8 +65,8 @@ from discovery.api_schemas import (
     AssemblyRosterItem,
     AssemblyScatterPoint,
     ValidatedReferencePoint,
+    ChemOntAnnotationNode,
     ChemOntClassNode,
-    ChemOntClassSummary,
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
@@ -93,6 +93,116 @@ discovery_router = Router(tags=["Discovery Platform"])
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def _build_chemont_annotation_tree(chemont_qs) -> list[ChemOntAnnotationNode]:
+    """Organise an NP's flat ChemOnt annotations into a hierarchy.
+
+    Since the ETL stores full lineage paths (every ancestor along the path
+    is an annotation row), the annotations for a single NP already encode
+    the tree structure.  We infer parent-child relationships by probability
+    ordering: higher-probability nodes are more general ancestors of
+    lower-probability nodes.
+
+    When the ChemOnt OBO ontology is available, uses real ``parent_ids``
+    for accurate hierarchy.  Otherwise falls back to a probability-based
+    heuristic that works because the ETL produces monotonically decreasing
+    probabilities along each lineage path.
+    """
+    annotations = list(chemont_qs)
+    if not annotations:
+        return []
+
+    prob_map: dict[str, float] = {a.chemont_id: a.probability for a in annotations}
+    name_map: dict[str, str] = {a.chemont_id: a.chemont_name for a in annotations}
+    annotated_ids = set(prob_map.keys())
+
+    # Try loading the ontology for accurate hierarchy.
+    ont = None
+    try:
+        from common_core.chemont.ontology import get_ontology
+        ont = get_ontology()
+    except (FileNotFoundError, ImportError):
+        pass
+
+    children_of: dict[str, list[str]] = {}
+    roots: list[str] = []
+    depth_map: dict[str, int] = {}
+
+    if ont is not None:
+        # Ontology available: use real parent_ids.
+        # Include unannotated ancestors that connect annotated terms.
+        all_ids: set[str] = set(annotated_ids)
+        for cid in annotated_ids:
+            for anc in ont.get_ancestors(cid):
+                all_ids.add(anc.id)
+                if anc.id not in name_map:
+                    name_map[anc.id] = anc.name
+
+        def _has_annotated_descendant(tid: str, visited: set[str]) -> bool:
+            if tid in annotated_ids:
+                return True
+            visited.add(tid)
+            for child_id in ont._children.get(tid, []):
+                if child_id in all_ids and child_id not in visited:
+                    if _has_annotated_descendant(child_id, visited):
+                        return True
+            return False
+
+        relevant: set[str] = set()
+        for tid in all_ids:
+            if _has_annotated_descendant(tid, set()):
+                relevant.add(tid)
+
+        for tid in relevant:
+            term = ont.get_term(tid)
+            if term is None:
+                if tid in annotated_ids:
+                    roots.append(tid)
+                continue
+            depth_map[tid] = term.depth
+            has_relevant_parent = False
+            for pid in term.parent_ids:
+                if pid in relevant:
+                    children_of.setdefault(pid, []).append(tid)
+                    has_relevant_parent = True
+            if not has_relevant_parent:
+                roots.append(tid)
+    else:
+        # No ontology: infer hierarchy from probability ordering.
+        # The ETL stores annotations with decreasing probabilities along
+        # each lineage (general=high, specific=low).  Sort by probability
+        # descending — each node's parent is the annotated node with the
+        # smallest probability that is still higher than its own.
+        sorted_anns = sorted(annotations, key=lambda a: a.probability, reverse=True)
+        for i, ann in enumerate(sorted_anns):
+            parent_found = False
+            for j in range(i - 1, -1, -1):
+                candidate = sorted_anns[j]
+                if candidate.probability > ann.probability:
+                    children_of.setdefault(candidate.chemont_id, []).append(ann.chemont_id)
+                    parent_found = True
+                    break
+            if not parent_found:
+                roots.append(ann.chemont_id)
+
+        for depth_idx, ann in enumerate(sorted_anns):
+            depth_map[ann.chemont_id] = depth_idx
+
+    def _to_node(tid: str) -> ChemOntAnnotationNode:
+        kids = sorted(children_of.get(tid, []), key=lambda c: name_map.get(c, c))
+        return ChemOntAnnotationNode(
+            chemont_id=tid,
+            name=name_map.get(tid, tid),
+            depth=depth_map.get(tid, 0),
+            probability=prob_map.get(tid),  # None for intermediate (unannotated) ancestors
+            children=[_to_node(c) for c in kids],
+        )
+
+    return sorted(
+        [_to_node(r) for r in roots],
+        key=lambda n: n.name,
+    )
 
 
 def _paginate(page: int, page_size: int, total_count: int):
@@ -504,14 +614,7 @@ def bgc_detail(request, bgc_id: int):
         "chemont_classes"
     )
     for np_obj in np_qs:
-        chemont_list = [
-            ChemOntClassSummary(
-                chemont_id=cc.chemont_id,
-                name=cc.chemont_name,
-                probability=cc.probability,
-            )
-            for cc in np_obj.chemont_classes.all()
-        ]
+        chemont_tree = _build_chemont_annotation_tree(np_obj.chemont_classes.all())
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -520,7 +623,7 @@ def bgc_detail(request, bgc_id: int):
                 smiles_svg="",
                 structure_thumbnail=np_obj.structure_svg_base64,
                 np_class_path=np_obj.np_class_path,
-                chemont_classes=chemont_list,
+                chemont_classes=chemont_tree,
             )
         )
 
@@ -1345,59 +1448,108 @@ def np_classes(request):
 
 @discovery_router.get("/filters/chemont-classes/", response=list[ChemOntClassNode])
 def chemont_classes(request):
-    """Return a hierarchical tree of ChemOnt classes with BGC counts."""
+    """Return a hierarchical tree of ChemOnt classes with BGC counts.
+
+    Uses the ChemOnt OBO ontology when available, otherwise falls back to
+    building the tree from co-occurrence in the database (since the ingestion
+    pipeline stores full lineage paths, every ancestor is present as a row).
+    """
     # Direct annotation counts grouped by chemont_id.
-    rows = (
+    rows = list(
         NaturalProductChemOntClass.objects
         .values("chemont_id", "chemont_name")
         .annotate(cnt=Count("natural_product__bgc", distinct=True))
     )
 
-    # Build tree from ontology hierarchy.
-    try:
-        from common_core.chemont.ontology import get_ontology
+    if not rows:
+        return []
 
-        ont = get_ontology()
-    except (FileNotFoundError, ImportError):
-        # Fallback: flat list without hierarchy.
-        return [
-            ChemOntClassNode(
-                chemont_id=r["chemont_id"],
-                name=r["chemont_name"],
-                count=r["cnt"],
-            )
-            for r in rows
-        ]
-
-    # Collect direct counts.
     direct_counts: dict[str, int] = {}
     name_map: dict[str, str] = {}
     for r in rows:
         direct_counts[r["chemont_id"]] = r["cnt"]
         name_map[r["chemont_id"]] = r["chemont_name"]
 
-    # Find all terms that are either directly annotated or ancestors of annotated terms.
-    relevant_ids: set[str] = set(direct_counts.keys())
-    for cid in list(direct_counts.keys()):
-        for ancestor in ont.get_ancestors(cid):
-            relevant_ids.add(ancestor.id)
-            if ancestor.id not in name_map:
-                name_map[ancestor.id] = ancestor.name
+    annotated_ids = set(direct_counts.keys())
 
-    # Build children sets for relevant terms.
+    # Try loading the ontology for hierarchy information.
+    ont = None
+    try:
+        from common_core.chemont.ontology import get_ontology
+        ont = get_ontology()
+    except (FileNotFoundError, ImportError):
+        pass
+
+    # Build parent→children mapping.
+    # Strategy: use the ontology if available, otherwise infer hierarchy from
+    # co-occurrence patterns in the data.  Since the ETL stores full lineage
+    # paths, if two annotated IDs share a parent-child relationship in the
+    # ontology, both will be present in the DB.
     children_map: dict[str, list[str]] = {}
     root_ids: list[str] = []
-    for tid in relevant_ids:
-        term = ont.get_term(tid)
-        if term is None:
-            continue
-        has_relevant_parent = False
-        for pid in term.parent_ids:
-            if pid in relevant_ids:
-                children_map.setdefault(pid, []).append(tid)
-                has_relevant_parent = True
-        if not has_relevant_parent:
-            root_ids.append(tid)
+
+    if ont is not None:
+        # Ontology available: use real parent_ids.
+        # Include ancestors of annotated terms so the tree is connected.
+        relevant_ids = set(annotated_ids)
+        for cid in list(annotated_ids):
+            for ancestor in ont.get_ancestors(cid):
+                relevant_ids.add(ancestor.id)
+                if ancestor.id not in name_map:
+                    name_map[ancestor.id] = ancestor.name
+
+        for tid in relevant_ids:
+            term = ont.get_term(tid)
+            if term is None:
+                if tid in annotated_ids:
+                    root_ids.append(tid)
+                continue
+            has_relevant_parent = False
+            for pid in term.parent_ids:
+                if pid in relevant_ids:
+                    children_map.setdefault(pid, []).append(tid)
+                    has_relevant_parent = True
+            if not has_relevant_parent:
+                root_ids.append(tid)
+    else:
+        # No ontology: infer hierarchy from the annotated data itself.
+        # NPs are annotated with full lineage paths, so for each NP the
+        # annotated ChemOnt IDs form a chain.  We find parent-child pairs
+        # by looking at which IDs always co-occur and have a subset
+        # relationship on the NPs that reference them.
+        #
+        # Heuristic: for each pair (A, B) where A's NP set is a superset
+        # of B's NP set AND A has more NPs, A is an ancestor of B.
+        # We pick the *closest* ancestor (smallest superset) as the parent.
+        id_to_nps: dict[str, set[int]] = {}
+        for row in NaturalProductChemOntClass.objects.values_list(
+            "chemont_id", "natural_product_id"
+        ):
+            id_to_nps.setdefault(row[0], set()).add(row[1])
+
+        all_ids = list(annotated_ids)
+        # For each term, find its parent = the term with the smallest
+        # strict superset of NPs.
+        parent_of: dict[str, str | None] = {}
+        for cid in all_ids:
+            my_nps = id_to_nps.get(cid, set())
+            best_parent = None
+            best_size = float("inf")
+            for other in all_ids:
+                if other == cid:
+                    continue
+                other_nps = id_to_nps.get(other, set())
+                if my_nps < other_nps and len(other_nps) < best_size:
+                    best_parent = other
+                    best_size = len(other_nps)
+            parent_of[cid] = best_parent
+
+        for cid in all_ids:
+            pid = parent_of[cid]
+            if pid is not None:
+                children_map.setdefault(pid, []).append(cid)
+            else:
+                root_ids.append(cid)
 
     # Propagate counts upward.
     def _count(tid: str) -> int:

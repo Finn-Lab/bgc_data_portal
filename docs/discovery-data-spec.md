@@ -396,9 +396,11 @@ encoded = base64.b64encode(raw_bytes).decode("ascii")
 
 ### 9. `np_chemont_classes.tsv` (optional)
 
-ChemOnt ontology classifications for natural products. Each natural product
-can have multiple ChemOnt nodes, each with a probability score from the
-classification pipeline.
+ChemOnt ontology classifications for natural products. ChemOnt is a
+hierarchical chemical taxonomy (~4,825 terms, version 2.1) — each natural
+product should be annotated with **full lineage paths** from general
+ancestor nodes down to the most specific classification, so the portal can
+reconstruct and display the ontology tree.
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
@@ -411,12 +413,41 @@ classification pipeline.
 | `chemont_name` | string | **yes** | Human-readable class name | `Macrolides and analogues` |
 | `probability` | float | no | Classification confidence (default 1.0) | `0.92` |
 
+**Hierarchical annotation pattern:**
+
+Each NP should have rows for **every node along the classification lineage
+path**, not just the leaf. This allows the portal to build a full
+ancestor-to-leaf tree for display. Probabilities typically decrease from
+general (high confidence) to specific (lower confidence).
+
+Example for erythromycin (a polyketide macrolide):
+
+```tsv
+natural_product_name	chemont_id	chemont_name	probability
+erythromycin	CHEMONTID:0000000	Organic compounds	0.99
+erythromycin	CHEMONTID:0000261	Phenylpropanoids and polyketides	0.90
+erythromycin	CHEMONTID:0000147	Macrolides and analogues	0.85
+erythromycin	CHEMONTID:0000161	Epothilones and analogues	0.72
+```
+
+An NP may have **multiple lineages** (branches in the ontology) when
+it matches more than one chemical class. Shared ancestor nodes should
+appear only once (the loader deduplicates on `(natural_product, chemont_id)`).
+
+```tsv
+# vancomycin: cyclic peptide AND glycopeptide lineages share common ancestors
+vancomycin	CHEMONTID:0000013	Amino acids, peptides, and analogues	0.92
+vancomycin	CHEMONTID:0000348	Peptides	0.88
+vancomycin	CHEMONTID:0001995	Cyclic peptides	0.83
+vancomycin	CHEMONTID:0001994	Cyclic depsipeptides	0.75
+```
+
 **Notes:**
 
 - A natural product is resolved by matching the BGC key (contig_sha256 + bgc_start + bgc_end + detector_name) plus the `natural_product_name`.
-- Multiple rows per natural product are expected (one per ChemOnt class).
 - ChemOnt IDs use the format `CHEMONTID:XXXXXXX` (7-digit zero-padded).
-- The ChemOnt ontology (version 2.1) hierarchy has ~4,825 terms rooted at `CHEMONTID:9999999` (Chemical entities).
+- The portal uses the ontology hierarchy (from `ChemOnt_2_1.obo`) to reconstruct the tree from flat rows. Intermediate ancestors that are present in the ontology but missing from the TSV will be inserted with `probability = null` in the API response.
+- The root of the ChemOnt ontology is `CHEMONTID:9999999` (Chemical entities). You do not need to include it — annotating from the first meaningful class level is sufficient.
 
 ---
 
@@ -632,6 +663,8 @@ archive.tar.gz
   bgcs.tsv               # required  (exactly 1 row)
   domains.tsv             # required
   embeddings_bgc.tsv      # required
+  natural_products.tsv     # optional
+  np_chemont_classes.tsv   # optional  (requires natural_products.tsv)
 ```
 
 #### Assembly Upload (`type="assembly"`)
@@ -643,6 +676,8 @@ archive.tar.gz
   bgcs.tsv                # required  (≥ 1 row)
   domains.tsv             # required
   embeddings_bgc.tsv      # required  (1 row per BGC)
+  natural_products.tsv     # optional
+  np_chemont_classes.tsv   # optional  (requires natural_products.tsv)
 ```
 
 > **Key differences from the ingestion pipeline:**
@@ -704,6 +739,48 @@ Rows without a `domain_acc` value are silently skipped. Rows referencing an unkn
 
 **Vector format:** exactly **1152** x float32 = 4608 bytes raw → ~6144 characters base64.  
 **Every BGC must have a matching embedding row.** Missing embeddings cause a validation error.
+
+#### `natural_products.tsv` (optional)
+
+Characterized natural products linked to BGCs. Unlike the ingestion pipeline, the `structure_svg_base64` field is **not used** in uploads.
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position | `45000` |
+| `detector_name` | string | **yes** | Detector name (must match `bgcs.tsv`) | `antiSMASH v7.1` |
+| `name` | string | **yes** | Compound name (used as join key for ChemOnt classes) | `erythromycin` |
+| `smiles` | string | no | SMILES string | `CC(O)C1CC(=O)...` |
+| `morgan_fp_base64` | string | no | Base64-encoded Morgan fingerprint (2048-bit) | `AAAB...` |
+
+#### `np_chemont_classes.tsv` (optional)
+
+ChemOnt (Chemical Ontology) classifications for natural products. ChemOnt is a hierarchical ontology (~4,825 terms); each natural product can be assigned to **multiple nodes**, each with a probability score from the classification pipeline.
+
+This file is separate from `natural_products.tsv` because the relationship is one-to-many: a single compound may belong to several ChemOnt classes at different confidence levels.
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `contig_sha256` | string | **yes** | Contig SHA-256 (identifies parent BGC) | `a1b2c3d4e5f6...` |
+| `bgc_start` | integer | **yes** | BGC start position | `10000` |
+| `bgc_end` | integer | **yes** | BGC end position | `45000` |
+| `detector_name` | string | **yes** | Detector name (must match `bgcs.tsv`) | `antiSMASH v7.1` |
+| `natural_product_name` | string | **yes** | Matches `name` in `natural_products.tsv` | `erythromycin` |
+| `chemont_id` | string | **yes** | ChemOnt ontology term ID (`CHEMONTID:XXXXXXX`) | `CHEMONTID:0000147` |
+| `chemont_name` | string | **yes** | Human-readable class name | `Macrolides and analogues` |
+| `probability` | float | no | Classification confidence (default 1.0) | `0.92` |
+
+**Resolution:** A natural product is identified by the BGC key `(contig_sha256, bgc_start, bgc_end, detector_name)` plus `natural_product_name`. Rows referencing an unknown natural product are skipped.
+
+**Example — one compound with multiple ChemOnt nodes:**
+
+```tsv
+contig_sha256	bgc_start	bgc_end	detector_name	natural_product_name	chemont_id	chemont_name	probability
+a1b2c3...	10000	45000	antiSMASH v7.1	erythromycin	CHEMONTID:0000147	Macrolides and analogues	0.92
+a1b2c3...	10000	45000	antiSMASH v7.1	erythromycin	CHEMONTID:0002279	Organic oxygen compounds	0.87
+a1b2c3...	10000	45000	antiSMASH v7.1	erythromycin	CHEMONTID:0000264	Polyketides	0.95
+```
 
 #### `assemblies.tsv` (assembly upload only)
 

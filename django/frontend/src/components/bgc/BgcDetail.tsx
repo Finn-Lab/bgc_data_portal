@@ -12,7 +12,58 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useAssessStore } from "@/stores/assess-store";
-import { ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
+import { ChevronRight, ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
+import type { ChemOntAnnotationNode } from "@/api/types";
+
+
+/**
+ * Renders a ChemOnt ontology lineage path for a natural product.
+ * Shows the classification hierarchy as a breadcrumb trail, with
+ * probability badges on directly-annotated nodes.
+ */
+function ChemOntLineage({ node }: { node: ChemOntAnnotationNode }) {
+  // Collect the deepest path(s) from this root.
+  // If a node has children, recurse; leaf nodes are the most specific class.
+  const paths = collectPaths(node);
+  return (
+    <div className="space-y-0.5">
+      {paths.map((path, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-0.5 text-[10px]">
+          {path.map((step, j) => (
+            <span key={step.chemont_id} className="flex items-center gap-0.5">
+              {j > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground shrink-0" />}
+              <span
+                className={
+                  step.probability != null
+                    ? "rounded-sm bg-muted px-1 py-px font-medium"
+                    : "text-muted-foreground"
+                }
+                title={step.chemont_id}
+              >
+                {step.name}
+                {step.probability != null && (
+                  <span className="ml-1 text-muted-foreground font-normal">
+                    {(step.probability * 100).toFixed(0)}%
+                  </span>
+                )}
+              </span>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Walk the tree and return all root-to-leaf paths. */
+function collectPaths(
+  node: ChemOntAnnotationNode,
+  prefix: ChemOntAnnotationNode[] = []
+): ChemOntAnnotationNode[][] {
+  const current = [...prefix, node];
+  if (node.children.length === 0) return [current];
+  return node.children.flatMap((child) => collectPaths(child, current));
+}
 import { toast } from "sonner";
 import type { RegionCds } from "@/api/types";
 
@@ -191,37 +242,12 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
             <div className="space-y-2">
               {bgc.natural_products.map((np) => (
                 <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
-                  {(np.structure_thumbnail || np.smiles_svg) && (
-                    np.structure_thumbnail ? (
-                      <img
-                        src={`data:image/svg+xml;base64,${np.structure_thumbnail}`}
-                        width={48}
-                        height={48}
-                        alt={np.name}
-                        className="flex-shrink-0 rounded border"
-                      />
-                    ) : (
-                      <div
-                        className="flex-shrink-0"
-                        dangerouslySetInnerHTML={{ __html: np.smiles_svg }}
-                      />
-                    )
-                  )}
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
                     {np.chemont_classes && np.chemont_classes.length > 0 && (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {np.chemont_classes.map((cc) => (
-                          <span
-                            key={cc.chemont_id}
-                            className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px]"
-                            title={cc.chemont_id}
-                          >
-                            {cc.name}
-                            <span className="text-muted-foreground">
-                              {(cc.probability * 100).toFixed(0)}%
-                            </span>
-                          </span>
+                      <div className="mt-1 space-y-0.5">
+                        {np.chemont_classes.map((root) => (
+                          <ChemOntLineage key={root.chemont_id} node={root} />
                         ))}
                       </div>
                     )}

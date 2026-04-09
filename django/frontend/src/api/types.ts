@@ -94,10 +94,12 @@ export interface ParentAssemblySummary {
   is_type_strain: boolean;
 }
 
-export interface ChemOntClassSummary {
+export interface ChemOntAnnotationNode {
   chemont_id: string;
   name: string;
-  probability: number;
+  depth: number;
+  probability: number | null; // null for intermediate (unannotated) ancestors
+  children: ChemOntAnnotationNode[];
 }
 
 export interface NaturalProductSummary {
@@ -107,7 +109,7 @@ export interface NaturalProductSummary {
   smiles_svg: string;
   structure_thumbnail: string;
   np_class_path: string;
-  chemont_classes: ChemOntClassSummary[];
+  chemont_classes: ChemOntAnnotationNode[];
 }
 
 export interface BgcDetail {
