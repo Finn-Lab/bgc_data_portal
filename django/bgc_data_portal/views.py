@@ -114,8 +114,10 @@ def search(request):
             form = BgcKeywordSearchForm(request.GET)
             if form.is_valid():
                 clean_params = form.cleaned_data
-                log.info(f"Keyword search key: {clean_params}")
-                cast(Any, bgc_tasks.keyword_search).delay(encoded_params, clean_params)
+                keyword = clean_params.get("keyword", "")
+                log.info(f"Keyword search (discovery): {keyword}")
+                from discovery import tasks as discovery_tasks
+                cast(Any, discovery_tasks.keyword_resolve).delay(encoded_params, keyword)
                 return redirect(reverse("results_view") + "?" + encoded_params)
 
         elif form_type == "advanced":
@@ -192,6 +194,11 @@ def results_view(request):
         )
 
     payload = status.get("result") or {}
+
+    # Keyword search resolved to a dashboard redirect
+    if "redirect_url" in payload:
+        return redirect(payload["redirect_url"])
+
     df = payload.get("df")
     result_stats = payload.get("stats") or {}
     scatter_data = payload.get("scatter_data") or []

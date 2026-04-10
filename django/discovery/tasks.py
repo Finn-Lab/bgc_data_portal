@@ -16,8 +16,29 @@ from discovery.cache_utils import set_job_cache
 log = logging.getLogger(__name__)
 
 ASSESSMENT_TTL = 86_400  # 24 hours
+KEYWORD_TTL = 300  # 5 minutes
 UPLOAD_ASSESSMENT_TTL = 14_400  # 4 hours
 CHEMICAL_QUERY_TTL = 3_600  # 1 hour
+
+
+@shared_task(name="discovery.tasks.keyword_resolve", bind=True, acks_late=True)
+def keyword_resolve(self, search_key: str, keyword: str) -> bool:
+    """Resolve a landing-page keyword to a dashboard filter and cache the redirect URL."""
+    task_id = self.request.id
+    set_job_cache(search_key=search_key, task_id=task_id, timeout=KEYWORD_TTL)
+
+    from discovery.services.keyword_resolver import resolve_keyword
+
+    result = resolve_keyword(keyword)
+
+    set_job_cache(
+        search_key=search_key,
+        results=result,
+        task_id=task_id,
+        timeout=KEYWORD_TTL,
+    )
+    log.info("Keyword resolved: %r → %s (task %s)", keyword, result.get("match_type"), task_id)
+    return True
 
 
 @shared_task(name="discovery.tasks.assess_assembly", bind=True, acks_late=True)
