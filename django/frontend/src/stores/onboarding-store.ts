@@ -2,6 +2,19 @@ import { create } from "zustand";
 
 const STORAGE_KEY = "bgc-discovery-welcome-seen";
 
+function shouldShowWelcome(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("tour") === "welcome") {
+    params.delete("tour");
+    const qs = params.toString();
+    const newUrl =
+      window.location.pathname + (qs ? `?${qs}` : "") + window.location.hash;
+    window.history.replaceState({}, "", newUrl);
+    return true;
+  }
+  return localStorage.getItem(STORAGE_KEY) !== "true";
+}
+
 interface OnboardingState {
   showWelcome: boolean;
   tourActive: boolean;
@@ -12,7 +25,7 @@ interface OnboardingState {
 }
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
-  showWelcome: localStorage.getItem(STORAGE_KEY) !== "true",
+  showWelcome: shouldShowWelcome(),
   tourActive: false,
 
   openWelcome: () => set({ showWelcome: true }),
