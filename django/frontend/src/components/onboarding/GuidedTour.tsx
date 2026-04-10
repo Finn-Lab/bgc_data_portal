@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import Shepherd from "shepherd.js";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { getTourSteps } from "./tour-steps";
+import "shepherd.js/dist/css/shepherd.css";
 import "./shepherd-theme.css";
 
 export function GuidedTour() {

@@ -20,6 +20,7 @@ export function ExploreActions() {
     <div
       className="vf-card vf-card--brand vf-card--bordered flex items-center gap-3"
       style={{ padding: "0.75rem" }}
+      data-tour="run-query"
     >
       <div className="flex items-center gap-2">
         <Button
