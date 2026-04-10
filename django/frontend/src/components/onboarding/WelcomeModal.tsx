@@ -146,11 +146,11 @@ export function WelcomeModal() {
         <DialogFooter className="gap-2 sm:justify-between">
           {isLast ? (
             <>
-              <Button variant="outline" onClick={() => startTour()}>
-                Take interactive tour
-              </Button>
-              <Button onClick={() => dismissWelcome()}>
+              <Button variant="outline" onClick={() => dismissWelcome()}>
                 Start exploring
+              </Button>
+              <Button onClick={() => startTour()}>
+                Take interactive tour
               </Button>
             </>
           ) : (
