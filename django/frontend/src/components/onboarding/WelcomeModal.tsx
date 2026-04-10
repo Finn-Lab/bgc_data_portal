@@ -21,16 +21,16 @@ const slides: Slide[] = [
   {
     icon: Compass,
     headline: "Find promising organisms for your bioprospecting effort, faster.",
-    body: "The Discovery Platform helps you explore thousands of sequenced assemblies \u2014 from isolated bacteria to environmental metagenomes \u2014 to identify samples or type strains worth testing, based on the novelty and diversity of their biosynthetic gene clusters (BGCs).",
+    body: "The Discovery Platform helps you explore thousands of sequenced assemblies — from isolated bacteria to environmental metagenomes — to identify samples or type strains worth testing, based on the novelty and diversity of their biosynthetic gene clusters (BGCs).",
   },
   {
     icon: Layers,
     headline: "Three modes, one platform.",
     body: (
       <ul className="mt-2 space-y-2 text-left text-sm text-muted-foreground">
-        <li><strong className="text-foreground">Explore Assemblies</strong> \u2014 Browse and filter the full assembly catalogue. Best when you have no prior hypothesis.</li>
-        <li><strong className="text-foreground">Search BGCs</strong> \u2014 Search by protein domain, sequence similarity, or chemical structure. Best when tracking a specific compound or enzymatic family.</li>
-        <li><strong className="text-foreground">Evaluate Asset</strong> \u2014 Submit your own assembly or BGC and get a structured comparison against the full database.</li>
+        <li><strong className="text-foreground">Explore Assemblies</strong> — Browse and filter the full assembly catalogue. Best when you have no prior hypothesis.</li>
+        <li><strong className="text-foreground">Search BGCs</strong> — Search by protein domain, sequence similarity, or chemical structure. Best when tracking a specific compound or enzymatic family.</li>
+        <li><strong className="text-foreground">Evaluate Asset</strong> — Submit your own assembly or BGC and get a structured comparison against the full database.</li>
       </ul>
     ),
   },
@@ -39,16 +39,16 @@ const slides: Slide[] = [
     headline: "Two levels, always in view.",
     body: (
       <ul className="mt-2 space-y-2 text-left text-sm text-muted-foreground">
-        <li><strong className="text-foreground">Assemblies</strong> \u2014 The organisms or environmental samples. Filter, sort, and shortlist them for screening decisions.</li>
-        <li><strong className="text-foreground">BGCs</strong> \u2014 The gene clusters that make natural products. Selecting an assembly populates its BGC panel automatically.</li>
-        <li><strong className="text-foreground">Linked panels</strong> \u2014 Shortlisting multiple assemblies merges their BGCs into one view.</li>
+        <li><strong className="text-foreground">Assemblies</strong> — The organisms or environmental samples. Filter, sort, and shortlist them for screening decisions.</li>
+        <li><strong className="text-foreground">BGCs</strong> — The gene clusters that make natural products. Selecting an assembly populates its BGC panel automatically.</li>
+        <li><strong className="text-foreground">Linked panels</strong> — Shortlisting multiple assemblies merges their BGCs into one view.</li>
       </ul>
     ),
   },
   {
     icon: Pin,
     headline: "Pin assemblies and BGCs as you explore. Export when ready.",
-    body: "Use the Assembly Shortlist (up to 20) for screening decisions \u2014 export as CSV. Use the BGC Shortlist (up to 20) for specific clusters \u2014 export as GenBank (.gbk) files ready for downstream workflows.",
+    body: "Use the Assembly Shortlist (up to 20) for screening decisions — export as CSV. Use the BGC Shortlist (up to 20) for specific clusters — export as GenBank (.gbk) files ready for downstream workflows.",
   },
   {
     icon: FlaskConical,

@@ -29,6 +29,7 @@ declare module "shepherd.js" {
         buttons?: StepOptionsButton[];
         scrollTo?: StepOptionsScrollTo | boolean;
         cancelIcon?: StepOptionsCancelIcon;
+        popperOptions?: Record<string, unknown>;
       }
     }
 

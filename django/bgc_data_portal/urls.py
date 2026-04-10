@@ -27,6 +27,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("about/", views.about, name="about"),
     path("docs/", views.DocsView.as_view(), {"path": "index.html"}, name="docs_index"),
+    path("docs/<path:path>", views.DocsView.as_view(), name="docs_file"),
     path("docs/<path:path>/", views.DocsView.as_view(), name="docs"),
     path("", views.landing_page, name="landing_page"),
     path(

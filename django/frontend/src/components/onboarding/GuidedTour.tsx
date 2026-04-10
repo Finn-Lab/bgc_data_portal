@@ -23,7 +23,26 @@ export function GuidedTour() {
       defaultStepOptions: {
         scrollTo: { behavior: "smooth", block: "center" },
         cancelIcon: { enabled: true },
-      },
+        // Use Popper.js modifiers to keep popover in the viewport
+        // even when the target is inside a scrollable sidebar
+        popperOptions: {
+          modifiers: [
+            {
+              name: "preventOverflow",
+              options: {
+                boundary: "viewport",
+                padding: 16,
+              },
+            },
+            {
+              name: "offset",
+              options: {
+                offset: [0, 12],
+              },
+            },
+          ],
+        },
+      } as Shepherd.Step.StepOptions,
     });
 
     const steps = getTourSteps();
