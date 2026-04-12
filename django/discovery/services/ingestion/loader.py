@@ -16,6 +16,7 @@ Expected directory layout::
       cds_sequences.tsv     (optional)
       domains.tsv           (optional)
       embeddings_bgc.tsv    (optional)
+      embeddings_protein.tsv (optional)
       natural_products.tsv       (optional)
       np_chemont_classes.tsv     (optional)
 """
@@ -47,6 +48,7 @@ from discovery.models import (
     DashboardNaturalProduct,
     DashboardRegion,
     NaturalProductChemOntClass,
+    ProteinEmbedding,
     RegionAccessionAlias,
 )
 
@@ -60,6 +62,7 @@ BATCH_SIZE = 10_000
 # Tables in truncation order (respects FK CASCADE but explicit is safer)
 ALL_DISCOVERY_TABLES = [
     "discovery_region_accession_alias",
+    "discovery_protein_embedding",
     "discovery_bgc_embedding",
     "discovery_bgc_domain",
     "discovery_cds_sequence",
@@ -609,6 +612,43 @@ def load_embeddings(
     return total
 
 
+def load_protein_embeddings(data_dir: Path) -> int:
+    """Load embeddings_protein.tsv → ProteinEmbedding. Returns row count."""
+    path = data_dir / "embeddings_protein.tsv"
+    if not path.exists():
+        logger.info("embeddings_protein.tsv not found, skipping")
+        return 0
+
+    batch: list[ProteinEmbedding] = []
+    total = 0
+
+    with open(path, newline="") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for row in reader:
+            raw = base64.b64decode(row["vector_base64"])
+            vector = list(struct.unpack(f"<{len(raw)//4}f", raw))
+
+            batch.append(
+                ProteinEmbedding(
+                    protein_sha256=row["protein_sha256"],
+                    vector=vector,
+                    source_protein_id=None,
+                )
+            )
+
+            if len(batch) >= BATCH_SIZE:
+                ProteinEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+                total += len(batch)
+                batch.clear()
+
+    if batch:
+        ProteinEmbedding.objects.bulk_create(batch, ignore_conflicts=True)
+        total += len(batch)
+
+    logger.info("Loaded %d protein embeddings", total)
+    return total
+
+
 def load_natural_products(
     data_dir: Path,
     bgc_lookup: dict[tuple[str, int, int, str], int],
@@ -847,8 +887,11 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # 6. Domains
     load_domains(data_dir, bgc_lookup, cds_lookup)
 
-    # 7. Embeddings
+    # 7. BGC embeddings
     load_embeddings(data_dir, bgc_lookup)
+
+    # 7.5. Protein embeddings
+    load_protein_embeddings(data_dir)
 
     # 8. Natural products
     load_natural_products(data_dir, bgc_lookup)

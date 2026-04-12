@@ -24,6 +24,7 @@ data_dir/
   cds_sequences.tsv        # optional
   domains.tsv              # optional
   embeddings_bgc.tsv       # optional
+  embeddings_protein.tsv   # optional
   natural_products.tsv       # optional
   np_chemont_classes.tsv     # optional (needs natural_products.tsv)
 ```
@@ -54,6 +55,8 @@ Files are loaded in strict dependency order. Each step resolves foreign keys usi
                                                           from step 5)
 7.   embeddings_bgc.tsv     →  BgcEmbedding           (needs contig_sha256 + bgc_start +
                                                           bgc_end + detector_name from step 4)
+7.5  embeddings_protein.tsv →  ProteinEmbedding       (protein_sha256 matches protein_sha256
+                                                          in cds.tsv from step 5)
 8.   natural_products.tsv   →  DashboardNaturalProduct (needs contig_sha256 + bgc_start +
                                                           bgc_end + detector_name from step 4)
 8.5  np_chemont_classes.tsv →  NaturalProductChemOntClass (needs BGC key from step 4 +
@@ -367,6 +370,29 @@ encoded = base64.b64encode(vec.astype(np.float32).tobytes()).decode("ascii")
 
 ---
 
+### 7.5 `embeddings_protein.tsv` (optional)
+
+Protein embedding vectors (1152-dimensional, half-precision storage). Vectors are linked to
+BGCs indirectly via the `protein_sha256` field on `DashboardCds`.
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| `protein_sha256` | string | **yes** | SHA-256 hash of the amino acid sequence (matches `protein_sha256` in `cds.tsv`) | `a1b2c3d4e5f6...` |
+| `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
+
+**Vector format:** 1152 × float32 = 4608 bytes raw → ~6144 characters base64. Same encoding as `embeddings_bgc.tsv`.
+
+**Uniqueness constraint:** `protein_sha256` must be unique. Conflicts are silently ignored (`ignore_conflicts=True`).
+
+```python
+# Producing a conformant vector
+import numpy as np, base64
+vec = model.encode(protein_sequence)  # shape (1152,), dtype float32
+encoded = base64.b64encode(vec.astype(np.float32).tobytes()).decode("ascii")
+```
+
+---
+
 ### 8. `natural_products.tsv` (optional)
 
 Characterized natural products linked to BGCs.
@@ -556,6 +582,7 @@ These fields are populated automatically after all TSV files are loaded. Your pi
 | `domains.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
 | `domains.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)` | in-memory lookup | `DashboardCds` (nullable) |
 | `embeddings_bgc.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
+| `embeddings_protein.tsv` | `protein_sha256` | unique constraint (no lookup needed) | `ProteinEmbedding` |
 | `natural_products.tsv` | `(contig_sha256, bgc_start, bgc_end, detector_name)` | in-memory lookup | `DashboardBgc` |
 
 ### Conflict Handling

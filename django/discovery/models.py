@@ -425,8 +425,8 @@ class ProteinEmbedding(models.Model):
     """Protein embedding vector in a dedicated table (halfvec)."""
 
     id = models.BigAutoField(primary_key=True)
-    source_protein_id = models.IntegerField(unique=True, db_index=True)
-    protein_sha256 = models.CharField(max_length=64, db_index=True)
+    source_protein_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
+    protein_sha256 = models.CharField(max_length=64, unique=True)
     vector = HalfVectorField(dimensions=1152)
 
     class Meta:
