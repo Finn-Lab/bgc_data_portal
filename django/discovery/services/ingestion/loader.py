@@ -554,6 +554,7 @@ def load_domains(
                     start_position=int(row.get("start_position", 0)),
                     end_position=int(row.get("end_position", 0)),
                     score=float(row["score"]) if row.get("score") else None,
+                    url=row.get("url", ""),
                 )
             )
 

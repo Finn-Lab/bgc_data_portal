@@ -338,10 +338,9 @@ Protein domain annotations on CDS entries within BGCs.
 | `start_position` | integer | no | Start on protein (aa, default 0) | `15` |
 | `end_position` | integer | no | End on protein (aa, default 0) | `260` |
 | `score` | float | no | Hit score (nullable) | `125.3` |
+| `url` | string | no | Canonical URL for the domain accession (e.g. Pfam entry page) | `https://pfam.xfam.org/family/PF00109` |
 
 **Uniqueness constraint:** `(bgc, domain_acc, cds, start_position, end_position)` must be unique. Conflicts are silently ignored.
-
-> **Note:** The `url` field on the `BgcDomain` model is NOT populated from TSV — it defaults to empty.
 
 ---
 

@@ -115,6 +115,7 @@ class DomainArchitectureItem(Schema):
     start: int
     end: int
     score: Optional[float] = None
+    url: str = ""
 
 
 class ParentAssemblySummary(Schema):
@@ -375,6 +376,7 @@ class RegionDomainOut(Schema):
     score: Optional[float] = None
     go_slim: list[str] = []
     parent_cds_id: str = ""
+    url: str = ""
 
 
 class RegionClusterOut(Schema):

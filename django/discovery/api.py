@@ -592,6 +592,7 @@ def bgc_detail(request, bgc_id: int):
             start=0,
             end=0,
             score=None,
+            url=bd.url,
         )
         for bd in BgcDomain.objects.filter(bgc=bgc).order_by("domain_acc")
     ]
@@ -720,6 +721,7 @@ def bgc_region(request, bgc_id: int):
                     score=bd.score,
                     go_slim=[],
                     parent_cds_id=cds.protein_id_str,
+                    url=bd.url,
                 )
             )
 
