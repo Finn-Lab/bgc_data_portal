@@ -176,6 +176,11 @@ items:
           labels:
             app: rabbitmq
         spec:
+          securityContext:
+            runAsUser: 999
+            runAsGroup: 999
+            fsGroup: 999
+            runAsNonRoot: true
           imagePullSecrets:
             - name: quay-pull-secret
           containers:
@@ -259,6 +264,16 @@ items:
             - name: hf-cache
               persistentVolumeClaim:
                 claimName: bgc-hf-cache-claim
+          initContainers:
+            - name: wait-for-postgres
+              image: quay.io/microbiome-informatics/bgc_dp_web_site:dev
+              command:
+                - sh
+                - -c
+                - |
+                  until python -c "import socket; socket.create_connection(('postgres', 5432), timeout=2)" 2>/dev/null; do
+                    echo "waiting for postgres..."; sleep 2
+                  done
           containers:
             - name: django
               securityContext:

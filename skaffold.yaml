@@ -163,6 +163,16 @@ profiles:
     deploy:
       kubectl:
         defaultNamespace: bgc-data-portal-hl-exp
+        hooks:
+          before:
+            - host:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    kubectl --context "$SKAFFOLD_KUBE_CONTEXT" -n bgc-data-portal-hl-exp \
+                      delete job bgc-integration-tests bgc-e2e-tests --ignore-not-found
+                os: [darwin, linux]
 
   # ── prod ───────────────────────────────────────────────────────────────────
   # Builds prod image (full requirements.txt, collectstatic), pushes, deploys.
@@ -190,3 +200,13 @@ profiles:
     deploy:
       kubectl:
         defaultNamespace: bgc-data-portal-hl-prod
+        hooks:
+          before:
+            - host:
+                command:
+                  - sh
+                  - -c
+                  - |
+                    kubectl --context "$SKAFFOLD_KUBE_CONTEXT" -n bgc-data-portal-hl-prod \
+                      delete job bgc-integration-tests bgc-e2e-tests --ignore-not-found
+                os: [darwin, linux]
