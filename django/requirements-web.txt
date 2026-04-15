@@ -35,3 +35,4 @@ django-ninja==1.4
 # Required for Celery hot-reload in k8s (watchmedo auto-restart)
 watchdog==4.0.1
 biopython==1.85
+mgnify-bgcs-common-core[chemont] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git
