@@ -393,10 +393,12 @@ def _rebuild_catalog_tables() -> None:
         batch_size=BATCH_SIZE,
     )
 
-    # Domain counts
+    # Domain counts — group by acc only; the same acc can carry different name
+    # strings across annotations, so we pick one name with Min to avoid
+    # violating the unique constraint on discovery_domain.acc.
     domain_counts = (
-        BgcDomain.objects.values("domain_acc", "domain_name", "ref_db")
-        .annotate(cnt=Count("bgc_id", distinct=True))
+        BgcDomain.objects.values("domain_acc", "ref_db")
+        .annotate(cnt=Count("bgc_id", distinct=True), domain_name=Min("domain_name"))
     )
     DashboardDomain.objects.all().delete()
     DashboardDomain.objects.bulk_create(
