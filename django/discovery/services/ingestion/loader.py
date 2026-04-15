@@ -153,7 +153,7 @@ def load_detectors(data_dir: Path) -> dict[str, tuple[int, str]]:
                 )
             )
 
-    DashboardDetector.objects.bulk_create(rows_to_create, batch_size=BATCH_SIZE)
+    DashboardDetector.objects.bulk_create(rows_to_create, batch_size=BATCH_SIZE, ignore_conflicts=True)
     lookup = {
         d.name: (d.id, d.tool_name_code)
         for d in DashboardDetector.objects.all()
@@ -201,7 +201,7 @@ def load_assemblies(data_dir: Path) -> dict[str, int]:
                 )
             )
 
-    DashboardAssembly.objects.bulk_create(rows, batch_size=BATCH_SIZE)
+    DashboardAssembly.objects.bulk_create(rows, batch_size=BATCH_SIZE, ignore_conflicts=True)
     lookup = dict(
         DashboardAssembly.objects.values_list("assembly_accession", "id")
     )
@@ -246,7 +246,7 @@ def load_contigs(
                 )
             )
 
-    DashboardContig.objects.bulk_create(rows, batch_size=BATCH_SIZE)
+    DashboardContig.objects.bulk_create(rows, batch_size=BATCH_SIZE, ignore_conflicts=True)
     lookup = dict(DashboardContig.objects.values_list("sequence_sha256", "id"))
     logger.info("Loaded %d contigs", len(lookup))
     return lookup
