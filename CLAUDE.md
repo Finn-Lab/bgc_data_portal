@@ -60,7 +60,7 @@ django/
 
 **Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through Celery (RabbitMQ broker, Redis result backend).
 
-**Vector similarity search** — `Bgc.embedding` is a 1152-dim pgvector column with an HNSW index (cosine distance). Similarity queries use `<=>` operator via `pgvector`.
+**Vector similarity search** — `Bgc.embedding` is a 960-dim pgvector column with an HNSW index (cosine distance). Similarity queries use `<=>` operator via `pgvector`.
 
 **Ingestion** — stream-based NDJSON packages; all writes are idempotent upserts keyed on stable identifiers.
 

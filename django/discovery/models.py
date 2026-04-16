@@ -403,7 +403,7 @@ class BgcEmbedding(models.Model):
         primary_key=True,
         related_name="embedding",
     )
-    vector = HalfVectorField(dimensions=1152)
+    vector = HalfVectorField(dimensions=960)
 
     class Meta:
         db_table = "discovery_bgc_embedding"
@@ -427,7 +427,7 @@ class ProteinEmbedding(models.Model):
     id = models.BigAutoField(primary_key=True)
     source_protein_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
     protein_sha256 = models.CharField(max_length=64, unique=True)
-    vector = HalfVectorField(dimensions=1152)
+    vector = HalfVectorField(dimensions=960)
 
     class Meta:
         db_table = "discovery_protein_embedding"

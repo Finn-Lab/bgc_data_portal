@@ -614,7 +614,7 @@ class Command(BaseCommand):
         bgc_embeddings = [
             BgcEmbedding(
                 bgc=bgc,
-                vector=np.random.randn(1152).astype(np.float32).tolist(),
+                vector=np.random.randn(960).astype(np.float32).tolist(),
             )
             for bgc in all_bgcs
         ]
@@ -633,7 +633,7 @@ class Command(BaseCommand):
             prot_embeddings.append(ProteinEmbedding(
                 source_protein_id=40000 + i,
                 protein_sha256=_sha256(cds._aa_seq),
-                vector=np.random.randn(1152).astype(np.float32).tolist(),
+                vector=np.random.randn(960).astype(np.float32).tolist(),
             ))
         ProteinEmbedding.objects.bulk_create(prot_embeddings)
         self.stdout.write(f"  {len(prot_embeddings)} ProteinEmbedding rows.")
@@ -799,7 +799,7 @@ class Command(BaseCommand):
         mibig_embs = [
             BgcEmbedding(
                 bgc=bgc,
-                vector=np.random.randn(1152).astype(np.float32).tolist(),
+                vector=np.random.randn(960).astype(np.float32).tolist(),
             )
             for bgc in mibig_bgcs
         ]

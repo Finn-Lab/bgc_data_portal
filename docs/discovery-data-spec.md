@@ -104,7 +104,7 @@ Embedding vectors and Morgan fingerprints are transmitted as **base64-encoded li
 import base64, struct, numpy as np
 
 # For float32 vectors (embeddings)
-vector = np.array([0.1, 0.2, ...], dtype=np.float32)  # 1152 dimensions
+vector = np.array([0.1, 0.2, ...], dtype=np.float32)  # 960 dimensions
 encoded = base64.b64encode(vector.tobytes()).decode("ascii")
 
 # For Morgan fingerprints (raw binary)
@@ -349,7 +349,7 @@ Protein domain annotations on CDS entries within BGCs.
 
 ### 7. `embeddings_bgc.tsv` (optional)
 
-BGC embedding vectors (1152-dimensional, half-precision storage).
+BGC embedding vectors (960-dimensional, half-precision storage).
 
 | Column | Type | Required | Description | Example |
 |--------|------|----------|-------------|---------|
@@ -359,12 +359,12 @@ BGC embedding vectors (1152-dimensional, half-precision storage).
 | `detector_name` | string | **yes** | Detector name (identifies parent BGC) | `antiSMASH v7.1` |
 | `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
 
-**Vector format:** 1152 x float32 = 4608 bytes raw → ~6144 characters base64.
+**Vector format:** 960 x float32 = 3840 bytes raw → ~5120 characters base64.
 
 ```python
 # Producing a conformant vector
 import numpy as np, base64
-vec = model.encode(bgc)  # shape (1152,), dtype float32
+vec = model.encode(bgc)  # shape (960,), dtype float32
 encoded = base64.b64encode(vec.astype(np.float32).tobytes()).decode("ascii")
 ```
 
@@ -372,7 +372,7 @@ encoded = base64.b64encode(vec.astype(np.float32).tobytes()).decode("ascii")
 
 ### 7.5 `embeddings_protein.tsv` (optional)
 
-Protein embedding vectors (1152-dimensional, half-precision storage). Vectors are linked to
+Protein embedding vectors (960-dimensional, half-precision storage). Vectors are linked to
 BGCs indirectly via the `protein_sha256` field on `DashboardCds`.
 
 | Column | Type | Required | Description | Example |
@@ -380,14 +380,14 @@ BGCs indirectly via the `protein_sha256` field on `DashboardCds`.
 | `protein_sha256` | string | **yes** | SHA-256 hash of the amino acid sequence (matches `protein_sha256` in `cds.tsv`) | `a1b2c3d4e5f6...` |
 | `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
 
-**Vector format:** 1152 × float32 = 4608 bytes raw → ~6144 characters base64. Same encoding as `embeddings_bgc.tsv`.
+**Vector format:** 960 × float32 = 3840 bytes raw → ~5120 characters base64. Same encoding as `embeddings_bgc.tsv`.
 
 **Uniqueness constraint:** `protein_sha256` must be unique. Conflicts are silently ignored (`ignore_conflicts=True`).
 
 ```python
 # Producing a conformant vector
 import numpy as np, base64
-vec = model.encode(protein_sequence)  # shape (1152,), dtype float32
+vec = model.encode(protein_sequence)  # shape (960,), dtype float32
 encoded = base64.b64encode(vec.astype(np.float32).tobytes()).decode("ascii")
 ```
 
@@ -655,7 +655,7 @@ The following model data is **not** part of the TSV pipeline and requires separa
 
 | Data | Model | Notes |
 |------|-------|-------|
-| Protein embeddings | `ProteinEmbedding` | Separate from BGC embeddings. Linked to CDS via `protein_sha256`. ESM-C 600M, layer 29, mean-pooled, 1152-dim, halfvec (float16) storage. HNSW index with `halfvec_cosine_ops` for sequence similarity search. |
+| Protein embeddings | `ProteinEmbedding` | Separate from BGC embeddings. Linked to CDS via `protein_sha256`. ESM-C 300M, layer 26, mean-pooled, 960-dim, halfvec (float16) storage. HNSW index with `halfvec_cosine_ops` for sequence similarity search. |
 | Precomputed stats | `PrecomputedStats` | Populated by query-time aggregation service |
 | GCF table | `DashboardGCF` | Materialized by `recompute_all_scores` from `gene_cluster_family` field |
 | Assembly percentile ranks | `DashboardAssembly.pctl_*` | Computed by `recompute_all_scores` |
@@ -780,7 +780,7 @@ Rows without a `domain_acc` value are silently skipped. Rows referencing an unkn
 | `detector_name` | string | **yes** | Detector name (must match `bgcs.tsv`) | `antiSMASH v7.1` |
 | `vector_base64` | string | **yes** | Base64-encoded float32 vector (little-endian) | `AAAAAAAAAIA/...` |
 
-**Vector format:** exactly **1152** x float32 = 4608 bytes raw → ~6144 characters base64.  
+**Vector format:** exactly **960** x float32 = 3840 bytes raw → ~5120 characters base64.  
 **Every BGC must have a matching embedding row.** Missing embeddings cause a validation error.
 
 #### `natural_products.tsv` (optional)
@@ -861,5 +861,5 @@ At least 1 row. Every `contig_sha256` in `bgcs.tsv` must reference a `sequence_s
 | `assemblies.tsv` row count | Not exactly 1 (assembly upload) |
 | `contigs.tsv` row count | 0 rows (assembly upload) |
 | Contig referential integrity | BGC references a `contig_sha256` not in `contigs.tsv` (assembly upload) |
-| Embedding dimension | Not exactly 1152 floats |
+| Embedding dimension | Not exactly 960 floats |
 | Missing embeddings | Any BGC without a matching row in `embeddings_bgc.tsv` |

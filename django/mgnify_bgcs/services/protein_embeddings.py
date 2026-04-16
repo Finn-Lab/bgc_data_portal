@@ -18,7 +18,7 @@ else:
 class ESMEmbedder:
     """Class to embed protein sequences using ESMC model."""
 
-    def __init__(self, model_name="esmc_600m", device=device, logits_config_dct=None):
+    def __init__(self, model_name="esmc_300m", device=device, logits_config_dct=None):
         self.device = device
         self.client = ESMC.from_pretrained(model_name).to(device)
         self.logits_config_dct = logits_config_dct or {
@@ -66,7 +66,7 @@ class ESMEmbedder:
     def embed_gene_cluster(
         self,
         protein_sequences: list[str],
-        ith_hidden_layer: int = 29,  # 29th is based on our benchmarks. See bgc_vectors repo for details
+        ith_hidden_layer: int = 26,  # 26th is based on our benchmarks for esmc_300m. See bgc_vectors repo for details
         weights: list[float] = None,  # This works with fuzzy BGCs
     ):  # returns a tuple of embeddings and mean embedding
         """
