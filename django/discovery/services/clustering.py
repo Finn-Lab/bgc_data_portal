@@ -50,7 +50,7 @@ def build_training_sample(
     pool_ids = list(
         BgcEmbedding.objects.filter(
             bgc__is_validated=False,
-            bgc__bgc__is_partial=False,
+            bgc__is_partial=False,
         )
         .exclude(bgc_id__in=validated_ids)
         .order_by("?")
