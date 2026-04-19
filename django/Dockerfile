@@ -39,3 +39,5 @@ EXPOSE 8000
 ENV PYTHONUNBUFFERED=0
 
 RUN python manage.py collectstatic --noinput || true
+
+RUN chgrp -R 1347 /app && chmod -R g+w /app
