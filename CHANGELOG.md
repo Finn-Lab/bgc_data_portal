@@ -1,5 +1,32 @@
 # Changelog
 
+## [3.1.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.0.0...bgc_data_portal-v3.1.0) (2026-04-20)
+
+
+### Features
+
+* **discovery:** scope domain novelty to GCF bucket ([fc739a4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fc739a4abb94e1a60facad4a513b1cf6499cb364))
+* **portal:** evaluate-asset region comparison, taxonomy hierarchy, UMAP fixes ([bed2939](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/bed2939565977c5da99e28aca8950a67468a783c))
+* **portal:** filter asset-upload domains to PFAM/TIGRFAM + count skipped rows ([1f0e9a0](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/1f0e9a0ac767ce1682cb3bf8367f109db41d75dc))
+
+
+### Bug Fixes
+
+* **asset evaluation:** Fix file path extention pattern to align with ETL pipeline. `*tar.gz` and `*tgz` ([3fea228](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/3fea228cd84f624af5bb251e5759e7804264927c))
+* **clustering:** convert HalfVector to list before numpy array construction ([8ad0dba](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/8ad0dbae55fc6a63a94d7796382ae0d203ba4250))
+* **clustering:** read hdbscan version via importlib.metadata ([56818e5](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/56818e50226c24069fc1bfdeafda12e071138bcc))
+* **clustering:** use HalfVector.to_list() for numpy conversion ([7cc35f4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/7cc35f4cfb64e0951ef00e58550c03c8b404ba85))
+* **Django ORM:** Manual migrations ([a1cf7ee](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/a1cf7ee7b84e72375296084cf6637b8905cd391a))
+* **ingestion:** deduplicate cds_sequences batch by cds_id before bulk_create ([6591afb](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/6591afbf0c01bbf1734683f3f458845582fff4d6))
+* **ingestion:** deduplicate domains batch by constraint key before bulk_create ([c5635f8](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c5635f8e8adfacf19633137ee484338de8bc8f86))
+* **portal:** align EMBEDDING_DIM with 960-dim DB column ([27a3fbd](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/27a3fbd79ebcb7b14d4cbb1ec6e0f697a4273e9f))
+* **portal:** allow group-write on /app for ([998235a](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/998235ab53d6986ba1c3fed198261dcbb748f724))
+* **portal:** bake ingress prefix into Vite base for prod build ([521b5db](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/521b5db6da2effcd65672b7e4a789328103deda1))
+* **portal:** bump umap-learn to 0.5.12 for scikit-learn 1.6+ compat ([497bef4](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/497bef4e45e6c09d9f96c26db286ae088d36f36b))
+* **portal:** match BGC embeddings case-insensitively in asset upload parser ([f3eba3f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/f3eba3f43960608d3f2c869ec9e7b8e2fcc320bc))
+* **portal:** run collectstatic on Django pod startup ([fbdbfa8](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fbdbfa8a29ef9cd9d3220ae8e16f94a426f6a941))
+* **portal:** show Protein Details card when clicking a CDS in Domain Architecture Comparison ([b91850e](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/b91850eec260091c68409da18a0e6c9b31a6e5d6))
+
 ## [3.0.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v2.1.0...bgc_data_portal-v3.0.0) (2026-04-19)
 
 
