@@ -367,3 +367,46 @@ def test_all_domains_filtered_still_parses():
     # BGC itself is still parsed — empty domain list is not an error.
     assert result["detector_name"] == "sanntis"
     assert len(result["embedding"]) == EMBEDDING_DIM
+
+
+def test_parse_bgc_upload_matches_embeddings_case_insensitively():
+    # Reproduces the production failure: the ETL lowercases detector_name
+    # when writing embeddings_bgc.tsv (bgc_embedding_aggregator.py) but keeps
+    # the original case in bgcs.tsv, so the two must be matched case-insensitively.
+    bgcs = _tsv(
+        [
+            {
+                "contig_sha256": SAMPLE_CONTIG_SHA,
+                "detector_name": "SanntiSv0.9.3.1",
+                "start_position": 158,
+                "end_position": 6883,
+            }
+        ],
+        ["contig_sha256", "detector_name", "start_position", "end_position"],
+    )
+    embeddings = _tsv(
+        [
+            {
+                "contig_sha256": SAMPLE_CONTIG_SHA,
+                "bgc_start": 158,
+                "bgc_end": 6883,
+                "detector_name": "sanntisv0.9.3.1",
+                "vector_base64": SAMPLE_EMBEDDING,
+            }
+        ],
+        ["contig_sha256", "bgc_start", "bgc_end", "detector_name", "vector_base64"],
+    )
+    archive = _build_archive(
+        {
+            "bgcs.tsv": bgcs,
+            "domains.tsv": b"contig_sha256\tbgc_start\tbgc_end\tdetector_name\tdomain_acc\n",
+            "embeddings_bgc.tsv": embeddings,
+        }
+    )
+
+    result = parse_bgc_upload(archive)
+
+    # Original case is preserved in the parsed payload (the normalisation only
+    # affects the internal match key).
+    assert result["detector_name"] == "SanntiSv0.9.3.1"
+    assert len(result["embedding"]) == EMBEDDING_DIM

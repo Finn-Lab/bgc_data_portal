@@ -267,7 +267,10 @@ def _decode_embedding(vector_base64: str) -> list[float]:
 
 
 def _bgc_key(bgc: UploadedBgc) -> tuple:
-    return (bgc.contig_sha256, bgc.start_position, bgc.end_position, bgc.detector_name)
+    # detector_name is lowercased here because the ETL emits it lowercased in
+    # embeddings_bgc.tsv (bgc_embedding_aggregator.py) while bgcs.tsv keeps the
+    # original case from the detector tool — we need both keys to line up.
+    return (bgc.contig_sha256, bgc.start_position, bgc.end_position, bgc.detector_name.lower())
 
 
 def _domain_bgc_key(row: dict[str, str]) -> tuple:
@@ -284,7 +287,7 @@ def _embedding_bgc_key(row: dict[str, str]) -> tuple:
         row["contig_sha256"],
         int(row.get("bgc_start", row.get("start_position", "0"))),
         int(row.get("bgc_end", row.get("end_position", "0"))),
-        row["detector_name"],
+        row["detector_name"].lower(),
     )
 
 
