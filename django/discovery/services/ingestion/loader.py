@@ -555,17 +555,19 @@ def load_cds_sequences(
             batch.append(CdsSequence(cds_id=cds_id, data=raw_zlib))
 
             if len(batch) >= BATCH_SIZE:
+                deduped = list({obj.cds_id: obj for obj in batch}.values())
                 CdsSequence.objects.bulk_create(
-                    batch, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+                    deduped, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
                 )
-                total += len(batch)
+                total += len(deduped)
                 batch.clear()
 
     if batch:
+        deduped = list({obj.cds_id: obj for obj in batch}.values())
         CdsSequence.objects.bulk_create(
-            batch, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
+            deduped, update_conflicts=True, unique_fields=["cds"], update_fields=["data"],
         )
-        total += len(batch)
+        total += len(deduped)
 
     logger.info("Loaded %d CDS sequences", total)
     return total
