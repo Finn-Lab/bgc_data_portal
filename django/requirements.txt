@@ -22,7 +22,7 @@ tqdm==4.67.1
 pandas
 redis>=4.0.0
 pyrodigal==3.6.3
-umap-learn==0.5.7
+umap-learn==0.5.12
 numpy==2.0.1
 joblib==1.4.2
 seaborn==0.13.2
