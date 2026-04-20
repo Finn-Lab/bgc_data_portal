@@ -613,23 +613,29 @@ def load_domains(
             )
 
             if len(batch) >= BATCH_SIZE:
+                deduped = list(
+                    {(o.bgc_id, o.domain_acc, o.cds_id, o.start_position, o.end_position): o for o in batch}.values()
+                )
                 BgcDomain.objects.bulk_create(
-                    batch,
+                    deduped,
                     update_conflicts=True,
                     unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
                     update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
                 )
-                total += len(batch)
+                total += len(deduped)
                 batch.clear()
 
     if batch:
+        deduped = list(
+            {(o.bgc_id, o.domain_acc, o.cds_id, o.start_position, o.end_position): o for o in batch}.values()
+        )
         BgcDomain.objects.bulk_create(
-            batch,
+            deduped,
             update_conflicts=True,
             unique_fields=["bgc", "domain_acc", "cds", "start_position", "end_position"],
             update_fields=["domain_name", "domain_description", "ref_db", "score", "url"],
         )
-        total += len(batch)
+        total += len(deduped)
 
     logger.info("Loaded %d domain rows", total)
     return total
