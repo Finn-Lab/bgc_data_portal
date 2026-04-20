@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
+import { CdsProteinInfo } from "@/components/bgc/CdsProteinInfo";
 import { useBgcRegion } from "@/hooks/use-bgc-region";
 import { useSelectionStore } from "@/stores/selection-store";
 import { Loader2 } from "lucide-react";
@@ -24,10 +25,12 @@ export function DomainArchitectureComparison({
     activeBgcId !== null && activeBgcId !== bgcId ? activeBgcId : null;
   const comparisonRegion = useBgcRegion(comparisonId);
 
-  const [selectedCds, setSelectedCds] = useState<string | null>(null);
+  const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
 
-  const handleCdsClick = (_cds: RegionCds) => {
-    setSelectedCds((prev) => (prev === _cds.protein_id ? null : _cds.protein_id));
+  const handleCdsClick = (cds: RegionCds) => {
+    setSelectedCds((prev) =>
+      prev?.protein_id === cds.protein_id ? null : cds,
+    );
   };
 
   if (!isUploaded && submittedRegion.isLoading) {
@@ -67,7 +70,7 @@ export function DomainArchitectureComparison({
           <RegionPlot
             data={submittedRegion.data!}
             onCdsClick={handleCdsClick}
-            selectedCdsId={selectedCds}
+            selectedCdsId={selectedCds?.protein_id ?? null}
           />
         </div>
       )}
@@ -86,7 +89,7 @@ export function DomainArchitectureComparison({
             <RegionPlot
               data={comparisonRegion.data}
               onCdsClick={handleCdsClick}
-              selectedCdsId={selectedCds}
+              selectedCdsId={selectedCds?.protein_id ?? null}
             />
           ) : (
             <p className="py-2 text-xs text-muted-foreground">
@@ -99,6 +102,15 @@ export function DomainArchitectureComparison({
           Click a BGC in the roster above to compare its domain architecture
           against the submitted BGC.
         </p>
+      )}
+
+      {/* Protein details for the CDS clicked in either plot — mirrors the
+          Search BGCs → BGC Detail behavior. */}
+      {selectedCds && (
+        <CdsProteinInfo
+          cds={selectedCds}
+          onClose={() => setSelectedCds(null)}
+        />
       )}
     </div>
   );
