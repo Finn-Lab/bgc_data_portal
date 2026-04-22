@@ -266,6 +266,7 @@ class QueryResultBgc(Schema):
     assembly_accession: Optional[str] = None
     organism_name: Optional[str] = None
     is_type_strain: bool = False
+    source_name: Optional[str] = None
 
 
 class PaginatedQueryResultResponse(Schema):
@@ -278,6 +279,7 @@ class QueryResultAssemblyAggregation(Schema):
     accession: str
     organism_name: Optional[str] = None
     is_type_strain: bool = False
+    source_name: Optional[str] = None
     hit_count: int = 0
     complete_fraction: float = 0.0
 

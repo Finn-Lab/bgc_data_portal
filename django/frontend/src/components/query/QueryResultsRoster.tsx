@@ -106,7 +106,7 @@ export function QueryResultsRoster() {
             <TableRow>
               <TableHead className="text-xs">Accession</TableHead>
               <TableHead className="text-xs">Class</TableHead>
-              <TableHead className="text-xs">Organism</TableHead>
+              <TableHead className="text-xs">Ref. DB</TableHead>
               <TableHead className="text-xs text-right">Query Similarity</TableHead>
               <TableHead className="text-xs text-right">Domain Novelty</TableHead>
               <TableHead className="text-xs text-right">Novelty</TableHead>
@@ -137,7 +137,7 @@ export function QueryResultsRoster() {
                       {bgc.is_type_strain && (
                         <Star className="h-3 w-3 flex-shrink-0 fill-amber-400 text-amber-400" />
                       )}
-                      {bgc.organism_name ?? bgc.assembly_accession ?? "-"}
+                      {bgc.source_name ?? "-"}
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">

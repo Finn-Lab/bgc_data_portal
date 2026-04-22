@@ -1012,6 +1012,7 @@ def domain_query(
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
+            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
         for bgc in page_qs
     ]
@@ -1083,6 +1084,7 @@ def similar_bgc_query(
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
+            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
         for bgc, similarity in page_results
     ]
@@ -1197,6 +1199,7 @@ def chemical_query(
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
+            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
         for bgc, similarity in page_results
     ]
@@ -1307,6 +1310,7 @@ def sequence_query(
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
+            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
         for bgc, similarity in page_results
     ]
@@ -1343,6 +1347,7 @@ def query_results_assembly_aggregation(
             "assembly__assembly_accession",
             "assembly__organism_name",
             "assembly__is_type_strain",
+            "assembly__source__name",
         )
         .annotate(
             hit_count=Count("id"),
@@ -1375,6 +1380,7 @@ def query_results_assembly_aggregation(
             accession=row["assembly__assembly_accession"],
             organism_name=row["assembly__organism_name"],
             is_type_strain=row["assembly__is_type_strain"],
+            source_name=row.get("assembly__source__name"),
             hit_count=row["hit_count"],
             complete_fraction=round(row["complete_fraction"] or 0.0, 4),
         )

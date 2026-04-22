@@ -212,6 +212,7 @@ export interface QueryResultBgc {
   assembly_accession: string | null;
   organism_name: string | null;
   is_type_strain: boolean;
+  source_name: string | null;
 }
 
 export interface PaginatedQueryResultResponse {
@@ -224,6 +225,7 @@ export interface QueryResultAssemblyAggregation {
   accession: string;
   organism_name: string | null;
   is_type_strain: boolean;
+  source_name: string | null;
   hit_count: number;
   complete_fraction: number;
 }

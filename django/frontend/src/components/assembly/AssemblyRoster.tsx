@@ -88,7 +88,7 @@ export function AssemblyRoster() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-xs">Organism</TableHead>
+              <TableHead className="text-xs">Ref. DB</TableHead>
               <TableHead className="text-xs">Taxonomy</TableHead>
               <TableHead className="text-xs text-center">BGCs</TableHead>
               <TableHead className="text-xs text-center">Classes</TableHead>
@@ -120,7 +120,7 @@ export function AssemblyRoster() {
                         <Star className="h-3 w-3 flex-shrink-0 fill-amber-400 text-amber-400" />
                       )}
                       <span className="truncate">
-                        {assembly.organism_name ?? assembly.accession}
+                        {assembly.source_name ?? "-"}
                       </span>
                     </div>
                   </TableCell>
