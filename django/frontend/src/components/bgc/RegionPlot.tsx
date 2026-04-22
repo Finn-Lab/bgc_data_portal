@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Tooltip,
   TooltipContent,
@@ -124,22 +124,10 @@ interface RegionPlotProps {
   data: BgcRegionData;
   onCdsClick: (cds: RegionCds) => void;
   selectedCdsId: string | null;
-  /** Reports each CDS center as an X fraction (0–1) of the region width after render. */
-  onCdsPositions?: (positions: Record<string, number>) => void;
 }
 
-export function RegionPlot({ data, onCdsClick, selectedCdsId, onCdsPositions }: RegionPlotProps) {
+export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps) {
   const [hoveredCdsId, setHoveredCdsId] = useState<string | null>(null);
-
-  // Report CDS X-fraction positions to parent (used by comparison connector lines)
-  useEffect(() => {
-    if (!onCdsPositions || !data.cds_list.length) return;
-    const positions: Record<string, number> = {};
-    for (const cds of data.cds_list) {
-      positions[cds.protein_id] = (cds.start + cds.end) / 2 / data.region_length;
-    }
-    onCdsPositions(positions);
-  }, [data, onCdsPositions]);
 
   const scaleX = (pos: number) =>
     SVG_PADDING_X + (pos / data.region_length) * (SVG_WIDTH - 2 * SVG_PADDING_X);
@@ -341,7 +329,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId, onCdsPositions }: 
                     )}
                     {cds.pfam.length > 0 && (
                       <div className="mt-1 border-t pt-1 space-y-0.5">
-                        {cds.pfam.map((pf) => (
+                        {[...new Map(cds.pfam.map((pf) => [pf.accession, pf])).values()].map((pf) => (
                           <p key={pf.accession}>
                             <span className="font-medium">{pf.accession}</span>
                             {pf.description && ` — ${pf.description}`}
