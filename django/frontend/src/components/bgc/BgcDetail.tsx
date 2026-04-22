@@ -12,58 +12,15 @@ import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { useAssessStore } from "@/stores/assess-store";
-import { ChevronRight, ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
+import { ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
 import type { ChemOntAnnotationNode } from "@/api/types";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 
 
-/**
- * Renders a ChemOnt ontology lineage path for a natural product.
- * Shows the classification hierarchy as a breadcrumb trail, with
- * probability badges on directly-annotated nodes.
- */
-function ChemOntLineage({ node }: { node: ChemOntAnnotationNode }) {
-  // Collect the deepest path(s) from this root.
-  // If a node has children, recurse; leaf nodes are the most specific class.
-  const paths = collectPaths(node);
-  return (
-    <div className="space-y-0.5">
-      {paths.map((path, i) => (
-        <div key={i} className="flex flex-wrap items-center gap-0.5 text-[10px]">
-          {path.map((step, j) => (
-            <span key={step.chemont_id} className="flex items-center gap-0.5">
-              {j > 0 && <ChevronRight className="h-2.5 w-2.5 text-muted-foreground shrink-0" />}
-              <span
-                className={
-                  step.probability != null
-                    ? "rounded-sm bg-muted px-1 py-px font-medium"
-                    : "text-muted-foreground"
-                }
-                title={step.chemont_id}
-              >
-                {step.name}
-                {step.probability != null && (
-                  <span className="ml-1 text-muted-foreground font-normal">
-                    {(step.probability * 100).toFixed(0)}%
-                  </span>
-                )}
-              </span>
-            </span>
-          ))}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/** Walk the tree and return all root-to-leaf paths. */
-function collectPaths(
-  node: ChemOntAnnotationNode,
-  prefix: ChemOntAnnotationNode[] = []
-): ChemOntAnnotationNode[][] {
-  const current = [...prefix, node];
-  if (node.children.length === 0) return [current];
-  return node.children.flatMap((child) => collectPaths(child, current));
+/** Collect all leaf nodes (nodes with no children) from a ChemOnt tree. */
+function collectLeaves(node: ChemOntAnnotationNode): ChemOntAnnotationNode[] {
+  if (node.children.length === 0) return [node];
+  return node.children.flatMap(collectLeaves);
 }
 import { toast } from "sonner";
 import type { RegionCds } from "@/api/types";
@@ -245,21 +202,41 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                 <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
-                    {np.chemont_classes && np.chemont_classes.length > 0 && (
-                      <div className="mt-1 space-y-0.5">
-                        {np.chemont_classes.map((root) => (
-                          <ChemOntLineage key={root.chemont_id} node={root} />
+                    {np.chemont_classes && np.chemont_classes.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {np.chemont_classes.flatMap(collectLeaves).map((leaf) => (
+                          <span
+                            key={leaf.chemont_id}
+                            title={leaf.chemont_id}
+                            className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
+                          >
+                            {leaf.name}
+                            {leaf.probability != null && (
+                              <span className="ml-1 font-normal text-muted-foreground">
+                                {(leaf.probability * 100).toFixed(0)}%
+                              </span>
+                            )}
+                          </span>
                         ))}
                       </div>
-                    )}
-                    {np.np_class_path && !np.chemont_classes?.length && (
-                      <div className="text-muted-foreground">
+                    ) : np.np_class_path ? (
+                      <div className="mt-1 text-[10px] text-muted-foreground">
                         {np.np_class_path.replace(/\./g, " > ")}
                       </div>
+                    ) : null}
+                    {np.smiles && (
+                      <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
+                        <span className="max-w-[200px] truncate" title={np.smiles}>{np.smiles}</span>
+                        <a
+                          href={`https://molview.org/?smiles=${encodeURIComponent(np.smiles)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="shrink-0 text-primary hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
                     )}
-                    <div className="mt-1 font-mono text-[10px] text-muted-foreground break-all">
-                      {np.smiles}
-                    </div>
                   </div>
                 </div>
               ))}
