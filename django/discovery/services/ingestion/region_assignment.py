@@ -13,6 +13,8 @@ import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 
+from django.db import IntegrityError
+
 from discovery.models import DashboardRegion, RegionAccessionAlias
 
 logger = logging.getLogger(__name__)
@@ -71,8 +73,7 @@ class RegionAssigner:
         if not overlaps:
             region = self._create_region(contig_id, start, end)
         elif len(overlaps) == 1:
-            region = overlaps[0]
-            self._extend(region, start, end, contig_id)
+            region = self._extend(overlaps[0], start, end, contig_id)
         else:
             region = self._merge(overlaps, contig_id, start, end)
 
@@ -102,19 +103,34 @@ class RegionAssigner:
         self._insert_sorted(contig_id, region)
         return region
 
-    def _extend(self, region: _Region, start: int, end: int, contig_id: int) -> None:
-        changed = False
-        if start < region.start:
-            region.start = start
-            changed = True
-        if end > region.end:
-            region.end = end
-            changed = True
-        if changed:
+    def _extend(self, region: _Region, start: int, end: int, contig_id: int) -> _Region:
+        new_start = min(region.start, start)
+        new_end = max(region.end, end)
+        if new_start == region.start and new_end == region.end:
+            return region
+        try:
             DashboardRegion.objects.filter(id=region.db_id).update(
-                start_position=region.start,
-                end_position=region.end,
+                start_position=new_start,
+                end_position=new_end,
             )
+            region.start = new_start
+            region.end = new_end
+            return region
+        except IntegrityError:
+            # A region at (new_start, new_end) already exists in the DB from a prior
+            # interrupted run that was not in the in-memory state. Load it and merge.
+            conflicting_obj = DashboardRegion.objects.get(
+                contig_id=contig_id,
+                start_position=new_start,
+                end_position=new_end,
+            )
+            conflict_mem = _Region(
+                db_id=conflicting_obj.id,
+                start=new_start,
+                end=new_end,
+            )
+            self._insert_sorted(contig_id, conflict_mem)
+            return self._merge([region, conflict_mem], contig_id, start, end)
 
     def _merge(
         self,
