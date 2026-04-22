@@ -543,6 +543,7 @@ class BgcDomain(models.Model):
     domain_name = models.CharField(max_length=255)
     domain_description = models.TextField(blank=True, default="")
     ref_db = models.CharField(max_length=50, blank=True, default="")
+    go_slim = models.CharField(max_length=100, blank=True, default="")
     # Positional data on the protein (amino acid coordinates)
     start_position = models.IntegerField(default=0)
     end_position = models.IntegerField(default=0)

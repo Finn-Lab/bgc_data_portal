@@ -715,7 +715,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                 PfamAnnotationOut(
                     accession=bd.domain_acc,
                     description=bd.domain_description or bd.domain_name or "",
-                    go_slim="",
+                    go_slim=bd.go_slim,
                     envelope_start=bd.start_position,
                     envelope_end=bd.end_position,
                     e_value=str(bd.score) if bd.score is not None else None,
@@ -739,7 +739,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                     end=max(0, dom_nt_end - window_start),
                     strand=cds.strand,
                     score=bd.score,
-                    go_slim=[],
+                    go_slim=[bd.go_slim] if bd.go_slim else [],
                     parent_cds_id=cds.protein_id_str,
                     url=bd.url,
                 )
