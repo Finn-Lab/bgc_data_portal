@@ -156,11 +156,15 @@ class TestAssemblyRoster:
         assert len(data["items"]) == 1
         assert data["pagination"]["total_pages"] == 2
 
-    def test_type_strain_filter(self, api_client, seeded_data):
-        r = api_client.get("/api/dashboard/assemblies/?type_strain_only=true")
+    def test_source_names_filter(self, api_client, seeded_data):
+        from discovery.models import AssemblySource
+        src = AssemblySource.objects.create(name="GTDB")
+        seeded_data["assemblies"][0].source = src
+        seeded_data["assemblies"][0].save()
+        r = api_client.get("/api/dashboard/assemblies/?source_names=GTDB")
         data = json.loads(r.content)
         assert data["pagination"]["total_count"] == 1
-        assert data["items"][0]["is_type_strain"] is True
+        assert data["items"][0]["source_name"] == "GTDB"
 
     def test_taxonomy_filter(self, api_client, seeded_data):
         r = api_client.get("/api/dashboard/assemblies/?taxonomy_path=Bacteria.Pseudomonadota")

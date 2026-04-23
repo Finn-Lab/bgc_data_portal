@@ -4,6 +4,8 @@ import type {
   ChemOntClassNode,
   NpClassLevel,
   PaginatedDomainResponse,
+  PaginatedSourceResponse,
+  PaginatedDetectorResponse,
   TaxonomyNode,
 } from "./types";
 
@@ -32,6 +34,32 @@ export interface DomainSearchParams {
 export function fetchDomains(params: DomainSearchParams = {}) {
   return apiGet<PaginatedDomainResponse>(
     "/filters/domains/",
+    params as Record<string, string | number | boolean | undefined>
+  );
+}
+
+export interface SourceSearchParams {
+  search?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export function fetchSources(params: SourceSearchParams = {}) {
+  return apiGet<PaginatedSourceResponse>(
+    "/filters/sources/",
+    params as Record<string, string | number | boolean | undefined>
+  );
+}
+
+export interface DetectorSearchParams {
+  search?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export function fetchDetectors(params: DetectorSearchParams = {}) {
+  return apiGet<PaginatedDetectorResponse>(
+    "/filters/detectors/",
     params as Record<string, string | number | boolean | undefined>
   );
 }

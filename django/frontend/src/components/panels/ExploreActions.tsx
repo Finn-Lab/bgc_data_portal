@@ -14,7 +14,8 @@ export function ExploreActions() {
     !!filters.bgcAccession ||
     !!filters.search ||
     !!filters.assemblyType ||
-    filters.typeStrainOnly ||
+    filters.sourceNames.length > 0 ||
+    filters.detectorTools.length > 0 ||
     filters.chemontIds.length > 0;
 
   return (

@@ -1,7 +1,8 @@
 import { create } from "zustand";
 
 interface FilterState {
-  typeStrainOnly: boolean;
+  sourceNames: string[];
+  detectorTools: string[];
   taxonomyPath: string;
   assemblyType: string;
   bgcClass: string;
@@ -16,7 +17,8 @@ interface FilterState {
   assemblyIds: string;
   exploreQueryTriggered: boolean;
 
-  setTypeStrainOnly: (v: boolean) => void;
+  setSourceNames: (v: string[]) => void;
+  setDetectorTools: (v: string[]) => void;
   setTaxonomyPath: (value: string) => void;
   setAssemblyType: (v: string) => void;
   setBgcClass: (v: string) => void;
@@ -32,7 +34,8 @@ interface FilterState {
 }
 
 const initialState = {
-  typeStrainOnly: false,
+  sourceNames: [] as string[],
+  detectorTools: [] as string[],
   taxonomyPath: "",
   assemblyType: "",
   bgcClass: "",
@@ -51,7 +54,9 @@ const initialState = {
 export const useFilterStore = create<FilterState>((set) => ({
   ...initialState,
 
-  setTypeStrainOnly: (v) => set({ typeStrainOnly: v, exploreQueryTriggered: false }),
+  setSourceNames: (v) => set({ sourceNames: v, exploreQueryTriggered: false }),
+
+  setDetectorTools: (v) => set({ detectorTools: v, exploreQueryTriggered: false }),
 
   setTaxonomyPath: (value) => set({ taxonomyPath: value, exploreQueryTriggered: false }),
 

@@ -46,7 +46,8 @@ export function QueryActions() {
     !!filters.assemblyAccession ||
     !!filters.bgcAccession ||
     !!filters.search ||
-    filters.typeStrainOnly ||
+    filters.sourceNames.length > 0 ||
+    filters.detectorTools.length > 0 ||
     filters.chemontIds.length > 0;
 
   const handleRunQuery = () => {

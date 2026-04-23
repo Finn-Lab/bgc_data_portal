@@ -11,7 +11,8 @@ export interface DomainQueryParams {
   sort_by?: string;
   order?: "asc" | "desc";
   search?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   assembly_type?: string;
   bgc_class?: string;
@@ -69,7 +70,8 @@ export interface ChemicalQueryParams {
   sort_by?: string;
   order?: "asc" | "desc";
   search?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   assembly_type?: string;
   bgc_class?: string;
@@ -105,7 +107,8 @@ export interface SequenceQueryParams {
   sort_by?: string;
   order?: "asc" | "desc";
   search?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   assembly_type?: string;
   bgc_class?: string;

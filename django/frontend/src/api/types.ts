@@ -188,6 +188,26 @@ export interface PaginatedDomainResponse {
   pagination: PaginationMeta;
 }
 
+export interface SourceOption {
+  name: string;
+  count: number;
+}
+
+export interface PaginatedSourceResponse {
+  items: SourceOption[];
+  pagination: PaginationMeta;
+}
+
+export interface DetectorOption {
+  tool: string;
+  count: number;
+}
+
+export interface PaginatedDetectorResponse {
+  items: DetectorOption[];
+  pagination: PaginationMeta;
+}
+
 // ── Query mode schemas ────────────────────────────────────────────────────
 
 export interface DomainCondition {

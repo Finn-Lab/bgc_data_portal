@@ -8,7 +8,8 @@ export function useAssemblyScatter(xAxis: string, yAxis: string) {
   const params: AssemblyScatterParams = {
     x_axis: xAxis,
     y_axis: yAxis,
-    type_strain_only: filters.typeStrainOnly || undefined,
+    source_names: filters.sourceNames.length ? filters.sourceNames.join(",") : undefined,
+    detector_tools: filters.detectorTools.length ? filters.detectorTools.join(",") : undefined,
     taxonomy_path: filters.taxonomyPath || undefined,
     assembly_type: filters.assemblyType || undefined,
     bgc_class: filters.bgcClass || undefined,

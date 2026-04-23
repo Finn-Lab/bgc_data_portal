@@ -2,7 +2,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { TypeStrainToggle } from "./TypeStrainToggle";
+import { SourceFilter } from "./SourceFilter";
+import { DetectorFilter } from "./DetectorFilter";
 import { TaxonomyFilter } from "./TaxonomyFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { ChemOntClassFilter } from "./ChemOntClassFilter";
@@ -56,7 +57,8 @@ export function FilterPanel() {
         />
       </div>
 
-      <TypeStrainToggle />
+      <SourceFilter />
+      <DetectorFilter />
       <AssemblyTypeFilter />
 
       {mode === "query" ? (

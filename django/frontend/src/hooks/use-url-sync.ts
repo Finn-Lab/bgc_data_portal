@@ -19,9 +19,14 @@ export function useUrlSync() {
       useModeStore.getState().setMode(mode);
     }
 
-    const typeStrain = searchParams.get("type_strain_only");
-    if (typeStrain === "true") {
-      useFilterStore.getState().setTypeStrainOnly(true);
+    const sourceNamesParam = searchParams.get("source_names");
+    if (sourceNamesParam) {
+      useFilterStore.getState().setSourceNames(sourceNamesParam.split(",").filter(Boolean));
+    }
+
+    const detectorToolsParam = searchParams.get("detector_tools");
+    if (detectorToolsParam) {
+      useFilterStore.getState().setDetectorTools(detectorToolsParam.split(",").filter(Boolean));
     }
 
     const bgcClass = searchParams.get("bgc_class");
@@ -70,7 +75,8 @@ export function useUrlSync() {
     const unsubscribers = [
       useModeStore.subscribe((state) => updateUrl("mode", state.mode)),
       useFilterStore.subscribe((state) => {
-        updateUrl("type_strain_only", state.typeStrainOnly ? "true" : "");
+        updateUrl("source_names", state.sourceNames.join(","));
+        updateUrl("detector_tools", state.detectorTools.join(","));
         updateUrl("bgc_class", state.bgcClass);
         updateUrl("search", state.search);
         updateUrl("taxonomy_path", state.taxonomyPath);

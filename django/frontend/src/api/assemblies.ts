@@ -13,7 +13,8 @@ export interface AssemblyRosterParams {
   sort_by?: string;
   order?: "asc" | "desc";
   search?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   bgc_class?: string;
   biome_lineage?: string;
@@ -38,7 +39,8 @@ export function fetchAssemblyBgcs(assemblyId: number) {
 export interface AssemblyScatterParams {
   x_axis?: string;
   y_axis?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   bgc_class?: string;
   assembly_ids?: string;
@@ -51,7 +53,8 @@ export function fetchAssemblyScatter(params: AssemblyScatterParams = {}) {
 
 export interface AssemblyStatsParams {
   search?: string;
-  type_strain_only?: boolean;
+  source_names?: string;
+  detector_tools?: string;
   taxonomy_path?: string;
   assembly_type?: string;
   bgc_class?: string;

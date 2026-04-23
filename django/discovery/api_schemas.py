@@ -230,6 +230,26 @@ class PaginatedDomainResponse(Schema):
     pagination: PaginationMeta
 
 
+class SourceOption(Schema):
+    name: str
+    count: int
+
+
+class PaginatedSourceResponse(Schema):
+    items: list[SourceOption]
+    pagination: PaginationMeta
+
+
+class DetectorOption(Schema):
+    tool: str
+    count: int
+
+
+class PaginatedDetectorResponse(Schema):
+    items: list[DetectorOption]
+    pagination: PaginationMeta
+
+
 # ── Query mode schemas ────────────────────────────────────────────────────────
 
 

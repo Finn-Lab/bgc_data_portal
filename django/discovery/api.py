@@ -29,11 +29,13 @@ from ninja.errors import HttpError
 from pgvector.django import CosineDistance
 
 from discovery.models import (
+    AssemblySource,
     BgcDomain,
     BgcEmbedding,
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardDetector,
     DashboardDomain,
     DashboardGCF,
     DashboardAssembly,
@@ -72,6 +74,10 @@ from discovery.api_schemas import (
     NaturalProductSummary,
     NpClassLevel,
     PaginatedDomainResponse,
+    PaginatedSourceResponse,
+    PaginatedDetectorResponse,
+    SourceOption,
+    DetectorOption,
     PaginatedAssemblyAggregationResponse,
     PaginatedAssemblyResponse,
     PaginatedQueryResultResponse,
@@ -241,7 +247,8 @@ def _apply_assembly_filters(
     *,
     assembly_ids: Optional[str] = None,
     assembly_type: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     search: Optional[str] = None,
     bgc_class: Optional[str] = None,
@@ -261,8 +268,14 @@ def _apply_assembly_filters(
         type_map = {v.label: v.value for v in AssemblyType}
         if assembly_type.lower() in type_map:
             qs = qs.filter(assembly_type=type_map[assembly_type.lower()])
-    if type_strain_only:
-        qs = qs.filter(is_type_strain=True)
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(source__name__in=names)
+    if detector_tools:
+        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
+        if tools:
+            qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
         matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
@@ -380,7 +393,8 @@ def assembly_roster(
     order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
@@ -393,7 +407,8 @@ def assembly_roster(
         qs,
         assembly_ids=assembly_ids,
         assembly_type=assembly_type,
-        type_strain_only=type_strain_only,
+        source_names=source_names,
+        detector_tools=detector_tools,
         taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,
@@ -555,7 +570,8 @@ def assembly_scatter(
     request,
     x_axis: str = "bgc_diversity_score",
     y_axis: str = "bgc_novelty_score",
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
     bgc_class: Optional[str] = None,
     assembly_ids: Optional[str] = None,
@@ -572,8 +588,14 @@ def assembly_scatter(
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
             qs = qs.filter(id__in=ids)
-    if type_strain_only:
-        qs = qs.filter(is_type_strain=True)
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(source__name__in=names)
+    if detector_tools:
+        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
+        if tools:
+            qs = qs.filter(bgcs__detector__tool__in=tools).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
         matching_contigs = filter_contigs_by_taxonomy(taxonomy_path)
@@ -936,7 +958,8 @@ def domain_query(
     order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
@@ -947,9 +970,15 @@ def domain_query(
 
     qs = DashboardBgc.objects.select_related("assembly")
 
-    # Sidebar filters via parent assembly
-    if type_strain_only:
-        qs = qs.filter(assembly__is_type_strain=True)
+    # Sidebar filters
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(assembly__source__name__in=names)
+    if detector_tools:
+        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
+        if tools:
+            qs = qs.filter(detector__tool__in=tools)
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
         qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
@@ -1106,7 +1135,8 @@ def chemical_query(
     order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
@@ -1139,8 +1169,14 @@ def chemical_query(
     qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
 
     # Sidebar filters
-    if type_strain_only:
-        qs = qs.filter(assembly__is_type_strain=True)
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(assembly__source__name__in=names)
+    if detector_tools:
+        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
+        if tools:
+            qs = qs.filter(detector__tool__in=tools)
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
         qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
@@ -1221,7 +1257,8 @@ def sequence_query(
     order: str = "desc",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     assembly_accession: Optional[str] = None,
@@ -1256,8 +1293,14 @@ def sequence_query(
     qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
 
     # Sidebar filters
-    if type_strain_only:
-        qs = qs.filter(assembly__is_type_strain=True)
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(assembly__source__name__in=names)
+    if detector_tools:
+        tools = [t.strip() for t in detector_tools.split(",") if t.strip()]
+        if tools:
+            qs = qs.filter(detector__tool__in=tools)
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
         qs = qs.filter(contig__in=filter_contigs_by_taxonomy(taxonomy_path)).distinct()
@@ -1652,6 +1695,57 @@ def domain_list(
     )
 
 
+@discovery_router.get("/filters/sources/", response=PaginatedSourceResponse)
+def source_list(
+    request,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    qs = AssemblySource.objects.filter(assemblies__isnull=False).annotate(
+        assembly_count=Count("assemblies", distinct=True)
+    )
+    if search:
+        qs = qs.filter(name__icontains=search)
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    items = [
+        SourceOption(name=s.name, count=s.assembly_count)
+        for s in qs.order_by("-assembly_count")[offset: offset + ps]
+    ]
+    return PaginatedSourceResponse(
+        items=items,
+        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    )
+
+
+@discovery_router.get("/filters/detectors/", response=PaginatedDetectorResponse)
+def detector_list(
+    request,
+    search: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 50,
+):
+    qs = (
+        DashboardDetector.objects
+        .values("tool")
+        .annotate(count=Count("bgcs"))
+        .filter(count__gt=0)
+    )
+    if search:
+        qs = qs.filter(tool__icontains=search)
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    items = [
+        DetectorOption(tool=d["tool"], count=d["count"])
+        for d in qs.order_by("-count")[offset: offset + ps]
+    ]
+    return PaginatedDetectorResponse(
+        items=items,
+        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    )
+
+
 # ── Stats endpoints ──────────────────────────────────────────────────────────
 
 
@@ -1660,7 +1754,8 @@ def assembly_stats(
     request,
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
@@ -1671,7 +1766,8 @@ def assembly_stats(
     qs = _apply_assembly_filters(
         qs,
         assembly_ids=assembly_ids,
-        type_strain_only=type_strain_only,
+        source_names=source_names,
+        detector_tools=detector_tools,
         taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,
@@ -1707,7 +1803,8 @@ def export_assembly_stats(
     format: str = "json",
     search: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    type_strain_only: bool = False,
+    source_names: Optional[str] = None,
+    detector_tools: Optional[str] = None,
     bgc_class: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     bgc_accession: Optional[str] = None,
@@ -1718,7 +1815,8 @@ def export_assembly_stats(
     qs = _apply_assembly_filters(
         qs,
         assembly_ids=assembly_ids,
-        type_strain_only=type_strain_only,
+        source_names=source_names,
+        detector_tools=detector_tools,
         taxonomy_path=taxonomy_path,
         search=search,
         bgc_class=bgc_class,

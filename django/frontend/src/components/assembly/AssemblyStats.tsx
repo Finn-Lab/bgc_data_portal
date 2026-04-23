@@ -64,7 +64,8 @@ export function AssemblyStatsActions({ assemblyIds }: { assemblyIds?: string }) 
   const params = useMemo(
     () => ({
       search: filters.search || undefined,
-      type_strain_only: filters.typeStrainOnly || undefined,
+      source_names: filters.sourceNames.length ? filters.sourceNames.join(",") : undefined,
+      detector_tools: filters.detectorTools.length ? filters.detectorTools.join(",") : undefined,
       bgc_class: filters.bgcClass || undefined,
       biome_lineage: filters.biomeLineage || undefined,
       assembly_ids: assemblyIds,
