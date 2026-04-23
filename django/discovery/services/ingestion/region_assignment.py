@@ -117,20 +117,34 @@ class RegionAssigner:
             region.end = new_end
             return region
         except IntegrityError:
-            # A region at (new_start, new_end) already exists in the DB from a prior
-            # interrupted run that was not in the in-memory state. Load it and merge.
+            # A region already occupies (new_start, new_end) on this contig — left over
+            # from a prior interrupted run or loaded by another dataset on a shared contig.
+            # Always absorb the conflicting region INTO `region` (never the reverse) so
+            # that BGCs already queued in the in-memory batch keep a valid region_id.
             conflicting_obj = DashboardRegion.objects.get(
                 contig_id=contig_id,
                 start_position=new_start,
                 end_position=new_end,
             )
-            conflict_mem = _Region(
-                db_id=conflicting_obj.id,
-                start=new_start,
-                end=new_end,
+            from discovery.models import DashboardBgc
+            DashboardBgc.objects.filter(region_id=conflicting_obj.id).update(
+                region_id=region.db_id
             )
-            self._insert_sorted(contig_id, conflict_mem)
-            return self._merge([region, conflict_mem], contig_id, start, end)
+            RegionAccessionAlias.objects.bulk_create(
+                [RegionAccessionAlias(
+                    alias_accession=f"MGYB{conflicting_obj.id:08}",
+                    region_id=region.db_id,
+                )],
+                ignore_conflicts=True,
+            )
+            DashboardRegion.objects.filter(id=conflicting_obj.id).delete()
+            DashboardRegion.objects.filter(id=region.db_id).update(
+                start_position=new_start,
+                end_position=new_end,
+            )
+            region.start = new_start
+            region.end = new_end
+            return region
 
     def _merge(
         self,
