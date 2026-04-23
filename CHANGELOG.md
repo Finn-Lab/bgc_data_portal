@@ -1,5 +1,35 @@
 # Changelog
 
+## [3.2.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.1.0...bgc_data_portal-v3.2.0) (2026-04-23)
+
+
+### Features
+
+* **Dashboard Roster:** Display source in roster ([ee01f79](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ee01f7900fd290c5fda742946cde61516377d8b8))
+* **discovery:** add GO slim to BgcDomain and load_pfam_go_slim command ([fda506c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/fda506c822126cafe9e0ca50cf024f7e4328d545))
+* **portal:** CDS connector lines in BGC comparison view ([ebe012f](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/ebe012fbd273053cdfc93d4e1a0f46e4daaa8e10))
+* **portal:** ChemOnt leaf-only display and SMILES MolView link ([8290167](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/829016723fde3fca0672dafc27b1660cd2615af5))
+* **portal:** GO slim CDS coloring and remove domain overlays from RegionPlot ([549c2ac](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/549c2acba43c4f5b20b8ee8de4b91427a03cc220))
+* **portal:** parent assembly accession link to assembly URL ([51fc437](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/51fc437778deae4c1b7c261d2c58c6cefd0d5fa3))
+* **portal:** replace type-strains toggle with Source and BGC Detector filters ([2867370](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/2867370d090ed1edb4252cbf9fdb92c638ea8745))
+
+
+### Bug Fixes
+
+* **clustering:** add --sync flag to run_bgc_clustering to bypass RabbitMQ ([78aeb4b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/78aeb4bbff86dce7e5bd0df7bb666b1300b3c370))
+* **dashboard:** Empty BGC Roster in the Assembly "Evaluate Asset" ([7dfcd2c](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/7dfcd2ce84c452ca490c55ca8c32c3467ca2c90a))
+* **ingestion:** add batch_size to bulk_create in sequence loaders ([5e10d49](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/5e10d4997b63fba851e8dcf700f960a070596d9e))
+* **ingestion:** avoid absorbing current region in _extend conflict path ([90f0f9b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/90f0f9b6128daf1423f18ddf15b0bf2edbaf69c7))
+* **ingestion:** avoid absorbing current region in _extend conflict path ([45efd5b](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/45efd5bf8a342b8e9f986af922a637dddc078191))
+* **ingestion:** handle region extend collision from prior interrupted run ([c6695c9](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/c6695c9d564dd4b9a270a552f216b060127e29d6))
+* **search:** align protein sequence search to final ESM-C layer ([eac57bf](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/eac57bf5339c7988fe3b9e528cc6e060f40d2302))
+* **search:** correct three bugs in keyword filter that silently broke free-text search and threw errors on regex-unsafe input ([feb4777](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/feb4777be0a8c6ce09e40aa28999613d0379630a))
+
+
+### Reverts
+
+* **portal:** remove CDS connector lines from comparison view ([0863b02](https://github.com/EBI-Metagenomics/bgc_data_portal/commit/0863b024d5050685ac10b3d9accae6caf414dc5c))
+
 ## [3.1.0](https://github.com/EBI-Metagenomics/bgc_data_portal/compare/bgc_data_portal-v3.0.0...bgc_data_portal-v3.1.0) (2026-04-20)
 
 
