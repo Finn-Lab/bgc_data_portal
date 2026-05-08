@@ -188,9 +188,14 @@ python manage.py seed_data --manifest /app/path/to/my.yaml
 ## Loading Real Precomputed Data
 
 As an alternative to the synthetic seeders above, you can load real
-precomputed TSV files (the output of the ETL pipeline) into the local KIND
+precomputed data (the output of the ETL pipeline) into the local KIND
 database. Use this when you want to exercise the portal against realistic
 accessions, taxonomies, embeddings, etc., without re-running the ETL.
+
+The data must be staged on the host as one or more `*.tgz` archives in
+`../../.SCRATCH/STAGED_FILES_SAMPLES/` (i.e. `.SCRATCH/STAGED_FILES_SAMPLES/`
+at the repository root). Each archive contains the TSV files consumed by
+`load_discovery_data`.
 
 ```bash
 make seed-real-data
@@ -198,32 +203,44 @@ make seed-real-data
 
 What it does, in order:
 
-1. Verifies that `../../SCRATCH/STAGED_FILES_SAMPLES/` exists on the host and
-   contains at least one `*.tsv` file. If not, the target aborts with a
+1. Verifies that `../../.SCRATCH/STAGED_FILES_SAMPLES/` exists on the host
+   and contains at least one `*.tgz` file. If not, the target aborts with a
    clear error **without touching the database**.
-2. Resolves the running django pod and `kubectl cp`s the directory to
-   `/tmp/staged_files` inside the pod.
-3. Runs `python manage.py load_discovery_data --data-dir /tmp/staged_files
-   --truncate`, which uses Postgres `COPY FROM` to bulk-load the TSVs.
+2. Resolves the running django pod.
+3. For each `*.tgz` (in lexical order), in series:
+   1. Extracts it to a host `mktemp -d`.
+   2. Locates the directory containing `assemblies.tsv` (root, or one
+      level down — anything deeper is rejected with an error).
+   3. `kubectl cp`s that directory to `/tmp/staged_files` inside the pod.
+   4. Runs `python manage.py load_discovery_data --data-dir /tmp/staged_files [--truncate]`.
+      `--truncate` is passed **only on the first archive**; subsequent
+      archives load additively.
+   5. Cleans up `/tmp/staged_files` in the pod and the host tempdir
+      (even if the loader fails).
 
-> **WARNING — destructive.** The `--truncate` flag wipes every discovery
-> table before loading. Do not run this against a database whose contents
-> you care about. It is intended for the local KIND cluster only.
+End state of the DB = union of every archive's contents.
+
+> **WARNING — destructive.** The first archive is loaded with `--truncate`,
+> which wipes every discovery table. Do not run this against a database
+> whose contents you care about. It is intended for the local KIND cluster
+> only.
 
 ### Prerequisites
 
 - The KIND cluster must be running (`make dev` or `make deploy-local`).
-- `../../SCRATCH/STAGED_FILES_SAMPLES/` must exist at the repository root and
-  contain ETL TSV files. **If the directory is missing or empty, the make
-  target will exit non-zero and do nothing** — it will not silently
-  truncate your DB or load an empty dataset.
+- `../../.SCRATCH/STAGED_FILES_SAMPLES/` must exist at the repository root
+  and contain at least one ETL `*.tgz` archive. **If the directory is
+  missing or contains no `*.tgz` files, the make target will exit non-zero
+  and do nothing** — it will not silently truncate your DB or load an
+  empty dataset.
 
-### Expected file layout
+### Expected archive layout
 
-`../../SCRATCH/STAGED_FILES_SAMPLES/` should contain the TSV files consumed by
-`load_discovery_data`. The required and optional files (and their column
-contracts) are documented in
-`django/discovery/services/ingestion/loader.py`. At a minimum:
+Each `*.tgz` must, after extraction, expose `assemblies.tsv` either at the
+archive root or inside a single top-level directory. The full set of
+required and optional TSV files (and their column contracts) is documented
+in `django/discovery/services/ingestion/loader.py`. At a minimum each
+archive must include:
 
 - `detectors.tsv`
 - `assemblies.tsv`
@@ -238,17 +255,15 @@ Optional (loaded when present): `cds.tsv`, `cds_sequences.tsv`,
 ### Running with different options
 
 `make seed-real-data` is a thin wrapper around the Django command. If you
-want to skip the truncate (additive load) or skip the in-pipeline stats
-step, invoke the command directly inside the pod:
+want to skip the truncate (e.g. extend an existing dataset), skip the
+in-pipeline stats step, or load a single archive on demand, invoke the
+command directly inside the pod after copying the TSVs in yourself:
 
 ```bash
 make shell
 python manage.py load_discovery_data --data-dir /tmp/staged_files            # no truncate
 python manage.py load_discovery_data --data-dir /tmp/staged_files --skip-stats
 ```
-
-(You will need to copy the files into the pod yourself first, e.g. via
-`kubectl cp`, if you bypass the make target.)
 
 ## Running Tests
 
