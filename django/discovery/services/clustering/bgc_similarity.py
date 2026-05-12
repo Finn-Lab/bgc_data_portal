@@ -1,11 +1,13 @@
-"""Compute the BGC × BGC similarity matrix using a pluggable metric.
+"""Composite weighted-mean BGC × BGC similarity.
 
-Thin wrapper around the metric callable (see ``metrics.py``). Centralised so
-the orchestrator and the reclassifier go through one entry point.
+The composite score is ``w_d · Dice(M_domains) + w_a · Dice(M_pairs)`` where:
 
-Pre-filters S to columns that are present in M before delegating to the
-metric — this drops the column dimension dramatically when many proteins in
-the embedding table never appear inside any selected BGC.
+* ``M_domains`` is the NRB × domain-accession binary matrix.
+* ``M_pairs``   is the NRB × adjacent-pair binary matrix.
+
+Both matrices share row ordering, so the two Dice scores are sparse matrices
+of identical shape and can be summed directly. The result is symmetrized and
+its diagonal zeroed so KNN / Leiden see clean edges.
 """
 
 from __future__ import annotations
@@ -16,63 +18,77 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import scipy.sparse as sp
 
-    from discovery.services.clustering.metrics import BgcSimilarityMetric
+from discovery.services.clustering.metrics import dice_similarity
 
 log = logging.getLogger(__name__)
 
 
-def compute_bgc_similarity(
-    M: "sp.csr_matrix",
-    S: "sp.csr_matrix",
-    metric: "BgcSimilarityMetric",
+def compute_composite_similarity(
+    M_domains: "sp.csr_matrix",
+    M_pairs: "sp.csr_matrix",
     *,
-    chunk_size: int = 2048,
+    weights: tuple[float, float] = (0.5, 0.5),
     prune_below: float = 0.0,
 ) -> "sp.csr_matrix":
-    """Run the metric on a (possibly pre-filtered) M and S.
+    """Return weighted-mean Sørensen–Dice similarity on two binary matrices.
 
     Parameters
     ----------
-    M:
-        BGC × protein 0/1 membership matrix (csr).
-    S:
-        Protein × protein symmetric similarity matrix already filtered at
-        the metric's threshold.
-    metric:
-        Pluggable metric implementing ``BgcSimilarityMetric``.
-    chunk_size:
-        Row-block size for the M @ S computation inside the metric.
-    prune_below:
-        Drop entries strictly less than this value from the result. Default
-        0.0 keeps everything; KNN graphs typically only need a handful of
-        neighbours per BGC so a small floor (e.g. 0.05) saves memory.
-    """
-    if M.nnz == 0 or S.nnz == 0:
-        return M  # empty similarity if either is empty
+    M_domains : sparse CSR, shape (n_rows, n_domains)
+    M_pairs   : sparse CSR, shape (n_rows, n_pairs)
+    weights   : (w_domain, w_adjacency); weights are renormalized to sum 1.0
+                so the output range stays in [0, 1] even if the caller
+                supplies un-normalized weights.
+    prune_below: drop entries strictly less than this value from the result.
 
-    sim = metric(M, S, chunk_size=chunk_size)
+    Returns
+    -------
+    sparse CSR symmetric NRB × NRB similarity, diagonal zeroed.
+    """
+    import scipy.sparse as sp
+
+    if M_domains.shape[0] != M_pairs.shape[0]:
+        raise ValueError(
+            f"row mismatch: M_domains={M_domains.shape}, M_pairs={M_pairs.shape}"
+        )
+
+    w_d, w_a = weights
+    total = float(w_d) + float(w_a)
+    if total <= 0:
+        raise ValueError(f"weights must sum > 0, got {weights}")
+    w_d, w_a = w_d / total, w_a / total
+
+    sim_d = dice_similarity(M_domains) if w_d > 0 else None
+    sim_a = dice_similarity(M_pairs) if w_a > 0 else None
+
+    if sim_d is not None and sim_a is not None:
+        sim = (w_d * sim_d) + (w_a * sim_a)
+    elif sim_d is not None:
+        sim = w_d * sim_d
+    elif sim_a is not None:
+        sim = w_a * sim_a
+    else:  # both weights zero — unreachable due to total>0 guard
+        raise RuntimeError("composite similarity has no contributing components")
+
+    sim = sim.tocsr()
 
     if prune_below > 0.0 and sim.nnz:
         coo = sim.tocoo(copy=False)
         keep = coo.data >= prune_below
         if keep.sum() != coo.nnz:
-            import scipy.sparse as sp
-
             sim = sp.csr_matrix(
                 (coo.data[keep], (coo.row[keep], coo.col[keep])),
                 shape=coo.shape,
             )
 
-    log.info(
-        "compute_bgc_similarity: metric=%s shape=%s nnz=%d (post-prune)",
-        getattr(metric, "name", type(metric).__name__),
-        sim.shape,
-        sim.nnz,
-    )
-    # Drop the diagonal (a BGC isn't its own neighbour for clustering).
+    # BGC isn't its own neighbour.
     sim.setdiag(0)
     sim.eliminate_zeros()
-    # ``sim`` may be slightly asymmetric due to numerical accumulation; force
-    # symmetry so KNN / Leiden see consistent edges.
+    # Force symmetry; tiny floating drift from the matmul can leak otherwise.
     sim = sim.maximum(sim.T).tocsr()
+
+    log.info(
+        "compute_composite_similarity: shape=%s nnz=%d weights=(%.3f, %.3f)",
+        sim.shape, sim.nnz, w_d, w_a,
+    )
     return sim

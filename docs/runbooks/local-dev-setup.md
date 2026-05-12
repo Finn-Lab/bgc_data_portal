@@ -113,6 +113,9 @@ Then seed:
 
 ```bash
 make shell
+# with real data
+make seed-real-data
+# or, use synth data
 python manage.py seed_data --manifest medium
 ```
 

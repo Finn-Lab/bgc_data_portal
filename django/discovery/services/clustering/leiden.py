@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 def run_hierarchical_leiden(
     graph: "ig.Graph",
-    resolutions: tuple[float, ...] = (0.4, 0.8, 1.4, 2.0),
+    resolutions: tuple[float, ...] = (0.03, 0.08, 0.15, 0.25),
     *,
     seed: int = 42,
     min_community_size: int = 2,
@@ -77,7 +77,7 @@ def run_hierarchical_leiden(
         weights = sub.es["weight"] if "weight" in sub.es.attributes() else None
         partition = la.find_partition(
             sub,
-            la.RBConfigurationVertexPartition,
+            la.CPMVertexPartition,
             weights=weights,
             resolution_parameter=resolutions[depth],
             seed=seed + depth,

@@ -143,7 +143,16 @@ CELERY_TASK_ROUTES = {
 # Must match ref_db_allowlist in mgnify-bgcs-etl/config/load/merge_staged_tsvs.yaml
 # so uploaded assets are compared against the same subset of domains that is
 # actually loaded into the Discovery DB.
-ALLOWED_DOMAIN_REF_DBS: tuple[str, ...] = ("PFAM", "TIGRFAM")
+ALLOWED_DOMAIN_REF_DBS: tuple[str, ...] = ("PFAM", "TIGRFAM", "NCBIFAM")
+
+# Filesystem destination for post-clustering analysis artifacts (TSV + Plotly HTMLs).
+# Each ClusteringRun writes to <CLUSTERING_ARTIFACTS_DIR>/<run_sha[:12]>/.
+CLUSTERING_ARTIFACTS_DIR: Path = Path(
+    os.environ.get(
+        "CLUSTERING_ARTIFACTS_DIR",
+        BASE_DIR / "data" / "clustering_artifacts",
+    )
+)
 
 
 # REST Framework

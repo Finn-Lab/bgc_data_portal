@@ -221,15 +221,13 @@ class ClusteringRunFactory(DjangoModelFactory):
         django_get_or_create = ("sha256",)
 
     sha256 = factory.Sequence(lambda n: f"{n:064x}")
-    pair_floor = 0.7
-    dice_threshold = 0.9
+    domain_sources = factory.LazyFunction(lambda: ["PFAM", "NCBIFAM"])
+    score_weights = factory.LazyFunction(lambda: [0.5, 0.5])
     knn_k = 5
-    leiden_resolutions = factory.LazyFunction(lambda: [0.4, 0.8, 1.4, 2.0])
-    metric_name = "dice"
+    leiden_resolutions = factory.LazyFunction(lambda: [0.03, 0.08, 0.15, 0.25])
     seed = 42
-    n_proteins = factory.LazyFunction(lambda: random.randint(100, 10_000))
-    n_pairs = factory.LazyFunction(lambda: random.randint(100, 100_000))
-    n_bgcs = factory.LazyFunction(lambda: random.randint(10, 1000))
+    n_proteins = 0
+    n_nrbs = factory.LazyFunction(lambda: random.randint(10, 1000))
     n_levels = 4
     n_root_communities = factory.LazyFunction(lambda: random.randint(1, 20))
     n_leaf_communities = factory.LazyFunction(lambda: random.randint(20, 200))

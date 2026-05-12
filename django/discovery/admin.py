@@ -10,8 +10,8 @@ from .models import (
     DashboardNaturalProduct,
     DashboardBgcClass,
     DashboardDomain,
+    NonRedundantBGC,
     PrecomputedStats,
-    ProteinSimilarPair,
 )
 
 
@@ -54,24 +54,25 @@ class ClusteringRunAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "created_at",
-        "metric_name",
-        "dice_threshold",
         "knn_k",
         "n_levels",
-        "n_bgcs",
-        "n_pairs",
+        "n_nrbs",
+        "n_leaf_communities",
     )
     readonly_fields = (
-        "created_at", "sha256", "n_proteins", "n_pairs", "n_bgcs",
+        "created_at", "sha256", "n_proteins", "n_nrbs",
         "n_levels", "n_root_communities", "n_leaf_communities",
         "igraph_version", "leidenalg_version", "umap_version", "scipy_version",
     )
 
 
-@admin.register(ProteinSimilarPair)
-class ProteinSimilarPairAdmin(admin.ModelAdmin):
-    list_display = ("protein_a_sha256", "protein_b_sha256", "cosine")
-    search_fields = ("protein_a_sha256", "protein_b_sha256")
+@admin.register(NonRedundantBGC)
+class NonRedundantBGCAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "contig_id", "start_position", "end_position",
+        "source_tools", "gene_cluster_family",
+    )
+    search_fields = ("gene_cluster_family",)
 
 
 @admin.register(DashboardNaturalProduct)

@@ -23,7 +23,9 @@ def _two_cliques_graph() -> "igraph.Graph":
 
 def test_two_cliques_split_at_coarsest_level():
     g = _two_cliques_graph()
-    levels = run_hierarchical_leiden(g, resolutions=(0.4,), seed=42)
+    # CPM resolution: smaller than modularity values; 0.1 separates the two
+    # cliques across the weak bridge (weight 0.05) cleanly.
+    levels = run_hierarchical_leiden(g, resolutions=(0.1,), seed=42)
     assert len(levels) == 1
     labels = levels[0]
     # Cliques should land in different communities.
@@ -36,7 +38,7 @@ def test_two_cliques_split_at_coarsest_level():
 def test_strict_nesting_invariant():
     """Vertices that share a label at a finer level must share it at every coarser level."""
     g = _two_cliques_graph()
-    levels = run_hierarchical_leiden(g, resolutions=(0.4, 1.5, 3.0), seed=42)
+    levels = run_hierarchical_leiden(g, resolutions=(0.1, 0.3, 0.6), seed=42)
     n = g.vcount()
     for u in range(n):
         for v in range(u + 1, n):
@@ -50,7 +52,7 @@ def test_strict_nesting_invariant():
 
 def test_empty_graph_returns_empty_labels():
     g = igraph.Graph(directed=False)
-    levels = run_hierarchical_leiden(g, resolutions=(0.4, 1.0), seed=0)
+    levels = run_hierarchical_leiden(g, resolutions=(0.05, 0.1), seed=0)
     assert levels == [[], []]
 
 
@@ -62,7 +64,7 @@ def test_min_community_size_pads_uniform_depth():
     g.add_edges([(0, 1), (1, 2), (0, 2)])
     g.es["weight"] = [1.0, 1.0, 1.0]
     levels = run_hierarchical_leiden(
-        g, resolutions=(0.5, 0.5, 0.5), seed=0, min_community_size=4
+        g, resolutions=(0.05, 0.05, 0.05), seed=0, min_community_size=4
     )
     assert len(levels) == 3
     for d in range(3):

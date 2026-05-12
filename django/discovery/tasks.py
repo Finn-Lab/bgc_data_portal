@@ -228,64 +228,43 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
 
 
 SEQUENCE_QUERY_TTL = 3_600  # 1 hour
-PROTEIN_PAIR_TTL = 86_400  # 24 hours
 CLUSTERING_TTL = 86_400  # 24 hours
 
 _VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
-# ── Protein-pair table builder ────────────────────────────────────────────────
+# ── Non-Redundant BGC table builder ───────────────────────────────────────────
 
 
 @shared_task(
-    name="discovery.tasks.recompute_protein_similar_pairs",
+    name="discovery.tasks.build_non_redundant_bgcs",
     bind=True,
     acks_late=True,
 )
-def recompute_protein_similar_pairs_task(
-    self,
-    floor: float = 0.7,
-    batch_size: int = 1024,
-    top_k: int = 64,
-    ef_search: int = 200,
-    resume: bool = True,
-) -> dict:
-    """Build / extend the ProteinSimilarPair table via pgvector HNSW ANN.
-
-    The pair table is the durable source of truth for any BGC similarity
-    metric — re-run only when proteins are added or when the floor needs
-    to drop. Threshold filtering at runtime (e.g. dice_threshold=0.9 on a
-    floor=0.7 table) doesn't require recompute.
-    """
+def build_non_redundant_bgcs_task(self) -> dict:
+    """Rebuild the NonRedundantBGC table from latest-version BGC predictions."""
     task_id = self.request.id
-    search_key = f"protein_pairs:{floor:.2f}"
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=PROTEIN_PAIR_TTL)
+    search_key = "non_redundant_bgcs"
+    set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
-    from discovery.services.clustering.pairs import build_protein_similar_pairs
+    from discovery.services.clustering.non_redundant import build_non_redundant_bgcs
 
-    def _progress(payload: dict) -> None:
+    def _progress(phase: str, processed: int, total: int) -> None:
         set_job_cache(
             search_key=search_key,
-            results={**payload, "phase": "running"},
+            results={"phase": phase, "processed": processed, "total": total},
             task_id=task_id,
-            timeout=PROTEIN_PAIR_TTL,
+            timeout=CLUSTERING_TTL,
         )
 
-    result = build_protein_similar_pairs(
-        floor=floor,
-        batch_size=batch_size,
-        top_k=top_k,
-        ef_search=ef_search,
-        resume=resume,
-        progress_cb=_progress,
-    )
+    result = build_non_redundant_bgcs(progress_cb=_progress)
     set_job_cache(
         search_key=search_key,
         results={**result, "phase": "complete"},
         task_id=task_id,
-        timeout=PROTEIN_PAIR_TTL,
+        timeout=CLUSTERING_TTL,
     )
-    log.info("recompute_protein_similar_pairs complete (task %s): %s", task_id, result)
+    log.info("build_non_redundant_bgcs complete (task %s): %s", task_id, result)
     return result
 
 
@@ -296,37 +275,49 @@ def recompute_protein_similar_pairs_task(
 def run_bgc_clustering_task(
     self,
     *,
-    dice_threshold: float = 0.9,
-    knn_k: int = 5,
-    leiden_resolutions: list[float] | tuple[float, ...] = (0.4, 0.8, 1.4, 2.0),
-    metric: str = "dice",
+    domain_sources: list[str] | None = None,
+    score_weights: list[float] | None = None,
+    knn_k: int | None = None,
+    leiden_resolutions: list[float] | tuple[float, ...] | None = None,
     seed: int = 42,
     apply: bool = False,
-    pair_floor: float = 0.7,
     auto_reclassify: bool = True,
     reclassify_scope: str = "all_non_primary",
 ) -> dict:
-    """Pair-based hierarchical Leiden clustering over complete BGCs.
+    """Domain+adjacency hierarchical-CPM-Leiden clustering over NRBs.
 
     Runs the orchestrator in ``services.clustering.pipeline``; if ``apply``
-    is True, writes leaf paths and umap coords back to ``DashboardBgc`` and
-    upserts ``DashboardGCF`` rows for the run. Optionally chains a
-    reclassify task to assign partial / late BGCs.
+    is True, writes leaf paths + umap coords to NonRedundantBGC and
+    back-propagates to source DashboardBgc rows, upserts DashboardGCF rows,
+    and emits MIBiG validation artifacts under
+    ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
+    chains a reclassify task to assign partial / late BGCs.
     """
     task_id = self.request.id
     search_key = f"bgc_clustering:{task_id}"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
-    from discovery.services.clustering.pipeline import run_clustering_pipeline
+    from discovery.services.clustering.pipeline import (
+        DEFAULT_DOMAIN_SOURCES,
+        DEFAULT_RESOLUTIONS,
+        DEFAULT_SCORE_WEIGHTS,
+        run_clustering_pipeline,
+    )
+
+    sources = tuple(s.upper() for s in (domain_sources or DEFAULT_DOMAIN_SOURCES))
+    weights = (
+        (float(score_weights[0]), float(score_weights[1]))
+        if score_weights else DEFAULT_SCORE_WEIGHTS
+    )
+    resolutions = tuple(leiden_resolutions) if leiden_resolutions else DEFAULT_RESOLUTIONS
 
     result = run_clustering_pipeline(
-        dice_threshold=dice_threshold,
+        domain_sources=sources,
+        score_weights=weights,
         knn_k=knn_k,
-        leiden_resolutions=tuple(leiden_resolutions),
-        metric=metric,
+        leiden_resolutions=resolutions,
         seed=seed,
         apply=apply,
-        pair_floor=pair_floor,
     )
 
     if apply and auto_reclassify and "run_pk" in result:
@@ -334,7 +325,7 @@ def run_bgc_clustering_task(
             kwargs={
                 "clustering_run_pk": result["run_pk"],
                 "scope": reclassify_scope,
-                "knn_k": knn_k,
+                "knn_k": result.get("knn_k") or knn_k or 5,
             },
             queue="scores",
         )

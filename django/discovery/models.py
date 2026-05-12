@@ -289,6 +289,87 @@ class RegionAccessionAlias(models.Model):
         return f"{self.alias_accession} → {self.region.accession}"
 
 
+# ── Non-Redundant BGC ─────────────────────────────────────────────────────────
+
+
+class NonRedundantBGC(models.Model):
+    """Consolidated BGC region used as the input unit for clustering.
+
+    Built from latest-version ``DashboardBgc`` rows that are either
+    ``is_partial=False`` or ``is_validated=True``:
+      * Validated BGCs (``is_validated=True``) become standalone NRBs
+        regardless of tool or ``is_partial`` — they are ground truth and
+        are never merged with predictions nor absorbed.
+      * Non-validated GECCO and SanntiS predictions on the same contig are
+        merged via transitive interval overlap (any positive intersection
+        joins a component). The merged interval spans
+        ``min(starts) → max(ends)``.
+      * Non-validated antiSMASH predictions are admitted as their own NRB
+        iff they do not overlap any already-built NRB on the same contig
+        (validated standalones included). Overlapping antiSMASH calls are
+        absorbed and contribute nothing.
+
+    Source ``DashboardBgc`` rows point here via ``DashboardBgc.non_redundant_bgc``.
+    Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here;
+    source BGCs inherit those values via back-propagation.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    contig = models.ForeignKey(
+        DashboardContig,
+        on_delete=models.CASCADE,
+        related_name="non_redundant_bgcs",
+        db_index=True,
+    )
+    start_position = models.IntegerField()
+    end_position = models.IntegerField()
+
+    source_tools = models.JSONField(
+        default=list,
+        help_text="Sorted, deduped tool names that contributed, e.g. ['GECCO','SanntiS']",
+    )
+
+    gene_cluster_family = models.CharField(
+        max_length=512,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="ltree dot-path, e.g. cluster.0042.0007.0003 (leaf of the hierarchy)",
+    )
+    umap_x = models.FloatField(null=True, blank=True)
+    umap_y = models.FloatField(null=True, blank=True)
+    classification_run = models.ForeignKey(
+        "ClusteringRun",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="non_redundant_bgcs",
+    )
+    classified_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "discovery_non_redundant_bgc"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["contig", "start_position", "end_position"],
+                name="uniq_nrb_contig_pos",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["contig", "start_position", "end_position"],
+                name="idx_nrb_contig_pos",
+            ),
+            models.Index(fields=["gene_cluster_family"], name="idx_nrb_gcf"),
+        ]
+
+    def __str__(self):
+        return f"NRB#{self.pk} contig={self.contig_id} {self.start_position}-{self.end_position}"
+
+
 # ── BGC ─────────────────────────────────────────────────────────────────────────
 
 
@@ -350,11 +431,13 @@ class DashboardBgc(models.Model):
     )
 
     # ── Classification provenance (set by the clustering pipeline) ──────
-    # ``primary``      — drove community detection (is_partial=False members of a run)
-    # ``knn``          — assigned post-hoc via KNN reclassification
+    # ``primary``      — source BGC of a NonRedundantBGC that drove community detection
+    # ``merged``       — source BGC of a NonRedundantBGC (set at NRB-build time, before clustering)
+    # ``knn``          — assigned post-hoc via KNN reclassification (partials, stale BGCs)
     # ``unclassified`` — never matched any community (default for new rows)
     CLASSIFICATION_SOURCE_CHOICES = [
         ("primary", "primary"),
+        ("merged", "merged"),
         ("knn", "knn"),
         ("unclassified", "unclassified"),
     ]
@@ -395,6 +478,16 @@ class DashboardBgc(models.Model):
     bgc_number = models.PositiveSmallIntegerField(
         default=0,
         help_text="2-digit incremental within region + detector",
+    )
+
+    # Non-redundant BGC (set during NRB build; NULL for partials and absorbed antiSMASH calls)
+    non_redundant_bgc = models.ForeignKey(
+        NonRedundantBGC,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="source_bgcs",
+        db_index=True,
     )
 
     updated_at = models.DateTimeField(auto_now=True)
@@ -579,6 +672,10 @@ class BgcDomain(models.Model):
         indexes = [
             models.Index(fields=["domain_acc", "bgc"], name="idx_bgcdom_acc_bgc"),
             models.Index(fields=["bgc", "domain_acc"], name="idx_bgcdom_bgc_acc"),
+            models.Index(
+                fields=["bgc", "ref_db", "domain_acc"],
+                name="idx_bgcdom_bgc_ref_acc",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -595,39 +692,36 @@ class BgcDomain(models.Model):
 
 
 class ClusteringRun(models.Model):
-    """One protein-pair → BGC-Dice → KNN-graph → hierarchical-Leiden run.
+    """One NRB-domain/adjacency-Dice → KNN-graph → hierarchical-CPM-Leiden run.
 
     Stores parameters and counts only. The hierarchy itself lives in DashboardGCF
-    rows (one per node) and on DashboardBgc.gene_cluster_family (leaf path per BGC).
-    Re-running with identical inputs yields the same `sha256` and therefore the
-    same `pk` (idempotent via update_or_create).
+    rows (one per node), on NonRedundantBGC.gene_cluster_family (leaf path per NRB),
+    and on DashboardBgc.gene_cluster_family (back-propagated to source BGCs).
+    Re-running with identical inputs yields the same ``sha256`` and therefore the
+    same ``pk`` (idempotent via update_or_create).
     """
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     # Pipeline parameters
-    pair_floor = models.FloatField(
-        help_text="Minimum cosine kept in ProteinSimilarPair (e.g. 0.7)",
+    domain_sources = models.JSONField(
+        default=list,
+        help_text="Domain ref_db sources used (upper-case), e.g. ['PFAM','NCBIFAM']",
     )
-    dice_threshold = models.FloatField(
-        help_text="Cosine threshold applied at runtime when computing Dice (e.g. 0.9)",
+    score_weights = models.JSONField(
+        default=list,
+        help_text="(w_domain, w_adjacency) used for the composite Dice score, e.g. [0.5, 0.5]",
     )
     knn_k = models.PositiveSmallIntegerField()
     leiden_resolutions = models.JSONField(
         default=list,
-        help_text="List of Leiden resolution_parameter values (one per nesting level)",
-    )
-    metric_name = models.CharField(
-        max_length=50,
-        default="dice",
-        help_text="Name of the BgcSimilarityMetric used (e.g. dice, jaccard, overlap)",
+        help_text="CPM resolution_parameter values (one per nesting level, coarsest first)",
     )
     seed = models.PositiveIntegerField(default=42)
 
     # Counts
     n_proteins = models.PositiveIntegerField(default=0)
-    n_pairs = models.PositiveIntegerField(default=0)
-    n_bgcs = models.PositiveIntegerField(default=0)
+    n_nrbs = models.PositiveIntegerField(default=0)
     n_levels = models.PositiveSmallIntegerField(default=0)
     n_root_communities = models.PositiveIntegerField(default=0)
     n_leaf_communities = models.PositiveIntegerField(default=0)
@@ -718,47 +812,6 @@ class DashboardGCF(models.Model):
 
     def __str__(self):
         return self.family_path
-
-
-# ── Protein–protein similarity (materialised, durable source for Dice) ─────
-
-
-class ProteinSimilarPair(models.Model):
-    """Symmetric protein–protein cosine pair table.
-
-    Built once at a permissive ``floor`` (e.g. 0.7) by per-protein pgvector
-    HNSW ANN. Both directions ``(a, b)`` and ``(b, a)`` are stored so a
-    threshold scan from ``protein_a_sha256`` is a single index seek. The
-    self-pair ``(p, p, 1.0)`` is implied by the diagonal of the protein-similarity
-    matrix and is *not* stored.
-
-    This is the durable source of truth for any BGC similarity metric — never
-    re-query pgvector inside the Dice path.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    protein_a_sha256 = models.CharField(max_length=64, db_index=True)
-    protein_b_sha256 = models.CharField(max_length=64)
-    cosine = models.FloatField(help_text="Cosine similarity (>= floor)")
-
-    class Meta:
-        db_table = "discovery_protein_similar_pair"
-        constraints = [
-            models.UniqueConstraint(
-                fields=["protein_a_sha256", "protein_b_sha256"],
-                name="uniq_protein_pair_a_b",
-            ),
-        ]
-        indexes = [
-            models.Index(
-                fields=["protein_a_sha256", "cosine"],
-                name="idx_psp_a_cos",
-            ),
-            models.Index(fields=["protein_b_sha256"], name="idx_psp_b"),
-        ]
-
-    def __str__(self):
-        return f"{self.protein_a_sha256[:8]}…{self.protein_b_sha256[:8]}@{self.cosine:.3f}"
 
 
 # ── Natural Product ──────────────────────────────────────────────────────────────

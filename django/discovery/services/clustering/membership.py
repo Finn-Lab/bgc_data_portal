@@ -1,18 +1,23 @@
-"""Build the BGC × protein membership matrix from DashboardCds.
+"""Build the NRB × domain-accession membership matrix.
 
-Protein vocabulary is keyed on **unique ``protein_sha256``** so overlapping
-BGCs that share a protein contribute the same column index — never duplicate
-columns. The (bgc_id, protein_sha256) pairs are deduplicated before COO
-assembly so a BGC that lists the same protein twice (multi-CDS pointing to
-identical sequence) doesn't get an inflated membership count.
+Each row is a :class:`discovery.models.NonRedundantBGC`; each column is a
+unique domain accession (e.g. ``PF00001``). The matrix is binary: a 1 means
+the NRB carries that domain at least once across any of its source
+DashboardBgc rows. Domains are first filtered by ``ref_db`` source
+(case-insensitive at the API boundary — ``ref_db`` is stored upper-case),
+then deduplicated by ``(nrb_id, domain_acc, cds.start_position)`` so the
+same accession appearing on multiple CDS positions counts once *per
+position* but the binary projection collapses to a single column entry per
+NRB.
 
-Heavy imports (numpy, scipy.sparse) are deferred inside the function body.
+Heavy imports (numpy, scipy.sparse) are deferred inside the function body
+so this module can be imported on the web container without ML deps.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
     import numpy as np
@@ -23,99 +28,139 @@ log = logging.getLogger(__name__)
 
 CHUNK = 200_000
 
+DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM")
 
-def build_bgc_protein_matrix(
+
+def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
+    return tuple(sorted({s.upper() for s in sources}))
+
+
+def build_nrb_domain_matrix(
     *,
-    only_complete: bool = True,
-    bgc_ids_subset: list[int] | None = None,
-    protein_shas_subset: list[str] | None = None,
+    sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
+    nrb_ids_subset: Sequence[int] | None = None,
+    domain_accs_subset: Sequence[str] | None = None,
+    extra_bgc_ids: Sequence[int] | None = None,
 ) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
-    """Stream DashboardCds rows and build a sparse membership matrix.
+    """Build the NRB × domain-accession binary matrix.
 
     Parameters
     ----------
-    only_complete:
-        Restrict to BGCs with ``is_partial=False`` — used for the primary
-        clustering pass. Partial BGCs are routed through ``reclassify`` later.
-    bgc_ids_subset:
-        Optional explicit list of BGC ids to include (intersected with the
-        ``only_complete`` filter). Used by the reclassifier to materialize a
-        single-row M against the run's vocabulary.
-    protein_shas_subset:
-        Optional list of protein sha256 strings defining the column space.
-        When supplied, proteins outside this set are dropped from the matrix.
-        The reclassifier uses this to align query BGCs with the run's S.
+    sources:
+        ``ref_db`` values to keep. Normalized to upper-case at the boundary.
+    nrb_ids_subset:
+        Optional explicit list of ``NonRedundantBGC.id`` values to include.
+        Used by the reclassifier path to project rows onto the primary run's
+        vocabulary.
+    domain_accs_subset:
+        Optional column vocabulary. When supplied, columns outside this set
+        are dropped; ordering is preserved.
+    extra_bgc_ids:
+        Optional list of *raw* ``DashboardBgc.id`` values to include as
+        additional rows (i.e. virtual NRBs sized as a single source row).
+        Used by the reclassifier so partial BGCs can be stacked under the
+        same column layout. Rows from this list are keyed by negative
+        ``bgc_id`` to avoid collision with real NRB ids.
 
     Returns
     -------
-    M:
-        ``csr_matrix`` of shape ``(n_bgcs, n_proteins)`` with dtype uint8 and
-        deduplicated 1-entries.
-    bgc_ids:
-        ``np.ndarray[int64]`` row label for each row of M.
-    protein_shas:
-        ``np.ndarray[object]`` column label (sha256 string) for each column of M.
+    M : sparse CSR uint8 (n_rows × n_domain_accs)
+    row_ids : np.ndarray[int64] — row label per row; positive = NRB id,
+              negative = ``-DashboardBgc.id`` for ``extra_bgc_ids`` rows.
+    domain_accs : np.ndarray[object] — column label per column.
     """
     import numpy as np
     import scipy.sparse as sp
 
-    from discovery.models import DashboardCds
+    from django.db.models.functions import Upper
 
-    qs = DashboardCds.objects.exclude(protein_sha256="").values_list(
-        "bgc_id", "protein_sha256"
+    from discovery.models import BgcDomain
+
+    upper_sources = _normalize_sources(sources)
+
+    # Case-insensitive ref_db match: the bulk loader stores ref_db verbatim
+    # from the ETL (typically mixed-case like "Pfam"/"NCBIfam"/"TIGRfam"),
+    # while the API contract is upper-case at the boundary. Annotating with
+    # Upper() lets us compare without depending on stored casing.
+    qs = (
+        BgcDomain.objects
+        .annotate(ref_db_upper=Upper("ref_db"))
+        .filter(
+            ref_db_upper__in=upper_sources,
+            bgc__non_redundant_bgc__isnull=False,
+        )
     )
-    if only_complete:
-        qs = qs.filter(bgc__is_partial=False)
-    if bgc_ids_subset is not None:
-        qs = qs.filter(bgc_id__in=list(bgc_ids_subset))
-    if protein_shas_subset is not None:
-        qs = qs.filter(protein_sha256__in=list(protein_shas_subset))
+    if nrb_ids_subset is not None:
+        qs = qs.filter(bgc__non_redundant_bgc_id__in=list(nrb_ids_subset))
+    nrb_qs = qs.values_list(
+        "bgc__non_redundant_bgc_id",
+        "domain_acc",
+        "cds__start_position",
+    )
 
-    pair_set: set[tuple[int, str]] = set()
+    # Set keyed on row identity, accession, and on-protein anchor for dedup.
+    pair_set: set[tuple[int, str, int]] = set()
     n = 0
-    for bgc_id, sha in qs.iterator(chunk_size=CHUNK):
-        if not sha:
+    for row_id, acc, cds_start in nrb_qs.iterator(chunk_size=CHUNK):
+        if not acc:
             continue
-        pair_set.add((bgc_id, sha))
+        pair_set.add((int(row_id), acc, int(cds_start or 0)))
         n += 1
         if n % 1_000_000 == 0:
-            log.info("build_bgc_protein_matrix: streamed %d cds rows", n)
+            log.info("build_nrb_domain_matrix: streamed %d nrb-domain rows", n)
+
+    # Extra single-DashboardBgc rows (e.g. partials being reclassified).
+    if extra_bgc_ids:
+        extra_qs = (
+            BgcDomain.objects
+            .annotate(ref_db_upper=Upper("ref_db"))
+            .filter(
+                ref_db_upper__in=upper_sources,
+                bgc_id__in=list(extra_bgc_ids),
+            )
+            .values_list("bgc_id", "domain_acc", "cds__start_position")
+        )
+        for bgc_id, acc, cds_start in extra_qs.iterator(chunk_size=CHUNK):
+            if not acc:
+                continue
+            pair_set.add((-int(bgc_id), acc, int(cds_start or 0)))
 
     if not pair_set:
         empty = sp.csr_matrix((0, 0), dtype=np.uint8)
         return empty, np.empty(0, dtype=np.int64), np.empty(0, dtype=object)
 
-    bgc_ids_unique = sorted({bid for bid, _ in pair_set})
-    if protein_shas_subset is not None:
-        # Preserve caller-provided ordering so columns line up across runs.
-        protein_shas_unique = list(protein_shas_subset)
+    row_ids_unique = sorted({row_id for row_id, _, _ in pair_set})
+    if domain_accs_subset is not None:
+        domain_accs_unique = list(domain_accs_subset)
     else:
-        protein_shas_unique = sorted({sha for _, sha in pair_set})
+        domain_accs_unique = sorted({acc for _, acc, _ in pair_set})
 
-    bgc_index = {b: i for i, b in enumerate(bgc_ids_unique)}
-    protein_index = {p: j for j, p in enumerate(protein_shas_unique)}
+    row_index = {r: i for i, r in enumerate(row_ids_unique)}
+    col_index = {a: j for j, a in enumerate(domain_accs_unique)}
 
-    rows: list[int] = []
-    cols: list[int] = []
-    for bgc_id, sha in pair_set:
-        col = protein_index.get(sha)
+    # Project per-position dedup to per-(row, acc) binary membership.
+    membership: set[tuple[int, int]] = set()
+    for row_id, acc, _cds_start in pair_set:
+        col = col_index.get(acc)
         if col is None:
             continue
-        rows.append(bgc_index[bgc_id])
-        cols.append(col)
+        membership.add((row_index[row_id], col))
 
-    data = np.ones(len(rows), dtype=np.uint8)
+    rows = np.fromiter((r for r, _ in membership), dtype=np.int64, count=len(membership))
+    cols = np.fromiter((c for _, c in membership), dtype=np.int64, count=len(membership))
+    data = np.ones(len(membership), dtype=np.uint8)
+
     M = sp.csr_matrix(
-        (data, (np.asarray(rows, dtype=np.int64), np.asarray(cols, dtype=np.int64))),
-        shape=(len(bgc_ids_unique), len(protein_shas_unique)),
+        (data, (rows, cols)),
+        shape=(len(row_ids_unique), len(domain_accs_unique)),
         dtype=np.uint8,
     )
     log.info(
-        "build_bgc_protein_matrix: %d BGCs × %d proteins, nnz=%d (only_complete=%s)",
-        M.shape[0], M.shape[1], M.nnz, only_complete,
+        "build_nrb_domain_matrix: %d rows × %d domains, nnz=%d (sources=%s)",
+        M.shape[0], M.shape[1], M.nnz, upper_sources,
     )
     return (
         M,
-        np.asarray(bgc_ids_unique, dtype=np.int64),
-        np.asarray(protein_shas_unique, dtype=object),
+        np.asarray(row_ids_unique, dtype=np.int64),
+        np.asarray(domain_accs_unique, dtype=object),
     )

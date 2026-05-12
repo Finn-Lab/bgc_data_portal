@@ -102,55 +102,12 @@ clear-cache-django:
 clear-cache: clear-cache-redis clear-cache-celery clear-cache-django
 
 # ── Real-data seeding ─────────────────────────────────────────────────────────
-# Iterates over every *.tgz in $(STAGED_FILES_DIR), extracts each on the host,
-# copies the resulting TSV directory into the django pod, and runs
-# `load_discovery_data`. The first archive is loaded with --truncate (full
-# reset); subsequent archives are additive. Aborts early if the staging dir is
-# missing, empty, or contains an archive with no `assemblies.tsv`.
+# Delegates to scripts/seed-real-data.sh — copies each *.tgz to the django pod
+# as a single file (robust for large archives), extracts inside the pod, and
+# runs load_discovery_data. First archive --truncate, rest additive.
+# Per-archive stderr captured to a temp log dir; pod re-resolved per iteration.
 seed-real-data:
-	@test -d $(STAGED_FILES_DIR) || \
-	  (echo "ERROR: $(STAGED_FILES_DIR) not found. Place ETL .tgz archives there before running this target." && exit 1)
-	@ls $(STAGED_FILES_DIR)/*.tgz >/dev/null 2>&1 || \
-	  (echo "ERROR: no *.tgz files in $(STAGED_FILES_DIR). Nothing to load." && exit 1)
-	@POD=$$(kubectl get pod -n bgc-local -l app=bgc-data-portal-django -o jsonpath='{.items[0].metadata.name}') ; \
-	  test -n "$$POD" || { echo "ERROR: django pod not found in namespace bgc-local. Is the cluster running?" ; exit 1 ; } ; \
-	  TRUNCATE_FLAG="--truncate" ; \
-	  for tgz in $(STAGED_FILES_DIR)/*.tgz ; do \
-	    name=$$(basename "$$tgz") ; \
-	    tmpdir=$$(mktemp -d) ; \
-	    echo "==> $$name" ; \
-	    echo "Extracting to $$tmpdir ..." ; \
-	    if ! tar -xzf "$$tgz" -C "$$tmpdir" ; then \
-	      echo "ERROR: failed to extract $$name" ; \
-	      rm -rf "$$tmpdir" ; \
-	      exit 1 ; \
-	    fi ; \
-	    data_dir=$$(find "$$tmpdir" -maxdepth 2 -name assemblies.tsv -exec dirname {} \; | head -1) ; \
-	    if [ -z "$$data_dir" ] ; then \
-	      echo "ERROR: $$name does not contain assemblies.tsv at root or one level down." ; \
-	      rm -rf "$$tmpdir" ; \
-	      exit 1 ; \
-	    fi ; \
-	    echo "Copying $$data_dir into pod $$POD:/tmp/staged_files ..." ; \
-	    kubectl exec -n bgc-local $$POD -- rm -rf /tmp/staged_files ; \
-	    if ! kubectl cp "$$data_dir" bgc-local/$$POD:/tmp/staged_files ; then \
-	      echo "ERROR: kubectl cp failed for $$name" ; \
-	      rm -rf "$$tmpdir" ; \
-	      exit 1 ; \
-	    fi ; \
-	    echo "Loading $$name (flags: $${TRUNCATE_FLAG:-additive}) ..." ; \
-	    kubectl exec -n bgc-local deploy/bgc-data-portal-django -- \
-	      python manage.py load_discovery_data --data-dir /tmp/staged_files $$TRUNCATE_FLAG ; \
-	    rc=$$? ; \
-	    kubectl exec -n bgc-local $$POD -- rm -rf /tmp/staged_files >/dev/null 2>&1 || true ; \
-	    rm -rf "$$tmpdir" ; \
-	    if [ $$rc -ne 0 ] ; then \
-	      echo "ERROR: load_discovery_data failed for $$name (rc=$$rc)" ; \
-	      exit $$rc ; \
-	    fi ; \
-	    TRUNCATE_FLAG="" ; \
-	  done ; \
-	  echo "All archives loaded."
+	STAGED_FILES_DIR=$(STAGED_FILES_DIR) ./scripts/seed-real-data.sh
 
 # ── Workspace (Claude Code in isolated pod) ──────────────────────────────────
 workspace-enter:
