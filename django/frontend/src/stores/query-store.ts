@@ -10,7 +10,9 @@ interface QueryState {
   smilesQuery: string;
   similarityThreshold: number;
   sequenceQuery: string;
-  sequenceEvalue: number;
+  sequenceMinBitscore: number;
+  sequenceMinPident: number;
+  sequenceMinQcov: number;
   sequenceTaskId: string | null;
   domainQueryTriggered: boolean;
   chemicalQueryTriggered: boolean;
@@ -31,7 +33,9 @@ interface QueryState {
   setSmilesQuery: (v: string) => void;
   setSimilarityThreshold: (v: number) => void;
   setSequenceQuery: (v: string) => void;
-  setSequenceEvalue: (v: number) => void;
+  setSequenceMinBitscore: (v: number) => void;
+  setSequenceMinPident: (v: number) => void;
+  setSequenceMinQcov: (v: number) => void;
   setSequenceTaskId: (id: string | null) => void;
   setDomainQueryTriggered: (v: boolean) => void;
   setChemicalQueryTriggered: (v: boolean) => void;
@@ -76,7 +80,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   smilesQuery: "",
   similarityThreshold: 0.5,
   sequenceQuery: "",
-  sequenceEvalue: 1e-5,
+  sequenceMinBitscore: 30,
+  sequenceMinPident: 70,
+  sequenceMinQcov: 70,
   sequenceTaskId: null,
   domainQueryTriggered: false,
   chemicalQueryTriggered: false,
@@ -107,7 +113,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   setSmilesQuery: (v) => set({ smilesQuery: v }),
   setSimilarityThreshold: (v) => set({ similarityThreshold: v }),
   setSequenceQuery: (v) => set({ sequenceQuery: v }),
-  setSequenceEvalue: (v) => set({ sequenceEvalue: v }),
+  setSequenceMinBitscore: (v) => set({ sequenceMinBitscore: v }),
+  setSequenceMinPident: (v) => set({ sequenceMinPident: v }),
+  setSequenceMinQcov: (v) => set({ sequenceMinQcov: v }),
   setSequenceTaskId: (id) => set({ sequenceTaskId: id }),
   setDomainQueryTriggered: (v) => set({ domainQueryTriggered: v }),
   setChemicalQueryTriggered: (v) => set({ chemicalQueryTriggered: v }),
@@ -139,7 +147,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       smilesQuery: "",
       similarityThreshold: 0.5,
       sequenceQuery: "",
-      sequenceEvalue: 1e-5,
+      sequenceMinBitscore: 30,
+      sequenceMinPident: 70,
+      sequenceMinQcov: 70,
       sequenceTaskId: null,
       domainQueryTriggered: false,
       chemicalQueryTriggered: false,

@@ -283,6 +283,7 @@ def run_bgc_clustering_task(
     apply: bool = False,
     auto_reclassify: bool = True,
     reclassify_scope: str = "all_non_primary",
+    score_nrbs: bool = True,
 ) -> dict:
     """Domain+adjacency hierarchical-CPM-Leiden clustering over NRBs.
 
@@ -291,7 +292,8 @@ def run_bgc_clustering_task(
     back-propagates to source DashboardBgc rows, upserts DashboardGCF rows,
     and emits MIBiG validation artifacts under
     ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
-    chains a reclassify task to assign partial / late BGCs.
+    chains a reclassify task to assign partial / late BGCs and a NRB
+    projection task that fills umap / leaf path / novelty for partials.
     """
     task_id = self.request.id
     search_key = f"bgc_clustering:{task_id}"
@@ -318,17 +320,31 @@ def run_bgc_clustering_task(
         leiden_resolutions=resolutions,
         seed=seed,
         apply=apply,
+        score_nrbs=score_nrbs,
     )
 
     if apply and auto_reclassify and "run_pk" in result:
-        async_result = reclassify_bgcs_task.apply_async(
-            kwargs={
-                "clustering_run_pk": result["run_pk"],
-                "scope": reclassify_scope,
-                "knn_k": result.get("knn_k") or knn_k or 5,
-            },
-            queue="scores",
-        )
+        reclassify_kwargs = {
+            "clustering_run_pk": result["run_pk"],
+            "scope": reclassify_scope,
+            "knn_k": result.get("knn_k") or knn_k or 5,
+        }
+        # Chain projection after reclassify when scoring is on, so partial
+        # NRBs get coordinates + leaf paths populated immediately. Using a
+        # link signature keeps the projection task from racing reclassify.
+        if score_nrbs:
+            project_sig = project_partial_nrbs_task.si(
+                clustering_run_pk=result["run_pk"],
+                knn_k=result.get("knn_k") or knn_k or 5,
+            ).set(queue="scores")
+            async_result = reclassify_bgcs_task.apply_async(
+                kwargs=reclassify_kwargs, queue="scores", link=project_sig,
+            )
+            result["project_partial_nrbs_chained"] = True
+        else:
+            async_result = reclassify_bgcs_task.apply_async(
+                kwargs=reclassify_kwargs, queue="scores",
+            )
         result["reclassify_task_id"] = async_result.id
 
     set_job_cache(
@@ -389,6 +405,58 @@ def reclassify_bgcs_task(
     return result
 
 
+# ── Partial-NRB projection (umap coords + scores for non-primary NRBs) ───────
+
+
+@shared_task(
+    name="discovery.tasks.project_partial_nrbs", bind=True, acks_late=True,
+)
+def project_partial_nrbs_task(
+    self,
+    *,
+    clustering_run_pk: int,
+    knn_k: int = 5,
+    min_total_similarity: float = 0.1,
+) -> dict:
+    """Project partial / non-primary NRBs onto a ClusteringRun's UMAP.
+
+    Writes ``umap_x`` / ``umap_y`` (similarity-weighted average of top-K
+    primary neighbours), ``gene_cluster_family``, ``novelty_score``, and
+    ``domain_novelty`` on every NonRedundantBGC whose ``classification_run``
+    differs from the target run. Marks ``umap_projected = True``.
+    """
+    task_id = self.request.id
+    search_key = f"bgc_project_partial:{clustering_run_pk}"
+    set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
+
+    from discovery.services.clustering.nrb_scoring import project_partial_nrbs
+
+    def _progress(payload: dict) -> None:
+        set_job_cache(
+            search_key=search_key,
+            results={**payload, "phase": "running"},
+            task_id=task_id,
+            timeout=CLUSTERING_TTL,
+        )
+
+    result = project_partial_nrbs(
+        clustering_run_pk=clustering_run_pk,
+        knn_k=knn_k,
+        min_total_similarity=min_total_similarity,
+        progress_cb=_progress,
+    )
+    set_job_cache(
+        search_key=search_key,
+        results={**result, "phase": "complete"},
+        task_id=task_id,
+        timeout=CLUSTERING_TTL,
+    )
+    log.info(
+        "project_partial_nrbs complete (task %s): %s", task_id, result
+    )
+    return result
+
+
 # ── Single-BGC classifier (used by uploaded BGC assessment) ───────────────────
 
 
@@ -441,16 +509,21 @@ _classify_with_knn = _classify_uploaded_bgc
 
 
 @shared_task(name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True)
-def sequence_similarity_search(self, sequence: str, max_evalue: float) -> dict[int, float]:
+def sequence_similarity_search(
+    self,
+    sequence: str,
+    min_bitscore: float = 30.0,
+    min_pident: float = 70.0,
+    min_qcov: float = 70.0,
+) -> dict[int, dict[str, float]]:
     """Run phmmer for a query protein against the on-disk reference DB and
-    return BGCs that contain a matching protein.
+    return BGCs that contain a matching protein passing all three filters.
 
-    Returns a dict ``{bgc_id: -log10(best_evalue_among_matched_proteins)}``.
-    Larger numbers mean better matches, so the existing DESC sort on
-    ``similarity_score`` keeps "best first" semantics.
+    Returns ``{bgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...}}``
+    where the values come from the highest-bitscore matched protein within
+    that BGC. The existing DESC sort on ``similarity_score`` continues to
+    work — ``similarity_score`` is set to ``bitscore`` at the API layer.
     """
-    import math
-
     from discovery.models import DashboardCds
     from discovery.services.protein_search import phmmer_search
     from discovery.services.protein_search.index import IndexNotBuiltError
@@ -468,7 +541,13 @@ def sequence_similarity_search(self, sequence: str, max_evalue: float) -> dict[i
         return {}
 
     try:
-        sha256_evalues = phmmer_search(seq, max_evalue=max_evalue, cpus=1)
+        sha256_metrics = phmmer_search(
+            seq,
+            min_bitscore=min_bitscore,
+            min_pident=min_pident,
+            min_qcov=min_qcov,
+            cpus=1,
+        )
     except IndexNotBuiltError:
         log.error(
             "Protein search index not built; "
@@ -476,36 +555,40 @@ def sequence_similarity_search(self, sequence: str, max_evalue: float) -> dict[i
         )
         return {}
 
-    if not sha256_evalues:
-        log.info("Sequence query: no protein hits at max_evalue=%g", max_evalue)
+    if not sha256_metrics:
+        log.info(
+            "Sequence query: no protein hits (min_bitscore=%g, min_pident=%g, min_qcov=%g)",
+            min_bitscore, min_pident, min_qcov,
+        )
         return {}
 
     cds_qs = (
         DashboardCds.objects
-        .filter(protein_sha256__in=sha256_evalues.keys())
+        .filter(protein_sha256__in=sha256_metrics.keys())
         .values_list("bgc_id", "protein_sha256")
     )
 
-    # For each BGC, keep the smallest E-value among its matched proteins, then
-    # transform to -log10(E) so DESC sort = best first. Guard against E == 0
-    # (pyhmmer rounds extremely strong hits to 0.0).
-    bgc_best_evalue: dict[int, float] = {}
+    # For each BGC, keep the metrics of its highest-bitscore matched protein.
+    bgc_best: dict[int, "ProteinHitMetrics"] = {}
     for bgc_id, sha256 in cds_qs:
-        ev = sha256_evalues[sha256]
-        existing = bgc_best_evalue.get(bgc_id)
-        if existing is None or ev < existing:
-            bgc_best_evalue[bgc_id] = ev
+        m = sha256_metrics[sha256]
+        existing = bgc_best.get(bgc_id)
+        if existing is None or m.bitscore > existing.bitscore:
+            bgc_best[bgc_id] = m
 
-    bgc_scores: dict[int, float] = {}
-    for bgc_id, ev in bgc_best_evalue.items():
-        if ev <= 0:
-            bgc_scores[bgc_id] = 999.0  # effectively +inf for sort purposes
-        else:
-            bgc_scores[bgc_id] = -math.log10(ev)
+    bgc_scores: dict[int, dict[str, float]] = {
+        bgc_id: {
+            "bitscore": float(m.bitscore),
+            "pident": float(m.pident),
+            "qcoverage": float(m.qcoverage),
+        }
+        for bgc_id, m in bgc_best.items()
+    }
 
     log.info(
-        "Sequence query: len=%d max_evalue=%g protein_hits=%d bgc_matches=%d",
-        len(seq), max_evalue, len(sha256_evalues), len(bgc_scores),
+        "Sequence query: len=%d min_bitscore=%g min_pident=%g min_qcov=%g protein_hits=%d bgc_matches=%d",
+        len(seq), min_bitscore, min_pident, min_qcov,
+        len(sha256_metrics), len(bgc_scores),
     )
     return bgc_scores
 

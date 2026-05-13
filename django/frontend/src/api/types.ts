@@ -229,6 +229,10 @@ export interface QueryResultBgc {
   domain_novelty: number;
   is_partial: boolean;
   similarity_score: number;
+  // Populated only by the sequence (phmmer) query mode.
+  best_bitscore?: number | null;
+  best_pident?: number | null;
+  best_qcoverage?: number | null;
   assembly_id: number | null;
   assembly_accession: string | null;
   organism_name: string | null;

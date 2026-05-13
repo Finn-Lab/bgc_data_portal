@@ -21,7 +21,10 @@ from discovery.services.protein_search.index import (
     IndexNotBuiltError,
     ProteinSearchIndex,
 )
-from discovery.services.protein_search.search import phmmer_search
+from discovery.services.protein_search.search import (
+    ProteinHitMetrics,
+    phmmer_search,
+)
 
 
 # A handful of clearly-distinguishable proteins. The "target" is repeated in
@@ -109,38 +112,130 @@ def test_bump_version_is_monotonic(index_dir):
 # ── phmmer_search ──────────────────────────────────────────────────────────────
 
 
-def test_phmmer_search_finds_self_match(built_index):
-    """A query equal to one of the indexed proteins should return that sha256
-    with a very small (significant) E-value, and not match the unrelated ones.
-    """
-    paths, records = built_index
+def _load_block(paths):
     alphabet = Alphabet.amino()
     with SequenceFile(str(paths.fasta), format="fasta", digital=True, alphabet=alphabet) as sf:
-        block = sf.read_block()
+        return sf.read_block()
+
+
+def test_phmmer_search_self_match_returns_full_metrics(built_index):
+    """A query equal to one of the indexed proteins should return a hit with
+    near-perfect identity, full coverage, and a high bit score."""
+    paths, _records = built_index
+    block = _load_block(paths)
 
     sha_a = _sha256(_PROTEIN_A)
-    hits = phmmer_search(_PROTEIN_A, max_evalue=1e-3, block=block)
+    hits = phmmer_search(
+        _PROTEIN_A,
+        min_bitscore=30.0,
+        min_pident=70.0,
+        min_qcov=70.0,
+        block=block,
+    )
 
     assert sha_a in hits
-    assert hits[sha_a] <= 1e-3
+    m = hits[sha_a]
+    assert isinstance(m, ProteinHitMetrics)
+    # Self-match: identity should be essentially 100% and coverage ~100%.
+    assert m.pident >= 95.0
+    assert m.qcoverage >= 95.0
+    assert m.bitscore >= 30.0
 
-    # B and C are biologically unrelated to A; we don't strictly require zero
-    # hits (phmmer can occasionally produce a low-significance spurious hit on
-    # tiny DBs), but the self-match must be the strongest.
+    # The self-match must also be the highest-bitscore hit.
     if hits:
-        assert hits[sha_a] == min(hits.values())
+        assert m.bitscore == max(h.bitscore for h in hits.values())
 
 
-def test_phmmer_search_respects_max_evalue(built_index):
-    """An impossibly strict E-value should yield no hits."""
+def test_phmmer_search_respects_min_bitscore(built_index):
+    """A bitscore floor above the self-match score yields no hits."""
     paths, _ = built_index
-    alphabet = Alphabet.amino()
-    with SequenceFile(str(paths.fasta), format="fasta", digital=True, alphabet=alphabet) as sf:
-        block = sf.read_block()
+    block = _load_block(paths)
 
-    # 1e-300 is below the float precision floor pyhmmer/phmmer can report.
-    hits = phmmer_search(_PROTEIN_A, max_evalue=1e-300, block=block)
+    hits = phmmer_search(
+        _PROTEIN_A,
+        min_bitscore=1e6,
+        min_pident=0.0,
+        min_qcov=0.0,
+        block=block,
+    )
     assert hits == {}
+
+
+def test_phmmer_search_respects_min_pident(built_index):
+    """Requiring >100% identity is impossible; result must be empty."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    hits = phmmer_search(
+        _PROTEIN_A,
+        min_bitscore=0.0,
+        min_pident=100.1,
+        min_qcov=0.0,
+        block=block,
+    )
+    assert hits == {}
+
+
+def test_phmmer_search_respects_min_qcov(built_index):
+    """Requiring >100% query coverage is impossible; result must be empty."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    hits = phmmer_search(
+        _PROTEIN_A,
+        min_bitscore=0.0,
+        min_pident=0.0,
+        min_qcov=100.1,
+        block=block,
+    )
+    assert hits == {}
+
+
+def test_phmmer_search_metrics_are_in_valid_ranges(built_index):
+    """For any hit that comes back, the percentage fields must lie in [0,100]
+    and bitscore must be non-negative."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    hits = phmmer_search(
+        _PROTEIN_A,
+        min_bitscore=0.0,
+        min_pident=0.0,
+        min_qcov=0.0,
+        block=block,
+    )
+    for m in hits.values():
+        assert 0.0 <= m.pident <= 100.0
+        assert 0.0 <= m.qcoverage <= 100.0
+        assert m.bitscore >= 0.0
+
+
+def test_phmmer_search_partial_query_yields_partial_coverage(built_index):
+    """A query that is a fragment of an indexed protein should still find
+    that protein, but its query coverage should round-trip to ~100%
+    (the fragment IS the full query, so coverage is on the query side, not
+    the target side) — what differs from the self-match case is that the
+    full self-match maps the entire target while the fragment only maps a
+    region. We verify the fragment is recovered with high identity."""
+    paths, _ = built_index
+    block = _load_block(paths)
+
+    # Take a 100-AA slice of protein A as the query.
+    fragment = _PROTEIN_A[50:150]
+    sha_a = _sha256(_PROTEIN_A)
+    hits = phmmer_search(
+        fragment,
+        min_bitscore=30.0,
+        min_pident=70.0,
+        min_qcov=70.0,
+        block=block,
+    )
+
+    assert sha_a in hits
+    m = hits[sha_a]
+    # Coverage is over the query (the 100-AA fragment), so it should be ~100%.
+    assert m.qcoverage >= 70.0
+    assert m.pident >= 70.0
 
 
 # ── ProteinSearchIndex (worker-local cache) ────────────────────────────────────

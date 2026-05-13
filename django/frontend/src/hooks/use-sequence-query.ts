@@ -13,7 +13,9 @@ export function useSequenceQuery() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
   const sequenceQuery = useQueryStore((s) => s.sequenceQuery);
-  const sequenceEvalue = useQueryStore((s) => s.sequenceEvalue);
+  const minBitscore = useQueryStore((s) => s.sequenceMinBitscore);
+  const minPident = useQueryStore((s) => s.sequenceMinPident);
+  const minQcov = useQueryStore((s) => s.sequenceMinQcov);
   const sequenceTaskId = useQueryStore((s) => s.sequenceTaskId);
   const setSequenceTaskId = useQueryStore((s) => s.setSequenceTaskId);
   const sequenceQueryTriggered = useQueryStore((s) => s.sequenceQueryTriggered);
@@ -29,11 +31,19 @@ export function useSequenceQuery() {
 
   // Phase 1: POST — fires once per trigger, disabled once task_id is stored
   const submitQuery = useQuery({
-    queryKey: ["sequence-submit", sequenceQuery, sequenceEvalue],
+    queryKey: [
+      "sequence-submit",
+      sequenceQuery,
+      minBitscore,
+      minPident,
+      minQcov,
+    ],
     queryFn: () =>
       postSequenceQuery({
         sequence: sequenceQuery,
-        max_evalue: sequenceEvalue,
+        min_bitscore: minBitscore,
+        min_pident: minPident,
+        min_qcov: minQcov,
       }),
     enabled: sequenceQueryTriggered && hasQuery && !sequenceTaskId,
     retry: false,

@@ -73,8 +73,16 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     text: "Tanimoto coefficient comparing Morgan fingerprints of predicted natural products (0\u20131). Used in chemical structure (SMILES) search.",
     docsUrl: "/docs/similarity-scores.html#tanimoto",
   },
-  phmmer_evalue: {
-    text: "phmmer E-value cutoff for protein-sequence search. Lower values are stricter \u2014 1e-5 is the conventional significance threshold; 1e-50 effectively requires near-identical matches; 1 returns everything HMMER considers a hit.",
+  phmmer_bitscore: {
+    text: "HMMER bit score for the full target sequence. Higher = more significant. 30 is HMMER's conventional weak-significance cut; \u2265200 indicates a very strong homolog.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
+  },
+  phmmer_pident: {
+    text: "Aggregate percent identity across all aligned domains of the best phmmer hit (identical residues / aligned columns). 70% is a stringent default; lower for distant homologs.",
+    docsUrl: "/docs/similarity-scores.html#phmmer",
+  },
+  phmmer_qcoverage: {
+    text: "Fraction of the query sequence covered by the union of phmmer domain envelopes in the matched protein. Low values mean only part of your query aligned.",
     docsUrl: "/docs/similarity-scores.html#phmmer",
   },
 

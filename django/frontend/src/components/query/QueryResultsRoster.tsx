@@ -47,9 +47,11 @@ export function QueryResultsRoster() {
   const sequenceQuery = useSequenceQuery();
 
   // Pick the active query: similar BGC > sequence > chemical > domain
+  const isSequenceMode =
+    !similarBgcSourceId && sequenceQueryText.trim().length > 0;
   const query = similarBgcSourceId
     ? similarQuery
-    : sequenceQueryText.trim()
+    : isSequenceMode
       ? sequenceQuery
       : smilesQuery.trim()
         ? chemicalQuery
@@ -112,7 +114,15 @@ export function QueryResultsRoster() {
               <TableHead className="text-xs">Accession</TableHead>
               <TableHead className="text-xs">Class</TableHead>
               <TableHead className="text-xs">Ref. DB</TableHead>
-              <TableHead className="text-xs text-right">Query Similarity</TableHead>
+              <TableHead className="text-xs text-right">
+                {isSequenceMode ? "Bitscore" : "Query Similarity"}
+              </TableHead>
+              {isSequenceMode && (
+                <>
+                  <TableHead className="text-xs text-right">% Identity</TableHead>
+                  <TableHead className="text-xs text-right">Q. Coverage</TableHead>
+                </>
+              )}
               <TableHead className="text-xs text-right">Domain Novelty</TableHead>
               <TableHead className="text-xs text-right">Novelty</TableHead>
             </TableRow>
@@ -146,8 +156,24 @@ export function QueryResultsRoster() {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
-                    {bgc.similarity_score.toFixed(2)}
+                    {isSequenceMode
+                      ? (bgc.best_bitscore ?? bgc.similarity_score).toFixed(1)
+                      : bgc.similarity_score.toFixed(2)}
                   </TableCell>
+                  {isSequenceMode && (
+                    <>
+                      <TableCell className="text-right font-mono text-xs">
+                        {bgc.best_pident != null
+                          ? `${bgc.best_pident.toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs">
+                        {bgc.best_qcoverage != null
+                          ? `${bgc.best_qcoverage.toFixed(1)}%`
+                          : "—"}
+                      </TableCell>
+                    </>
+                  )}
                   <TableCell className="text-right font-mono text-xs">
                     {bgc.domain_novelty.toFixed(2)}
                   </TableCell>

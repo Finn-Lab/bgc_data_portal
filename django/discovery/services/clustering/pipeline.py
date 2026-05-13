@@ -2,9 +2,15 @@
 
 Called by ``run_bgc_clustering_task`` in ``discovery/tasks.py``. Operates on
 the ``NonRedundantBGC`` table (built by ``build_non_redundant_bgcs`` before
-this runs). When ``apply=True``, the resulting hierarchy is persisted into
-``DashboardGCF`` and back-propagated to source ``DashboardBgc`` rows, and
-MIBiG validation artifacts are emitted under
+this runs), restricted to the **clusterable** subset: NRBs whose source
+``DashboardBgc`` rows include at least one ``is_partial=False`` or
+``is_validated=True`` member. NRBs composed exclusively of partial,
+non-validated BGCs are excluded from community detection (they're handled
+by ``reclassify_bgcs`` via KNN like before).
+
+When ``apply=True``, the resulting hierarchy is persisted into
+``DashboardGCF`` and back-propagated to source ``DashboardBgc`` rows of the
+clusterable NRBs, and MIBiG validation artifacts are emitted under
 ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``.
 
 Partial BGCs and antiSMASH calls absorbed at NRB-build time are routed
@@ -17,6 +23,7 @@ import hashlib
 import logging
 import math
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from pathlib import Path
 from typing import Sequence
 
 log = logging.getLogger(__name__)
@@ -54,6 +61,7 @@ def run_clustering_pipeline(
     leiden_resolutions: Sequence[float] = DEFAULT_RESOLUTIONS,
     seed: int = 42,
     apply: bool = False,
+    score_nrbs: bool = True,
 ) -> dict:
     """Run the full domain/adjacency clustering pipeline.
 
@@ -62,6 +70,7 @@ def run_clustering_pipeline(
     The caller (Celery task / management command) is responsible for chaining
     a reclassify step.
     """
+    from django.db.models import Q
     from django.utils import timezone
 
     from discovery.models import (
@@ -92,8 +101,22 @@ def run_clustering_pipeline(
     if not NonRedundantBGC.objects.exists():
         return {"error": "NonRedundantBGC table is empty — run build_non_redundant_bgcs first"}
 
+    # Clusterable subset: NRBs with at least one non-partial-or-validated
+    # source BGC. Partial+unvalidated-only NRBs are reclassified via KNN
+    # downstream and never drive community detection.
+    clusterable_nrb_ids = list(
+        DashboardBgc.objects.filter(non_redundant_bgc__isnull=False)
+        .filter(Q(is_partial=False) | Q(is_validated=True))
+        .values_list("non_redundant_bgc_id", flat=True)
+        .distinct()
+    )
+    if not clusterable_nrb_ids:
+        return {"error": "no clusterable NRBs (all NRBs are partial+unvalidated)"}
+
     # ── 1. Domain matrix ─────────────────────────────────────────────────
-    M_domains, nrb_ids, domain_accs = build_nrb_domain_matrix(sources=upper_sources)
+    M_domains, nrb_ids, domain_accs = build_nrb_domain_matrix(
+        sources=upper_sources, nrb_ids_subset=clusterable_nrb_ids,
+    )
     if M_domains.shape[0] == 0:
         return {"error": "no NRBs with selected-source domains found"}
 
@@ -210,6 +233,7 @@ def run_clustering_pipeline(
     # ── 10. Apply: NRB + source DashboardBgc back-propagation ────────────
     gcf_updated = 0
     artifacts_dir = None
+    result_extra_scoring: dict | None = None
     leaf_paths: list[str] = [paths_per_row[int(nrb_id)] for nrb_id in nrb_ids.tolist()]
     if apply:
         now = timezone.now()
@@ -274,6 +298,47 @@ def run_clustering_pipeline(
         except Exception:  # noqa: BLE001 — never block the run on plot errors
             log.exception("MIBiG analysis failed; clustering run is intact")
 
+        # ── 12. NRB scoring (novelty + domain novelty) ───────────────────
+        # Reuses the in-memory composite-Dice matrix and the per-row leaf
+        # paths produced above. Also persists those matrices so a follow-up
+        # standalone scoring run (e.g. after reclassify projects partials)
+        # doesn't have to rebuild them.
+        if score_nrbs:
+            from discovery.services.clustering.nrb_scoring import (
+                persist_scoring_cache,
+                score_primary_nrbs,
+            )
+
+            if artifacts_dir is not None:
+                try:
+                    persist_scoring_cache(
+                        artifacts_dir=Path(artifacts_dir),
+                        sim=sim,
+                        M_domains=M_domains,
+                        M_pairs=M_pairs,
+                        nrb_ids=nrb_ids,
+                        domain_accs=domain_accs,
+                        pair_vocab=pair_vocab,
+                        leaf_paths=leaf_paths,
+                    )
+                except Exception:  # noqa: BLE001 — cache miss is non-fatal
+                    log.exception("Failed to persist NRB scoring cache")
+
+            try:
+                scoring_result = score_primary_nrbs(
+                    sim=sim,
+                    M_domains=M_domains,
+                    nrb_ids=nrb_ids,
+                    leaf_paths=leaf_paths,
+                    run=run,
+                )
+                result_extra_scoring = scoring_result
+            except Exception:  # noqa: BLE001 — never block apply on scoring
+                log.exception("score_primary_nrbs failed; NRB rows left unscored")
+                result_extra_scoring = None
+        else:
+            result_extra_scoring = None
+
     result = {
         "run_pk": run.pk,
         "created": created,
@@ -290,6 +355,8 @@ def run_clustering_pipeline(
     }
     if artifacts_dir is not None:
         result["artifacts_dir"] = artifacts_dir
+    if result_extra_scoring is not None:
+        result["nrb_scoring"] = result_extra_scoring
     return result
 
 

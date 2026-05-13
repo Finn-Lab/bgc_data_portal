@@ -90,6 +90,26 @@ make delete-local    # Remove Skaffold-managed resources
 make cluster-delete  # Delete the kind cluster entirely
 ```
 
+## Disk Hygiene
+
+The Colima VM has a fixed disk allocation (default 100 GB). Image rebuilds and
+the Docker build cache grow silently and will eventually starve the cluster —
+when this happens postgres `initdb` fails with "No space left on device" and
+rabbitmq's Erlang cookie file gets truncated, both presenting as
+CrashLoopBackOff.
+
+```bash
+make tidy            # clean-images + docker builder prune (run when nagged)
+make clean-images    # prune dangling images on host + Kind containerd
+make nuke            # last resort: delete cluster + prune --volumes (wipes db)
+```
+
+`make dev` runs a preflight that warns when reclaimable Docker space crosses
+`DISK_RECLAIMABLE_WARN_GB` (default 10 GB) and pauses 5 s — Ctrl-C to abort
+and run `make tidy` first. It also waits for any in-progress namespace
+termination before re-applying, so back-to-back `make dev` invocations no
+longer hit the "namespace is being terminated" race.
+
 ### Clean Slate (Danger Zone)
 
 To wipe all resources from the kind cluster without deleting the cluster itself

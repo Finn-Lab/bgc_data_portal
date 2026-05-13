@@ -1,14 +1,15 @@
 """Post-hoc KNN reclassification for non-primary BGCs.
 
-The primary clustering pass operates on ``NonRedundantBGC`` rows (built from
-latest-version, non-partial GECCO+SanntiS+antiSMASH predictions). This module
-assigns family paths to every other ``DashboardBgc`` via the same composite
-Dice metric: compute similarity between each query BGC and every primary NRB
-of a given ``ClusteringRun``, take top-K, and inherit the most common leaf
-family path weighted by similarity.
+The primary clustering pass operates on the *clusterable* subset of
+``NonRedundantBGC`` rows — those with at least one non-partial or validated
+source BGC. This module assigns family paths to every other ``DashboardBgc``
+via the same composite Dice metric: compute similarity between each query
+BGC and every primary NRB of a given ``ClusteringRun``, take top-K, and
+inherit the most common leaf family path weighted by similarity.
 
 Re-runnable independently — never reshapes the hierarchy and never modifies
-``DashboardBgc.non_redundant_bgc`` (reclassified partials remain unmerged).
+``DashboardBgc.non_redundant_bgc`` (partials keep the NRB row assigned by
+``build_non_redundant_bgcs``; this step only writes their family path).
 """
 
 from __future__ import annotations

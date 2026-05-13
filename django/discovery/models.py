@@ -293,25 +293,32 @@ class RegionAccessionAlias(models.Model):
 
 
 class NonRedundantBGC(models.Model):
-    """Consolidated BGC region used as the input unit for clustering.
+    """Consolidated BGC region. Complete registry of latest-version BGCs and
+    input table for the clustering pipeline (which filters down to the
+    clusterable subset).
 
-    Built from latest-version ``DashboardBgc`` rows that are either
-    ``is_partial=False`` or ``is_validated=True``:
+    Built from latest-version ``DashboardBgc`` rows:
       * Validated BGCs (``is_validated=True``) become standalone NRBs
-        regardless of tool or ``is_partial`` — they are ground truth and
-        are never merged with predictions nor absorbed.
-      * Non-validated GECCO and SanntiS predictions on the same contig are
-        merged via transitive interval overlap (any positive intersection
-        joins a component). The merged interval spans
-        ``min(starts) → max(ends)``.
-      * Non-validated antiSMASH predictions are admitted as their own NRB
-        iff they do not overlap any already-built NRB on the same contig
-        (validated standalones included). Overlapping antiSMASH calls are
-        absorbed and contribute nothing.
+        regardless of tool or ``is_partial`` — ground truth, never merged
+        with predictions nor absorbed.
+      * Non-validated, non-partial GECCO and SanntiS predictions on the
+        same contig are merged via transitive interval overlap (any
+        positive intersection joins a component). The merged interval
+        spans ``min(starts) → max(ends)``.
+      * Non-validated, non-partial antiSMASH predictions are admitted as
+        their own NRB iff they do not overlap any already-built NRB on
+        the same contig (validated standalones included). Overlapping
+        antiSMASH calls are absorbed and contribute nothing.
+      * Non-validated **partial** BGCs become standalone NRBs (one BGC
+        each). They sit outside the merge/absorb logic so they don't
+        perturb non-partial NRB boundaries, and the clustering pipeline
+        filters them out — they're reclassified via KNN downstream.
 
     Source ``DashboardBgc`` rows point here via ``DashboardBgc.non_redundant_bgc``.
-    Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here;
-    source BGCs inherit those values via back-propagation.
+    Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here
+    on the clusterable subset; source BGCs inherit those values via
+    back-propagation. Partial-only NRBs are skipped by the clustering
+    pipeline; their source BGCs receive paths via ``reclassify_bgcs``.
     """
 
     id = models.BigAutoField(primary_key=True)
@@ -338,6 +345,31 @@ class NonRedundantBGC(models.Model):
     )
     umap_x = models.FloatField(null=True, blank=True)
     umap_y = models.FloatField(null=True, blank=True)
+    umap_projected = models.BooleanField(
+        default=False,
+        help_text=(
+            "True when umap_x/y were derived by averaging top-K nearest primary "
+            "NRB coordinates (partials reclassified via KNN) rather than by the "
+            "main UMAP layout. False for NRBs included in the clustering pass."
+        ),
+    )
+    novelty_score = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "1 − max composite-Dice similarity to the nearest validated NRB. "
+            "NULL when there are no validated NRBs in this run."
+        ),
+    )
+    domain_novelty = models.FloatField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Fraction of this NRB's domains not shared by any other NRB of the "
+            "same leaf GCF. NULL for singleton GCFs and for NRBs without any "
+            "domains of the selected sources."
+        ),
+    )
     classification_run = models.ForeignKey(
         "ClusteringRun",
         on_delete=models.SET_NULL,

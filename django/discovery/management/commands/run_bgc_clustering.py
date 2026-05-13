@@ -78,6 +78,22 @@ class Command(BaseCommand):
             help="Scope passed to reclassify_bgcs when auto-chaining",
         )
         parser.add_argument(
+            "--score-nrbs",
+            action="store_true",
+            default=True,
+            help=(
+                "Compute NRB novelty_score and domain_novelty inline with the "
+                "clustering apply step, and chain a partial-NRB UMAP projection "
+                "task after reclassify (default true)."
+            ),
+        )
+        parser.add_argument(
+            "--no-score-nrbs",
+            action="store_false",
+            dest="score_nrbs",
+            help="Skip NRB scoring and partial-NRB projection.",
+        )
+        parser.add_argument(
             "--rebuild-nrb",
             action="store_true",
             help="Rebuild the NonRedundantBGC table before clustering (chains build_non_redundant_bgcs)",
@@ -104,7 +120,14 @@ class Command(BaseCommand):
             "apply": options["apply"],
             "auto_reclassify": options["auto_reclassify"],
             "reclassify_scope": options["reclassify_scope"],
+            "score_nrbs": options["score_nrbs"],
         }
+        if options["score_nrbs"] and not options["auto_reclassify"]:
+            self.stdout.write(self.style.WARNING(
+                "--score-nrbs is enabled but --no-auto-reclassify was passed: "
+                "primary NRBs will be scored inline, but partial NRBs won't be "
+                "projected (the projection step is chained after reclassify)."
+            ))
         queue = options["queue"]
 
         # --sync runs both tasks in-process and sequentially, so there is no

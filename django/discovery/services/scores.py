@@ -1,19 +1,24 @@
 """Score recomputation service for the discovery platform.
 
 Computes all derived scores and materialized tables from raw loaded data:
-  - BGC novelty_score (nearest validated BGC embedding distance)
-  - BGC domain_novelty (fraction of unique domains)
   - Assembly aggregates (bgc_count, l1_class_count, novelty, diversity, density)
   - Assembly percentile ranks
   - GCF table rebuild from gene_cluster_family ltree
   - Catalog table rebuild (BgcClass, Domain)
-  - UMAP coordinate recomputation (if model available)
+  - UMAP coordinate recomputation (no-op stub; layout is written inline by
+    the clustering pipeline)
+
+BGC-level novelty (``DashboardBgc.novelty_score``) and ``domain_novelty``
+were previously computed here from ESM-300M embeddings; both are retired in
+the v2 redesign in favour of NRB-level scoring written by
+``discovery.services.clustering.nrb_scoring`` over the composite-Dice
+matrix. The DashboardBgc columns remain in the schema but are no longer
+recomputed — drill-down views read scores from the parent NonRedundantBGC.
 """
 
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 
 from django.db import connection
 from django.db.models import Avg, Count, Min
@@ -21,7 +26,6 @@ from django.db.models.expressions import RawSQL
 
 from discovery.models import (
     BgcDomain,
-    BgcEmbedding,
     DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
@@ -40,8 +44,6 @@ BATCH_SIZE = 10_000
 def recompute_all_scores() -> None:
     """Master function — orchestrates all score recomputation."""
     logger.info("Starting full score recomputation ...")
-    _compute_bgc_novelty_scores()
-    _compute_bgc_domain_novelty()
     _compute_assembly_aggregates()
     _compute_percentile_ranks()
     _rebuild_gcf_table()
@@ -49,173 +51,6 @@ def recompute_all_scores() -> None:
     _compute_chemont_ic()
     _recompute_umap()
     logger.info("Score recomputation complete.")
-
-
-# ── BGC-level scores ─────────────────────────────────────────────────────────
-
-
-def _compute_bgc_novelty_scores() -> None:
-    """Compute novelty_score for each BGC as cosine distance to nearest validated BGC.
-
-    Uses the HNSW index on BgcEmbedding for efficient approximate nearest-neighbor.
-    """
-    logger.info("Computing BGC novelty scores ...")
-
-    validated_bgc_ids = set(
-        DashboardBgc.objects.filter(is_validated=True).values_list("id", flat=True)
-    )
-
-    if not validated_bgc_ids:
-        logger.warning("No validated BGCs found — setting all novelty_score to 1.0")
-        DashboardBgc.objects.all().update(
-            novelty_score=1.0,
-            nearest_validated_accession="",
-            nearest_validated_distance=None,
-        )
-        return
-
-    # Build accession lookup for validated BGCs
-    validated_accessions = dict(
-        DashboardBgc.objects.filter(is_validated=True).values_list("id", "bgc_accession")
-    )
-
-    # Process all BGCs with embeddings in batches using raw SQL for efficiency.
-    # The HNSW index on BgcEmbedding supports <=> (cosine distance) operator.
-    batch_updates = []
-    processed = 0
-
-    # Use a cursor-based approach: for each BGC embedding, find nearest validated
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT e.bgc_id, e.vector
-            FROM discovery_bgc_embedding e
-            ORDER BY e.bgc_id
-        """)
-
-        for bgc_id, vector in cursor.fetchall():
-            # Find nearest validated BGC embedding via cosine distance
-            nearest = (
-                BgcEmbedding.objects.filter(bgc_id__in=validated_bgc_ids)
-                .exclude(bgc_id=bgc_id)
-                .extra(
-                    select={"distance": "vector <=> %s::halfvec"},
-                    select_params=[str(vector)],
-                )
-                .order_by("distance")
-                .values_list("bgc_id", "distance")
-                .first()
-            )
-
-            if nearest:
-                ref_id, distance = nearest
-                batch_updates.append({
-                    "id": bgc_id,
-                    "novelty_score": min(float(distance), 1.0),
-                    "nearest_validated_accession": validated_accessions.get(ref_id, ""),
-                    "nearest_validated_distance": float(distance),
-                })
-            else:
-                batch_updates.append({
-                    "id": bgc_id,
-                    "novelty_score": 1.0,
-                    "nearest_validated_accession": "",
-                    "nearest_validated_distance": None,
-                })
-
-            if len(batch_updates) >= BATCH_SIZE:
-                _bulk_update_bgc_scores(batch_updates)
-                processed += len(batch_updates)
-                logger.info("  novelty: %d BGCs processed", processed)
-                batch_updates.clear()
-
-    if batch_updates:
-        _bulk_update_bgc_scores(batch_updates)
-        processed += len(batch_updates)
-
-    logger.info("Novelty scores computed for %d BGCs", processed)
-
-
-def _bulk_update_bgc_scores(updates: list[dict]) -> None:
-    """Batch-update novelty fields on DashboardBgc."""
-    if not updates:
-        return
-    objs = DashboardBgc.objects.in_bulk([u["id"] for u in updates])
-    to_update = []
-    for u in updates:
-        bgc = objs.get(u["id"])
-        if bgc is None:
-            continue
-        bgc.novelty_score = u["novelty_score"]
-        bgc.nearest_validated_accession = u["nearest_validated_accession"]
-        bgc.nearest_validated_distance = u["nearest_validated_distance"]
-        to_update.append(bgc)
-    DashboardBgc.objects.bulk_update(
-        to_update,
-        ["novelty_score", "nearest_validated_accession", "nearest_validated_distance"],
-        batch_size=BATCH_SIZE,
-    )
-
-
-def _compute_bgc_domain_novelty() -> None:
-    """Compute domain_novelty for each BGC.
-
-    domain_novelty = fraction of this BGC's domains not found in any other BGC
-    within the same GCF. BGCs without a GCF are compared only against each other.
-    """
-    logger.info("Computing BGC domain novelty ...")
-
-    # bgc_id -> gene_cluster_family ("" means no GCF)
-    bgc_to_gcf: dict[int, str] = dict(
-        DashboardBgc.objects.values_list("id", "gene_cluster_family")
-    )
-
-    # Per-GCF-bucket: domain_acc -> set of bgc_ids (key "" = no-GCF bucket)
-    bucket_domain_to_bgcs: dict[str, dict[str, set[int]]] = defaultdict(
-        lambda: defaultdict(set)
-    )
-    # Build bgc_id -> set of domain_accs
-    bgc_to_domains: dict[int, set[str]] = defaultdict(set)
-    for domain_acc, bgc_id in BgcDomain.objects.values_list("domain_acc", "bgc_id"):
-        gcf = bgc_to_gcf.get(bgc_id, "")
-        bucket_domain_to_bgcs[gcf][domain_acc].add(bgc_id)
-        bgc_to_domains[bgc_id].add(domain_acc)
-
-    batch = []
-    processed = 0
-
-    for bgc_id, domains in bgc_to_domains.items():
-        if not domains:
-            continue
-        gcf = bgc_to_gcf.get(bgc_id, "")
-        scoped = bucket_domain_to_bgcs[gcf]
-        unique_count = sum(1 for d in domains if len(scoped[d]) == 1)
-        domain_novelty = unique_count / len(domains)
-        batch.append((bgc_id, domain_novelty))
-
-        if len(batch) >= BATCH_SIZE:
-            _bulk_update_domain_novelty(batch)
-            processed += len(batch)
-            batch.clear()
-
-    if batch:
-        _bulk_update_domain_novelty(batch)
-        processed += len(batch)
-
-    logger.info("Domain novelty computed for %d BGCs", processed)
-
-
-def _bulk_update_domain_novelty(updates: list[tuple[int, float]]) -> None:
-    """Batch-update domain_novelty on DashboardBgc."""
-    ids = [u[0] for u in updates]
-    objs = DashboardBgc.objects.in_bulk(ids)
-    to_update = []
-    for bgc_id, novelty in updates:
-        bgc = objs.get(bgc_id)
-        if bgc is None:
-            continue
-        bgc.domain_novelty = novelty
-        to_update.append(bgc)
-    DashboardBgc.objects.bulk_update(to_update, ["domain_novelty"], batch_size=BATCH_SIZE)
 
 
 # ── Assembly-level scores ────────────────────────────────────────────────────

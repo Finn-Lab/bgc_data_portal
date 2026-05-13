@@ -9,8 +9,8 @@ Verifies the merge rules:
     row created; source DashboardBgc.non_redundant_bgc stays NULL).
   * Standalone antiSMASH calls (no overlap with merge predictors) become
     their own NRB.
-  * Non-validated partial BGCs (is_partial=True, is_validated=False) are
-    excluded from the build.
+  * Non-validated partial BGCs (is_partial=True, is_validated=False) become
+    standalone NRBs that are filtered out at clustering time.
   * Non-latest detector versions are excluded via latest_version_bgcs().
 """
 
@@ -104,14 +104,70 @@ def test_standalone_antismash_becomes_own_nrb():
     assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id == nrb.id
 
 
-def test_partial_bgcs_excluded_from_build():
+def test_partial_unvalidated_bgc_becomes_standalone_nrb():
     contig = DashboardContigFactory()
     gecco = _detector("GECCO", "0.9.8", 100)
     partial = _bgc(contig=contig, detector=gecco, start=1_000, end=5_000, is_partial=True)
 
     result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 0
-    assert DashboardBgc.objects.get(pk=partial.id).non_redundant_bgc_id is None
+    assert result["n_nrbs"] == 1
+    assert result["n_partial_standalone"] == 1
+    nrb = NonRedundantBGC.objects.get()
+    assert nrb.source_tools == ["GECCO"]
+    bgc_after = DashboardBgc.objects.get(pk=partial.id)
+    assert bgc_after.non_redundant_bgc_id == nrb.id
+    assert bgc_after.classification_source == "merged"
+
+
+def test_partial_unvalidated_does_not_merge_with_non_partial():
+    """A partial GECCO overlapping a non-partial SanntiS must NOT be merged
+    into the non-partial NRB — partials stay standalone so they don't perturb
+    the boundaries of the clusterable NRB."""
+    contig = DashboardContigFactory()
+    gecco = _detector("GECCO", "0.9.8", 100)
+    sanntis = _detector("SanntiS", "0.1.0", 100)
+
+    partial = _bgc(
+        contig=contig, detector=gecco, start=1_000, end=5_000, is_partial=True,
+    )
+    full = _bgc(contig=contig, detector=sanntis, start=4_000, end=8_000)
+
+    result = build_non_redundant_bgcs()
+    assert result["n_nrbs"] == 2
+    assert result["n_partial_standalone"] == 1
+
+    full_nrb = NonRedundantBGC.objects.get(source_tools=["SanntiS"])
+    partial_nrb = NonRedundantBGC.objects.get(source_tools=["GECCO"])
+
+    assert DashboardBgc.objects.get(pk=full.id).non_redundant_bgc_id == full_nrb.id
+    assert full_nrb.start_position == 4_000
+    assert full_nrb.end_position == 8_000
+
+    assert DashboardBgc.objects.get(pk=partial.id).non_redundant_bgc_id == partial_nrb.id
+    assert partial_nrb.start_position == 1_000
+    assert partial_nrb.end_position == 5_000
+
+
+def test_partial_antismash_emitted_even_when_overlapping_a_full_nrb():
+    """A partial antiSMASH that overlaps a non-partial GECCO NRB on the same
+    contig is still emitted as its own standalone NRB. Partials are processed
+    after the merge/absorb step and bypass the overlap check by design."""
+    contig = DashboardContigFactory()
+    gecco = _detector("GECCO", "0.9.8", 100)
+    antismash = _detector("antiSMASH", "7.1.0", 200)
+
+    g = _bgc(contig=contig, detector=gecco, start=1_000, end=5_000)
+    partial_a = _bgc(
+        contig=contig, detector=antismash, start=2_000, end=4_000,
+        is_partial=True,
+    )
+
+    result = build_non_redundant_bgcs()
+    assert result["n_nrbs"] == 2
+    assert result["n_partial_standalone"] == 1
+    assert result["n_absorbed_antismash"] == 0
+    assert DashboardBgc.objects.get(pk=g.id).non_redundant_bgc_id is not None
+    assert DashboardBgc.objects.get(pk=partial_a.id).non_redundant_bgc_id is not None
 
 
 def test_validated_partial_is_admitted_as_standalone_nrb():

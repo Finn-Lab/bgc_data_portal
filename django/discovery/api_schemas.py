@@ -97,8 +97,6 @@ class BgcRosterItem(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_distance: Optional[float] = None
     assembly_accession: Optional[str] = None
     detector: Optional[DetectorOut] = None
     region_accession: Optional[str] = None
@@ -161,8 +159,6 @@ class BgcDetail(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
-    nearest_validated_accession: Optional[str] = None
-    nearest_validated_distance: Optional[float] = None
     is_validated: bool = False
     domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
@@ -188,6 +184,108 @@ class ValidatedReferencePoint(Schema):
     classification_path: str = ""
     umap_x: float
     umap_y: float
+
+
+# ── NRB (Non-Redundant BGC) schemas ──────────────────────────────────────────
+
+
+class NrbRosterItem(Schema):
+    """Row in the NRB-level results table.
+
+    NRBs are the primary unit in the v2 Discovery dashboard. Each NRB
+    consolidates one or more source ``DashboardBgc`` rows; the table here
+    flattens metadata that the UI needs in the roster view.
+    """
+
+    id: int
+    label: str  # human-facing identifier (e.g. "NRB-12345")
+    classification_path: str = ""  # leaf GCF path (gene_cluster_family)
+    size_kb: float = 0.0  # (end - start) / 1000
+    n_source_bgcs: int = 0
+    source_tools: list[str] = []
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    umap_projected: bool = False
+    parent_assembly_id: Optional[int] = None
+    parent_assembly_accession: Optional[str] = None
+    organism_name: Optional[str] = None
+    contig_accession: Optional[str] = None
+    similarity_score: Optional[float] = None  # filled by similar-nrb / query
+
+
+class PaginatedNrbRosterResponse(Schema):
+    items: list[NrbRosterItem]
+    pagination: PaginationMeta
+
+
+class NrbMemberBgc(Schema):
+    """Source DashboardBgc contributing to an NRB (drill-down list)."""
+
+    id: int
+    accession: str
+    detector_name: Optional[str] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    size_kb: float = 0.0
+
+
+class NrbDetail(Schema):
+    id: int
+    label: str
+    classification_path: str = ""
+    size_kb: float = 0.0
+    start_position: int = 0
+    end_position: int = 0
+    contig_accession: Optional[str] = None
+    source_tools: list[str] = []
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    umap_projected: bool = False
+    umap_x: Optional[float] = None
+    umap_y: Optional[float] = None
+    parent_assembly: Optional[ParentAssemblySummary] = None
+    representative_bgc_id: Optional[int] = None  # for region/CDS rendering
+    member_bgcs: list[NrbMemberBgc] = []
+    domain_architecture: list[DomainArchitectureItem] = []
+    natural_products: list[NaturalProductSummary] = []
+
+
+class NrbScatterPoint(Schema):
+    """Point for the Variables Map (axes chosen from numeric NRB columns)."""
+
+    id: int
+    x: float
+    y: float
+    classification_path: str = ""
+    novelty_score: Optional[float] = None
+    domain_novelty: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    umap_projected: bool = False
+    similarity_score: Optional[float] = None
+
+
+class NrbUmapPoint(Schema):
+    """Point for the UMAP tab; ``umap_projected`` flags partial-NRB inferred coords."""
+
+    id: int
+    label: str
+    umap_x: float
+    umap_y: float
+    classification_path: str = ""
+    novelty_score: Optional[float] = None
+    is_partial: bool = False
+    is_validated: bool = False
+    umap_projected: bool = False
+
+
+class SimilarNrbRequest(Schema):
+    nrb_id: int
+    k: int = 25
 
 
 # ── Filter schemas ────────────────────────────────────────────────────────────
@@ -260,7 +358,11 @@ class ChemicalQueryRequest(Schema):
 
 class SequenceQueryRequest(Schema):
     sequence: str
-    max_evalue: float = 1e-5
+    # phmmer hit must pass all three thresholds. Defaults are tuned for
+    # "clearly a close homolog" (bitscore ≥ 30, ≥70% identity, ≥70% query coverage).
+    min_bitscore: float = 30.0
+    min_pident: float = 70.0   # percent, 0..100
+    min_qcov: float = 70.0     # percent, 0..100
 
 
 class DomainCondition(Schema):
@@ -281,7 +383,13 @@ class QueryResultBgc(Schema):
     novelty_score: float = 0.0
     domain_novelty: float = 0.0
     is_partial: bool = False
+    # For sequence queries `similarity_score` carries the best bitscore; for
+    # other modes it keeps the mode-specific score (Dice, Tanimoto, etc.).
     similarity_score: float = 0.0
+    # Sequence-query-specific metrics (populated only by the protein search).
+    best_bitscore: Optional[float] = None
+    best_pident: Optional[float] = None     # percent, 0..100
+    best_qcoverage: Optional[float] = None  # percent, 0..100
     # Parent assembly summary
     assembly_id: Optional[int] = None
     assembly_accession: Optional[str] = None

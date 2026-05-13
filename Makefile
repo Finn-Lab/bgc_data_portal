@@ -1,10 +1,10 @@
 .PHONY: cluster-create cluster-delete create-local-namespace create-local-secrets \
-        dev dev-full dev-clean deploy-local delete-local deploy-dev deploy-prod \
+        dev dev-full dev-clean dev-preflight deploy-local delete-local deploy-dev deploy-prod \
         test-unit test-integration test-e2e logs shell db-shell validate-secrets \
         clear-cache-redis clear-cache-celery clear-cache-django clear-cache \
         seed-real-data \
         build-protein-index update-protein-index \
-        clean-images nuke \
+        clean-images tidy nuke \
         workspace-enter workspace-login workspace-claude workspace-sync-in workspace-sync-out \
         workspace-patch workspace-apply-patch workspace-set-api-key workspace-restart
 
@@ -33,7 +33,15 @@ cluster-delete:
 	kind delete cluster --name bgc-local
 
 # ── Secrets ───────────────────────────────────────────────────────────────────
+# Wait for any in-progress namespace deletion before re-applying. Without this,
+# a fast-retry of `make dev` after a previous teardown hits:
+#   "namespace bgc-local … is forbidden … is being terminated"
 create-local-namespace:
+	@if kubectl get ns bgc-local -o jsonpath='{.status.phase}' 2>/dev/null | grep -q Terminating; then \
+	  echo "Namespace bgc-local is Terminating; waiting up to 120s for cleanup..."; \
+	  kubectl wait --for=delete ns/bgc-local --timeout=120s || \
+	    (echo "ERROR: bgc-local stuck Terminating. Inspect: kubectl get ns bgc-local -o yaml" && exit 1); \
+	fi
 	kubectl apply -f deployments/k8s-local/manifests/00-namespace.yaml
 
 create-local-secrets: validate-secrets create-local-namespace
@@ -42,10 +50,29 @@ create-local-secrets: validate-secrets create-local-namespace
 	  --dry-run=client -o yaml | kubectl apply -f -
 
 # ── Local dev loop ────────────────────────────────────────────────────────────
-dev: create-local-secrets
+# Reclaimable threshold (GB) above which dev-preflight nags about running tidy.
+# Tune by editing this number — when reclaimable Docker space crosses it, we
+# warn and pause briefly before continuing so a Ctrl-C escape is possible.
+DISK_RECLAIMABLE_WARN_GB := 10
+
+# Sums GB-scale reclaimable across Images / Containers / Volumes / Build Cache.
+# Sub-GB rows are ignored (they're not what fills a 100 GB Colima VM).
+dev-preflight:
+	@reclaim=$$(docker system df --format '{{.Reclaimable}}' 2>/dev/null \
+	  | grep -oE '[0-9]+(\.[0-9]+)?GB' | sed 's/GB//' \
+	  | awk '{s+=$$1} END {printf "%.0f", s+0}'); \
+	if [ "$${reclaim:-0}" -ge "$(DISK_RECLAIMABLE_WARN_GB)" ]; then \
+	  echo ""; \
+	  echo "WARN: Docker has ~$${reclaim}GB reclaimable (threshold $(DISK_RECLAIMABLE_WARN_GB)GB)."; \
+	  echo "      Run 'make tidy' to reclaim it before disk pressure breaks pods."; \
+	  echo "      Continuing in 5s — Ctrl-C to abort."; \
+	  sleep 5; \
+	fi
+
+dev: dev-preflight create-local-secrets
 	skaffold dev -p local --cleanup=false
 
-dev-full: create-local-secrets
+dev-full: dev-preflight create-local-secrets
 	skaffold dev -p local-full --cleanup=false
 
 dev-clean:
@@ -156,13 +183,24 @@ workspace-restart:
 clean-images:
 	@echo "Pruning dangling images in Docker daemon..."
 	docker image prune -af
-	@echo "Pruning unused images in Kind containerd..."
-	docker exec bgc-local-control-plane crictl rmi --prune || true
+	@echo "Pruning unused images in Kind containerd (--timeout=300s)..."
+	docker exec bgc-local-control-plane crictl --timeout=300s rmi --prune || \
+	  echo "WARN: crictl prune incomplete (node likely overloaded). Re-run 'make tidy', or 'make nuke' for a hard reset."
 	@echo "Done. Run 'docker system df' to verify."
+
+# Routine sweep: clean-images PLUS the Docker build cache. Build cache grows
+# silently with each rebuild (saw it hit 25GB in normal use) and isn't touched
+# by clean-images. Run 'make tidy' weekly or when dev-preflight nags.
+tidy: clean-images
+	@echo "Pruning Docker build cache..."
+	docker builder prune -af
+	@echo ""
+	@echo "Disk after tidy:"
+	@docker system df
 
 # Nuclear reset: delete the Kind cluster AND prune everything Docker, including
 # named volumes. WIPES local Postgres data (db_data volume). Use when 'make
-# clean-images' isn't enough or you want a known-good clean slate.
+# tidy' isn't enough or you want a known-good clean slate.
 nuke: cluster-delete
 	@echo "Pruning Docker daemon (images, containers, build cache, networks, VOLUMES)..."
 	docker system prune -af --volumes

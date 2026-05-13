@@ -98,7 +98,9 @@ export function postChemicalQuery(
 
 export interface SequenceQueryRequest {
   sequence: string;
-  max_evalue: number;
+  min_bitscore: number;
+  min_pident: number;
+  min_qcov: number;
 }
 
 export interface SequenceQueryParams {

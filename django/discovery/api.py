@@ -19,19 +19,20 @@ from django.db.models import (
     Count,
     F,
     FloatField,
+    OuterRef,
     Q,
+    Subquery,
     Value,
     When,
 )
 from django.http import HttpResponse
 from ninja import Router
 from ninja.errors import HttpError
-from pgvector.django import CosineDistance
 
 from discovery.models import (
     AssemblySource,
     BgcDomain,
-    BgcEmbedding,
+    ClusteringRun,
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
@@ -42,6 +43,7 @@ from discovery.models import (
     DashboardNaturalProduct,
     DiscoveryStats,
     NaturalProductChemOntClass,
+    NonRedundantBGC,
     PrecomputedStats,
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
@@ -75,9 +77,16 @@ from discovery.api_schemas import (
     DiscoveryStatsResponse,
     NaturalProductSummary,
     NpClassLevel,
+    NrbDetail,
+    NrbMemberBgc,
+    NrbRosterItem,
+    NrbScatterPoint,
+    NrbUmapPoint,
     PaginatedDomainResponse,
+    PaginatedNrbRosterResponse,
     PaginatedSourceResponse,
     PaginatedDetectorResponse,
+    SimilarNrbRequest,
     SourceOption,
     DetectorOption,
     PaginatedAssemblyAggregationResponse,
@@ -490,8 +499,6 @@ def assembly_bgc_roster(request, assembly_id: int):
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            nearest_validated_accession=bgc.nearest_validated_accession or None,
-            nearest_validated_distance=bgc.nearest_validated_distance,
         )
         for bgc in bgcs
     ]
@@ -542,8 +549,6 @@ def bgc_roster(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            nearest_validated_accession=bgc.nearest_validated_accession or None,
-            nearest_validated_distance=bgc.nearest_validated_distance,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
         )
         for bgc in page_qs
@@ -697,8 +702,6 @@ def bgc_detail(request, bgc_id: int):
         novelty_score=bgc.novelty_score,
         domain_novelty=bgc.domain_novelty,
         is_partial=bgc.is_partial,
-        nearest_validated_accession=bgc.nearest_validated_accession or None,
-        nearest_validated_distance=bgc.nearest_validated_distance,
         is_validated=bgc.is_validated,
         domain_architecture=domain_arch,
         parent_assembly=parent,
@@ -947,6 +950,473 @@ def bgc_scatter(
     return points
 
 
+# ── NRB (Non-Redundant BGC) endpoints ────────────────────────────────────────
+
+
+_NRB_AXES = {
+    "size_kb",  # length / 1000
+    "n_cds",
+    "novelty_score",
+    "domain_novelty",
+    "similarity_score",  # populated only from a similarity query context
+}
+
+
+def _nrb_label(nrb_id: int) -> str:
+    return f"NRB-{nrb_id}"
+
+
+def _pick_representative_bgc_id(nrb_id: int) -> Optional[int]:
+    """Lowest-id source DashboardBgc for an NRB (deterministic)."""
+    return (
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id=nrb_id)
+        .order_by("id")
+        .values_list("id", flat=True)
+        .first()
+    )
+
+
+def _nrb_is_partial(nrb: NonRedundantBGC) -> bool:
+    """An NRB is "partial" when it didn't go through the primary clustering
+    pass — either no clustering run touched it, or it was projected from a
+    KNN average of its primary neighbours (``umap_projected=True``)."""
+    return bool(nrb.umap_projected) or nrb.classification_run_id is None
+
+
+def _nrb_to_roster_item(
+    nrb: NonRedundantBGC,
+    *,
+    parent_assembly: Optional[DashboardAssembly] = None,
+    n_source_bgcs: int = 0,
+    is_validated: bool = False,
+    contig_accession: Optional[str] = None,
+    similarity_score: Optional[float] = None,
+) -> NrbRosterItem:
+    return NrbRosterItem(
+        id=nrb.id,
+        label=_nrb_label(nrb.id),
+        classification_path=nrb.gene_cluster_family or "",
+        size_kb=round((nrb.end_position - nrb.start_position) / 1000.0, 3),
+        n_source_bgcs=n_source_bgcs,
+        source_tools=list(nrb.source_tools or []),
+        novelty_score=nrb.novelty_score,
+        domain_novelty=nrb.domain_novelty,
+        is_partial=_nrb_is_partial(nrb),
+        is_validated=is_validated,
+        umap_projected=nrb.umap_projected,
+        parent_assembly_id=parent_assembly.id if parent_assembly else None,
+        parent_assembly_accession=(
+            parent_assembly.assembly_accession if parent_assembly else None
+        ),
+        organism_name=parent_assembly.organism_name if parent_assembly else None,
+        contig_accession=contig_accession,
+        similarity_score=similarity_score,
+    )
+
+
+def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
+    """Return per-NRB aggregates: ``n_source_bgcs``, ``is_validated``,
+    ``parent_assembly``, ``contig_accession``. Single DB sweep."""
+    facts: dict[int, dict] = {
+        nid: {
+            "n_source_bgcs": 0,
+            "is_validated": False,
+            "parent_assembly": None,
+            "contig_accession": None,
+        }
+        for nid in nrb_ids
+    }
+    rows = (
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id__in=nrb_ids)
+        .select_related("assembly", "contig")
+        .values(
+            "non_redundant_bgc_id", "is_validated",
+            "assembly_id", "assembly__assembly_accession", "assembly__organism_name",
+            "contig__contig_accession",
+        )
+    )
+    for r in rows:
+        nid = r["non_redundant_bgc_id"]
+        f = facts.get(nid)
+        if not f:
+            continue
+        f["n_source_bgcs"] += 1
+        f["is_validated"] = f["is_validated"] or bool(r["is_validated"])
+        if f["parent_assembly"] is None and r["assembly_id"]:
+            f["parent_assembly"] = type("AsmStub", (), {
+                "id": r["assembly_id"],
+                "assembly_accession": r["assembly__assembly_accession"],
+                "organism_name": r["assembly__organism_name"],
+            })()
+        if not f["contig_accession"]:
+            f["contig_accession"] = r["contig__contig_accession"]
+    return facts
+
+
+@discovery_router.get("/nrbs/roster/", response=PaginatedNrbRosterResponse)
+def nrb_roster(
+    request,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
+    page: int = 1,
+    page_size: int = 25,
+    include_partials: bool = True,
+):
+    """Paginated NRB roster (v2 Discovery primary unit).
+
+    Mirrors the BGC roster but operates on ``NonRedundantBGC`` rows. Filters
+    will be added in a follow-up sub-phase; for v1 the endpoint supports
+    sort + pagination + the partial toggle so the UI can be wired up.
+    """
+    qs = NonRedundantBGC.objects.all()
+    if not include_partials:
+        qs = qs.filter(classification_run_id__isnull=False)
+
+    sort_map = {
+        "novelty_score": "novelty_score",
+        "domain_novelty": "domain_novelty",
+        "classification_path": "gene_cluster_family",
+        "id": "id",
+    }
+    if sort_by == "size_kb":
+        qs = qs.annotate(_size=F("end_position") - F("start_position"))
+        order_field = "_size"
+    else:
+        order_field = sort_map.get(sort_by, "novelty_score")
+    descending = order == "desc"
+    # NULLS LAST keeps unscored partials out of the head of the page.
+    qs = qs.order_by(
+        F(order_field).desc(nulls_last=True) if descending
+        else F(order_field).asc(nulls_last=True)
+    )
+
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_qs = list(qs[offset: offset + ps])
+
+    facts = _nrb_member_facts([nrb.id for nrb in page_qs])
+    items = [
+        _nrb_to_roster_item(
+            nrb,
+            parent_assembly=facts[nrb.id]["parent_assembly"],
+            n_source_bgcs=facts[nrb.id]["n_source_bgcs"],
+            is_validated=facts[nrb.id]["is_validated"],
+            contig_accession=facts[nrb.id]["contig_accession"],
+        )
+        for nrb in page_qs
+    ]
+    return PaginatedNrbRosterResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+        ),
+    )
+
+
+@discovery_router.get("/nrbs/{nrb_id}/", response=NrbDetail)
+def nrb_detail(request, nrb_id: int):
+    try:
+        nrb = NonRedundantBGC.objects.select_related("contig").get(id=nrb_id)
+    except NonRedundantBGC.DoesNotExist:
+        raise HttpError(404, "NRB not found")
+
+    member_qs = (
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id=nrb_id)
+        .select_related("assembly", "assembly__source", "detector")
+        .order_by("id")
+    )
+    members = list(member_qs)
+    is_validated = any(m.is_validated for m in members)
+
+    parent = None
+    if members:
+        asm = members[0].assembly
+        if asm:
+            parent = ParentAssemblySummary(
+                assembly_id=asm.id,
+                accession=asm.assembly_accession,
+                organism_name=asm.organism_name,
+                source_name=asm.source.name if asm.source else None,
+                is_type_strain=asm.is_type_strain,
+                url=asm.url or "",
+            )
+
+    representative_id = _pick_representative_bgc_id(nrb_id)
+
+    # Domain architecture: collapse domain_acc across all member BGCs.
+    domain_arch_rows = (
+        BgcDomain.objects
+        .filter(bgc_id__in=[m.id for m in members])
+        .values("domain_acc", "domain_name", "ref_db", "url")
+        .order_by("domain_acc")
+        .distinct()
+    )
+    domain_arch = [
+        DomainArchitectureItem(
+            domain_acc=r["domain_acc"],
+            domain_name=r["domain_name"],
+            ref_db=r["ref_db"],
+            start=0,
+            end=0,
+            score=None,
+            url=r["url"] or "",
+        )
+        for r in domain_arch_rows
+    ]
+
+    # Natural products: union over members (each NP attaches to one BGC).
+    np_items: list[NaturalProductSummary] = []
+    np_qs = (
+        DashboardNaturalProduct.objects
+        .filter(bgc_id__in=[m.id for m in members])
+        .prefetch_related("chemont_classes")
+    )
+    for np_obj in np_qs:
+        chemont_tree = _build_chemont_annotation_tree(np_obj.chemont_classes.all())
+        np_items.append(
+            NaturalProductSummary(
+                id=np_obj.id,
+                name=np_obj.name,
+                smiles=np_obj.smiles,
+                smiles_svg="",
+                structure_thumbnail=np_obj.structure_svg_base64,
+                np_class_path=np_obj.np_class_path,
+                chemont_classes=chemont_tree,
+            )
+        )
+
+    member_items = [
+        NrbMemberBgc(
+            id=m.id,
+            accession=m.bgc_accession,
+            detector_name=m.detector.tool if m.detector else None,
+            is_partial=m.is_partial,
+            is_validated=m.is_validated,
+            size_kb=m.size_kb,
+        )
+        for m in members
+    ]
+
+    return NrbDetail(
+        id=nrb.id,
+        label=_nrb_label(nrb.id),
+        classification_path=nrb.gene_cluster_family or "",
+        size_kb=round((nrb.end_position - nrb.start_position) / 1000.0, 3),
+        start_position=nrb.start_position,
+        end_position=nrb.end_position,
+        contig_accession=nrb.contig.contig_accession if nrb.contig else None,
+        source_tools=list(nrb.source_tools or []),
+        novelty_score=nrb.novelty_score,
+        domain_novelty=nrb.domain_novelty,
+        is_partial=_nrb_is_partial(nrb),
+        is_validated=is_validated,
+        umap_projected=nrb.umap_projected,
+        umap_x=nrb.umap_x,
+        umap_y=nrb.umap_y,
+        parent_assembly=parent,
+        representative_bgc_id=representative_id,
+        member_bgcs=member_items,
+        domain_architecture=domain_arch,
+        natural_products=np_items,
+    )
+
+
+@discovery_router.get("/nrbs/umap/", response=list[NrbUmapPoint])
+def nrb_umap(
+    request,
+    include_partials: bool = True,
+    max_points: int = 10_000,
+):
+    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords."""
+    qs = (
+        NonRedundantBGC.objects
+        .exclude(umap_x__isnull=True)
+        .exclude(umap_y__isnull=True)
+    )
+    if not include_partials:
+        qs = qs.filter(umap_projected=False)
+
+    nrb_ids = list(qs.values_list("id", flat=True))
+    if len(nrb_ids) > max_points:
+        # Deterministic downsampling by id stride (preserves coverage; cheap).
+        stride = len(nrb_ids) // max_points + 1
+        nrb_ids = nrb_ids[::stride]
+        qs = qs.filter(id__in=nrb_ids)
+
+    facts = _nrb_member_facts(list(qs.values_list("id", flat=True)))
+    return [
+        NrbUmapPoint(
+            id=nrb.id,
+            label=_nrb_label(nrb.id),
+            umap_x=nrb.umap_x,
+            umap_y=nrb.umap_y,
+            classification_path=nrb.gene_cluster_family or "",
+            novelty_score=nrb.novelty_score,
+            is_partial=_nrb_is_partial(nrb),
+            is_validated=facts[nrb.id]["is_validated"],
+            umap_projected=nrb.umap_projected,
+        )
+        for nrb in qs
+    ]
+
+
+@discovery_router.get("/nrbs/scatter/", response=list[NrbScatterPoint])
+def nrb_scatter(
+    request,
+    x_axis: str = "novelty_score",
+    y_axis: str = "domain_novelty",
+    include_partials: bool = True,
+    max_points: int = 5_000,
+):
+    if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
+        raise HttpError(
+            400, f"axes must be one of: {', '.join(sorted(_NRB_AXES))}"
+        )
+
+    qs = NonRedundantBGC.objects.all()
+    if not include_partials:
+        qs = qs.filter(classification_run_id__isnull=False)
+
+    # similarity_score is not a stored column — only meaningful when supplied
+    # by a similar-NRB or domain query. For the bare scatter endpoint, treat
+    # it as null and the UI will offer it only post-query.
+    if x_axis == "similarity_score" or y_axis == "similarity_score":
+        raise HttpError(
+            400,
+            "similarity_score axis requires a similarity-query context; "
+            "use the query response payload instead of /nrbs/scatter/",
+        )
+
+    n_cds_subq = (
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id=OuterRef("id"))
+        .values("non_redundant_bgc_id")
+        .annotate(c=Count("cds_list"))
+        .values("c")
+    )
+    qs = qs.annotate(
+        size_kb=(F("end_position") - F("start_position")) / 1000.0,
+        n_cds=Subquery(n_cds_subq[:1]),
+    )
+
+    total = qs.count()
+    if total > max_points:
+        qs = qs.order_by("?")[:max_points]
+
+    points: list[NrbScatterPoint] = []
+    nrb_list = list(qs)
+    facts = _nrb_member_facts([n.id for n in nrb_list])
+    for nrb in nrb_list:
+        x_val = getattr(nrb, x_axis, None)
+        y_val = getattr(nrb, y_axis, None)
+        if x_val is None or y_val is None:
+            continue
+        points.append(
+            NrbScatterPoint(
+                id=nrb.id,
+                x=float(x_val),
+                y=float(y_val),
+                classification_path=nrb.gene_cluster_family or "",
+                novelty_score=nrb.novelty_score,
+                domain_novelty=nrb.domain_novelty,
+                is_partial=not facts[nrb.id]["is_validated"]
+                           and nrb.classification_run_id is None,
+                is_validated=facts[nrb.id]["is_validated"],
+                umap_projected=nrb.umap_projected,
+            )
+        )
+    return points
+
+
+@discovery_router.post(
+    "/query/similar-nrb/", response=PaginatedNrbRosterResponse,
+)
+def similar_nrb_query(
+    request,
+    body: SimilarNrbRequest,
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Top-K NRBs by composite-Dice similarity to ``body.nrb_id``.
+
+    Uses the cached similarity matrix from the latest ClusteringRun (written
+    by ``run_clustering_pipeline``). Only primary NRBs (those in the run's
+    clusterable subset) can be used as seeds in v1; ad-hoc partial seeds
+    require recomputation and will be enabled in a follow-up phase.
+    """
+    from discovery.services.clustering.nrb_scoring import load_scoring_cache
+    from django.conf import settings
+
+    run = ClusteringRun.objects.order_by("-created_at").first()
+    if run is None:
+        raise HttpError(404, "No ClusteringRun available")
+
+    cache_dir = settings.CLUSTERING_ARTIFACTS_DIR / run.sha256[:12]
+    try:
+        cache = load_scoring_cache(cache_dir)
+    except FileNotFoundError:
+        raise HttpError(
+            503,
+            "Similarity cache not present on this run — rerun "
+            "run_bgc_clustering with --score-nrbs (default) to materialise it.",
+        )
+
+    sim = cache["sim"]
+    nrb_ids_arr = cache["nrb_ids"]
+    id_to_row = {int(x): i for i, x in enumerate(nrb_ids_arr.tolist())}
+    if body.nrb_id not in id_to_row:
+        raise HttpError(
+            400,
+            "Seed NRB is not a primary in the latest ClusteringRun — "
+            "similar-NRB requires a primary seed in v1.",
+        )
+
+    row_ix = id_to_row[body.nrb_id]
+    row = sim.getrow(row_ix)
+    if row.nnz == 0:
+        return PaginatedNrbRosterResponse(
+            items=[],
+            pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
+        )
+
+    import numpy as np
+    cols = row.indices
+    vals = row.data
+    k = max(1, min(int(body.k), 500))
+    order = np.argsort(-vals)[:k]
+    top_ids = [int(nrb_ids_arr[cols[i]]) for i in order.tolist()]
+    top_sims = [float(vals[i]) for i in order.tolist()]
+    sim_lookup = dict(zip(top_ids, top_sims))
+
+    total_count = len(top_ids)
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_ids = top_ids[offset: offset + ps]
+
+    nrbs = {n.id: n for n in NonRedundantBGC.objects.filter(id__in=page_ids)}
+    facts = _nrb_member_facts(page_ids)
+    items = [
+        _nrb_to_roster_item(
+            nrbs[nid],
+            parent_assembly=facts[nid]["parent_assembly"],
+            n_source_bgcs=facts[nid]["n_source_bgcs"],
+            is_validated=facts[nid]["is_validated"],
+            contig_accession=facts[nid]["contig_accession"],
+            similarity_score=round(sim_lookup[nid], 4),
+        )
+        for nid in page_ids
+        if nid in nrbs
+    ]
+    return PaginatedNrbRosterResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+        ),
+    )
+
+
 # ── Query mode endpoints ─────────────────────────────────────────────────────
 
 
@@ -1047,78 +1517,6 @@ def domain_query(
             source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
         for bgc in page_qs
-    ]
-
-    return PaginatedQueryResultResponse(
-        items=items,
-        pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
-    )
-
-
-@discovery_router.post(
-    "/query/similar-bgc/{bgc_id}/", response=PaginatedQueryResultResponse
-)
-def similar_bgc_query(
-    request,
-    bgc_id: int,
-    page: int = 1,
-    page_size: int = 25,
-    sort_by: str = "similarity_score",
-    order: str = "desc",
-    max_distance: float = 0.5,
-):
-    try:
-        source_emb = BgcEmbedding.objects.get(bgc_id=bgc_id)
-    except BgcEmbedding.DoesNotExist:
-        raise HttpError(400, "Source BGC has no embedding")
-
-    # ANN search on the lean embedding table
-    emb_qs = (
-        BgcEmbedding.objects.exclude(bgc_id=bgc_id)
-        .annotate(distance=CosineDistance("vector", source_emb.vector))
-        .filter(distance__lte=max_distance)
-        .order_by("distance")
-        .select_related("bgc__assembly")
-    )
-
-    # Materialize similarity scores
-    results = []
-    for emb in emb_qs:
-        bgc = emb.bgc
-        similarity = round(1.0 - float(emb.distance), 4)
-        results.append((bgc, similarity))
-
-    # Sort
-    sort_key_map = {
-        "similarity_score": lambda x: x[1],
-        "novelty_score": lambda x: x[0].novelty_score,
-        "domain_novelty": lambda x: x[0].domain_novelty,
-        "size_kb": lambda x: x[0].size_kb,
-    }
-    key_fn = sort_key_map.get(sort_by, sort_key_map["similarity_score"])
-    results.sort(key=key_fn, reverse=(order == "desc"))
-
-    total_count = len(results)
-    pg, ps, tp, offset = _paginate(page, page_size, total_count)
-    page_results = results[offset: offset + ps]
-
-    items = [
-        QueryResultBgc(
-            id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
-            size_kb=bgc.size_kb,
-            novelty_score=bgc.novelty_score,
-            domain_novelty=bgc.domain_novelty,
-            is_partial=bgc.is_partial,
-            similarity_score=similarity,
-            assembly_id=bgc.assembly_id,
-            assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
-            organism_name=bgc.assembly.organism_name if bgc.assembly else None,
-            is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
-            source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
-        )
-        for bgc, similarity in page_results
     ]
 
     return PaginatedQueryResultResponse(
@@ -1261,13 +1659,22 @@ def sequence_query(request, body: SequenceQueryRequest):
         raise HttpError(400, "Protein sequence is required")
     if len(cleaned) > 5000:
         raise HttpError(400, "Sequence exceeds maximum length of 5,000 amino acids")
-    if not (1e-100 <= body.max_evalue <= 1.0):
-        raise HttpError(400, "max_evalue must be between 1e-100 and 1.0")
+    if not (0.0 <= body.min_bitscore <= 10_000.0):
+        raise HttpError(400, "min_bitscore must be between 0 and 10000")
+    if not (0.0 <= body.min_pident <= 100.0):
+        raise HttpError(400, "min_pident must be between 0 and 100")
+    if not (0.0 <= body.min_qcov <= 100.0):
+        raise HttpError(400, "min_qcov must be between 0 and 100")
 
     from discovery.tasks import sequence_similarity_search
 
     try:
-        result = sequence_similarity_search.delay(cleaned, body.max_evalue)
+        result = sequence_similarity_search.delay(
+            cleaned,
+            body.min_bitscore,
+            body.min_pident,
+            body.min_qcov,
+        )
     except Exception as e:
         logger.error("Failed to dispatch sequence search task: %s", e)
         raise HttpError(503, "Search service temporarily unavailable")
@@ -1305,17 +1712,18 @@ def sequence_query_status(
     if not res.ready():
         return SequenceQueryStatusResponse(status="PENDING")
 
-    raw_result = res.result
-    bgc_similarities: dict[int, float] = {int(k): v for k, v in raw_result.items()}
+    raw_result = res.result or {}
+    # Task returns {bgc_id: {"bitscore": .., "pident": .., "qcoverage": ..}}.
+    bgc_metrics: dict[int, dict[str, float]] = {int(k): v for k, v in raw_result.items()}
 
-    if not bgc_similarities:
+    if not bgc_metrics:
         return SequenceQueryStatusResponse(
             status="SUCCESS",
             items=[],
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
-    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly", "assembly__source")
+    qs = DashboardBgc.objects.filter(id__in=bgc_metrics.keys()).select_related("assembly", "assembly__source")
 
     if source_names:
         names = [n.strip() for n in source_names.split(",") if n.strip()]
@@ -1347,8 +1755,11 @@ def sequence_query_status(
 
     results = []
     for bgc in qs:
-        similarity = round(bgc_similarities.get(bgc.id, 0.0), 4)
-        results.append((bgc, similarity))
+        m = bgc_metrics.get(bgc.id) or {}
+        bitscore = round(float(m.get("bitscore", 0.0)), 2)
+        pident = round(float(m.get("pident", 0.0)), 2)
+        qcov = round(float(m.get("qcoverage", 0.0)), 2)
+        results.append((bgc, bitscore, pident, qcov))
 
     sort_key_map = {
         "similarity_score": lambda x: x[1],
@@ -1372,14 +1783,17 @@ def sequence_query_status(
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
             is_partial=bgc.is_partial,
-            similarity_score=similarity,
+            similarity_score=bitscore,
+            best_bitscore=bitscore,
+            best_pident=pident,
+            best_qcoverage=qcov,
             assembly_id=bgc.assembly_id,
             assembly_accession=bgc.assembly.assembly_accession if bgc.assembly else None,
             organism_name=bgc.assembly.organism_name if bgc.assembly else None,
             is_type_strain=bgc.assembly.is_type_strain if bgc.assembly else False,
             source_name=bgc.assembly.source.name if bgc.assembly and bgc.assembly.source else None,
         )
-        for bgc, similarity in page_results
+        for bgc, bitscore, pident, qcov in page_results
     ]
 
     return SequenceQueryStatusResponse(

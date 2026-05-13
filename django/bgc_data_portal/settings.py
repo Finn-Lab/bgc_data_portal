@@ -284,5 +284,14 @@ LOGGING = {
             "level": DJANGO_MANAGED_LOG_LEVEL,
             "propagate": False,
         },
+        # django-debug-toolbar 5.0.1's history_sidebar view renders
+        # panel_content.html without `toolbar` in context, producing noisy
+        # VariableDoesNotExist DEBUG traces on every page reload. Harmless —
+        # the template falls back to the lazy-load branch as intended.
+        "django.template": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
