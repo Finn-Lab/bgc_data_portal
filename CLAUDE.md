@@ -27,9 +27,11 @@ pre-commit run --all-files
 ```bash
 docker compose exec django python manage.py migrate
 docker compose exec django python manage.py collectstatic
-docker compose exec django python manage.py calculate_aggregated_bgcs
-docker compose exec django python manage.py update_current_stats
-docker compose exec django python manage.py backfill_protein_embeddings
+docker compose exec django python manage.py build_non_redundant_bgcs
+docker compose exec django python manage.py run_bgc_clustering --apply   # also scores NRBs + projects partials
+docker compose exec django python manage.py reclassify_bgcs --run <pk>
+docker compose exec django python manage.py recompute_all_scores
+docker compose exec django python manage.py update_discovery_stats
 ```
 
 
@@ -38,19 +40,30 @@ docker compose exec django python manage.py backfill_protein_embeddings
 ```
 django/
   bgc_data_portal/        # Project settings, root URLs, template views
-  mgnify_bgcs/            # Main app
-    models.py             # ORM models (Bgc, GCF, Genome, …)
+  discovery/              # v2 Discovery app (NRB-first)
+    models.py             # ORM models (NonRedundantBGC, DashboardBgc, ClusteringRun, …)
     api.py                # Django Ninja REST API (OpenAPI at /api/docs)
     api_schemas.py        # Pydantic schemas for API I/O
     tasks.py              # Celery async tasks
-    searches.py           # Search orchestration
-    filters.py            # Query filters
     cache_utils.py        # Redis caching helpers
     services/             # Business logic layer
+      clustering/         # Domain+adjacency Dice → KNN → hierarchical Leiden
+        pipeline.py       # Orchestrator (persists per-run scoring cache)
+        nrb_scoring.py    # NRB novelty + domain_novelty + partial projection
+        reclassify.py     # KNN reclassification of non-primary DashboardBgcs
+        metrics.py        # Sørensen–Dice similarity
+        bgc_similarity.py # Composite weighted-mean Dice
+        knn_graph.py      # Union top-k KNN graph
+        leiden.py         # Hierarchical CPM Leiden
+        layout.py         # UMAP (precomputed_knn) → DRL fallback
+        adjacency.py      # Adjacency-pair matrix builder
+        membership.py     # NRB × domain binary matrix builder
+        non_redundant.py  # NonRedundantBGC table builder
+      protein_search/     # phmmer-based sequence search
+      report.py           # Shortlist Report payload builder
+      stats.py            # Aggregations for BGC/Assembly stats panels
       ingestion/          # Stream-based NDJSON package ingestion
-      annotation/         # Annotation helpers
-      search/             # Search utilities
-      umap/               # UMAP dimensionality reduction
+  mgnify_bgcs/            # Legacy app (pre-v2; being retired by P1.4b)
   tests/
     unit/
     integration/
@@ -59,9 +72,15 @@ django/
 
 ## Key Patterns
 
-**Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through Celery (RabbitMQ broker, Redis result backend).
+**NRB-first** — In v2 the dashboard surfaces ``NonRedundantBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the NRB. `NonRedundantBGC.umap_projected = True` marks coords averaged from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered.
 
-**Vector similarity search** — `Bgc.embedding` is a 960-dim pgvector column with an HNSW index (cosine distance). Similarity queries use `<=>` operator via `pgvector`.
+**Composite-Dice similarity** — Replaces the retired ESM embedding HNSW. Per `ClusteringRun`, ``run_clustering_pipeline`` builds the NRB×NRB composite-Dice matrix (`w_d · Dice(domains) + w_a · Dice(adjacency-pairs)`) and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds NRB novelty scoring and the `/query/similar-nrb/` endpoint.
+
+**NRB scoring** — `novelty_score = 1 − max(sim to validated NRB)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / NRBs without source-vocab domains). Computed inline by the pipeline (primary NRBs) and by `project_partial_nrbs` (partials, after reclassify).
+
+**Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through Celery (RabbitMQ broker, Redis result backend). Sequence search uses pyhmmer's phmmer.
+
+**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 NRB ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in Redis (`report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
 
 **Ingestion** — stream-based NDJSON packages; all writes are idempotent upserts keyed on stable identifiers.
 
@@ -72,12 +91,12 @@ django/
 | Component | Technology |
 |-----------|-----------|
 | Web framework | Django 5 + Django Ninja |
-| Database | PostgreSQL + pgvector |
+| Database | PostgreSQL (pgvector kept for legacy embeddings until P1.4b drops them) |
 | Cache / result backend | Redis |
 | Task broker | RabbitMQ |
 | Async workers | Celery |
 | Production server | Gunicorn |
-| Local dev | Docker Compose |
+| Local dev | Docker Compose / Kind |
 
 ## Kubernetes Workspace (Claude Code in an isolated pod)
 

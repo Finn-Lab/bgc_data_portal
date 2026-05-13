@@ -1058,6 +1058,92 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
     return facts
 
 
+def _apply_nrb_filters(
+    qs,
+    *,
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    source_tools: Optional[str] = None,  # CSV, any-of (OR) semantics
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    nrb_ids: Optional[list[int]] = None,
+):
+    """Apply NRB-level filters to a ``NonRedundantBGC`` queryset.
+
+    Used by ``/nrbs/roster/`` and by the NRB-collapsed query endpoints
+    (``/query/nrb-domain/``, ``/query/nrb-sequence/status/``) so the same
+    filter surface is available regardless of how the initial NRB id set
+    was produced.
+    """
+    if nrb_ids is not None:
+        qs = qs.filter(id__in=nrb_ids)
+    if not include_partials:
+        # Primary NRBs only: row was clustered directly (not projected) and
+        # has a classification run.
+        qs = qs.filter(classification_run_id__isnull=False, umap_projected=False)
+    if validated_only:
+        qs = qs.filter(source_bgcs__is_validated=True).distinct()
+    if min_length_kb is not None:
+        qs = qs.filter(end_position__gte=F("start_position") + int(min_length_kb * 1000))
+    if max_length_kb is not None:
+        qs = qs.filter(end_position__lte=F("start_position") + int(max_length_kb * 1000))
+    if min_novelty is not None:
+        qs = qs.filter(novelty_score__gte=min_novelty)
+    if max_novelty is not None:
+        qs = qs.filter(novelty_score__lte=max_novelty)
+    if min_domain_novelty is not None:
+        qs = qs.filter(domain_novelty__gte=min_domain_novelty)
+    if max_domain_novelty is not None:
+        qs = qs.filter(domain_novelty__lte=max_domain_novelty)
+    if source_tools:
+        tools = [t.strip() for t in source_tools.split(",") if t.strip()]
+        if tools:
+            # JSONField "any of" — Postgres ?| operator: at least one tool
+            # in `tools` is present in the source_tools array.
+            tool_q = Q()
+            for t in tools:
+                tool_q |= Q(source_tools__contains=[t])
+            qs = qs.filter(tool_q)
+    if leaf_path_prefix:
+        qs = qs.filter(
+            Q(gene_cluster_family__istartswith=leaf_path_prefix + ".")
+            | Q(gene_cluster_family__iexact=leaf_path_prefix)
+        )
+    if bgc_class:
+        qs = qs.filter(
+            Q(gene_cluster_family__istartswith=bgc_class + ".")
+            | Q(gene_cluster_family__iexact=bgc_class)
+        )
+    if assembly_accession:
+        qs = qs.filter(
+            source_bgcs__assembly__assembly_accession__icontains=assembly_accession.strip()
+        ).distinct()
+    if organism:
+        qs = qs.filter(
+            source_bgcs__assembly__organism_name__icontains=organism.strip()
+        ).distinct()
+    if biome_lineage:
+        qs = qs.filter(
+            source_bgcs__assembly__biome_path__icontains=biome_lineage.strip()
+        ).distinct()
+    if taxonomy_path:
+        from discovery.ltree import filter_contigs_by_taxonomy
+        qs = qs.filter(
+            contig__in=filter_contigs_by_taxonomy(taxonomy_path)
+        ).distinct()
+    return qs
+
+
 @discovery_router.get("/nrbs/roster/", response=PaginatedNrbRosterResponse)
 def nrb_roster(
     request,
@@ -1066,16 +1152,40 @@ def nrb_roster(
     page: int = 1,
     page_size: int = 25,
     include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    source_tools: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
 ):
-    """Paginated NRB roster (v2 Discovery primary unit).
-
-    Mirrors the BGC roster but operates on ``NonRedundantBGC`` rows. Filters
-    will be added in a follow-up sub-phase; for v1 the endpoint supports
-    sort + pagination + the partial toggle so the UI can be wired up.
-    """
-    qs = NonRedundantBGC.objects.all()
-    if not include_partials:
-        qs = qs.filter(classification_run_id__isnull=False)
+    """Paginated, filterable NRB roster (v2 Discovery primary unit)."""
+    qs = _apply_nrb_filters(
+        NonRedundantBGC.objects.all(),
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        source_tools=source_tools,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        assembly_accession=assembly_accession,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    )
 
     sort_map = {
         "novelty_score": "novelty_score",
@@ -1586,6 +1696,297 @@ def domain_query(
     return PaginatedQueryResultResponse(
         items=items,
         pagination=PaginationMeta(page=pg, page_size=ps, total_count=total_count, total_pages=tp),
+    )
+
+
+# ── NRB-collapsed query endpoints ────────────────────────────────────────────
+
+
+def _nrb_roster_page_response(
+    qs,
+    *,
+    sort_by: str,
+    order: str,
+    page: int,
+    page_size: int,
+    similarity_lookup: Optional[dict[int, float]] = None,
+) -> PaginatedNrbRosterResponse:
+    """Sort, paginate, and serialise a filtered ``NonRedundantBGC`` queryset.
+
+    Shared between ``/nrbs/roster/``, ``/query/nrb-domain/``, and
+    ``/query/nrb-sequence/status/`` so result shape stays identical.
+    ``similarity_lookup`` is an optional ``{nrb_id: score}`` map that gets
+    stamped onto each ``NrbRosterItem.similarity_score`` (used by the
+    query endpoints; ``/nrbs/roster/`` leaves it null).
+    """
+    sort_map = {
+        "novelty_score": "novelty_score",
+        "domain_novelty": "domain_novelty",
+        "classification_path": "gene_cluster_family",
+        "id": "id",
+    }
+    if sort_by == "size_kb":
+        qs = qs.annotate(_size=F("end_position") - F("start_position"))
+        order_field = "_size"
+    elif sort_by == "similarity_score" and similarity_lookup is not None:
+        # Materialise + sort in Python — similarity isn't a DB column.
+        rows = list(qs)
+        rows.sort(
+            key=lambda n: similarity_lookup.get(n.id, 0.0),
+            reverse=(order == "desc"),
+        )
+        total_count = len(rows)
+        pg, ps, tp, offset = _paginate(page, page_size, total_count)
+        page_rows = rows[offset: offset + ps]
+        facts = _nrb_member_facts([n.id for n in page_rows])
+        items = [
+            _nrb_to_roster_item(
+                n,
+                parent_assembly=facts[n.id]["parent_assembly"],
+                n_source_bgcs=facts[n.id]["n_source_bgcs"],
+                is_validated=facts[n.id]["is_validated"],
+                contig_accession=facts[n.id]["contig_accession"],
+                similarity_score=similarity_lookup.get(n.id),
+            )
+            for n in page_rows
+        ]
+        return PaginatedNrbRosterResponse(
+            items=items,
+            pagination=PaginationMeta(
+                page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+            ),
+        )
+    else:
+        order_field = sort_map.get(sort_by, "novelty_score")
+
+    descending = order == "desc"
+    qs = qs.order_by(
+        F(order_field).desc(nulls_last=True) if descending
+        else F(order_field).asc(nulls_last=True)
+    )
+    total_count = qs.count()
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_qs = list(qs[offset: offset + ps])
+    facts = _nrb_member_facts([n.id for n in page_qs])
+    items = [
+        _nrb_to_roster_item(
+            n,
+            parent_assembly=facts[n.id]["parent_assembly"],
+            n_source_bgcs=facts[n.id]["n_source_bgcs"],
+            is_validated=facts[n.id]["is_validated"],
+            contig_accession=facts[n.id]["contig_accession"],
+            similarity_score=(
+                similarity_lookup.get(n.id) if similarity_lookup else None
+            ),
+        )
+        for n in page_qs
+    ]
+    return PaginatedNrbRosterResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+        ),
+    )
+
+
+@discovery_router.post(
+    "/query/nrb-domain/", response=PaginatedNrbRosterResponse, tags=["Query"],
+)
+def nrb_domain_query(
+    request,
+    body: DomainQueryRequest,
+    page: int = 1,
+    page_size: int = 25,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    source_tools: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+):
+    """NRB-collapsed domain query.
+
+    Resolves the domain conditions against ``BgcDomain`` rows, collapses to
+    distinct ``NonRedundantBGC`` ids (any source BGC of the NRB carrying a
+    required domain counts the NRB in; excluded domains drop the NRB if any
+    source BGC carries them). All NRB-level filters from ``/nrbs/roster/``
+    apply in the same shape.
+    """
+    required = [d.acc for d in body.domains if d.required]
+    excluded = [d.acc for d in body.domains if not d.required]
+
+    # Resolve the matching NRB id set via BgcDomain → DashboardBgc → NRB.
+    bgc_qs = DashboardBgc.objects.filter(non_redundant_bgc__isnull=False)
+    if body.logic == "and" and required:
+        for acc in required:
+            bgc_qs = bgc_qs.filter(bgc_domains__domain_acc=acc)
+    elif required:
+        bgc_qs = bgc_qs.filter(bgc_domains__domain_acc__in=required)
+    nrb_ids = list(
+        bgc_qs.values_list("non_redundant_bgc_id", flat=True).distinct()
+    )
+    if excluded and nrb_ids:
+        excluded_nrb_ids = set(
+            DashboardBgc.objects
+            .filter(non_redundant_bgc_id__in=nrb_ids, bgc_domains__domain_acc__in=excluded)
+            .values_list("non_redundant_bgc_id", flat=True)
+            .distinct()
+        )
+        nrb_ids = [i for i in nrb_ids if i not in excluded_nrb_ids]
+
+    if not nrb_ids:
+        return PaginatedNrbRosterResponse(
+            items=[],
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0,
+            ),
+        )
+
+    qs = _apply_nrb_filters(
+        NonRedundantBGC.objects.all(),
+        nrb_ids=nrb_ids,
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        source_tools=source_tools,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        assembly_accession=assembly_accession,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    )
+    # Domain match is binary → similarity_score = 1.0 for every NRB.
+    similarity_lookup = {nid: 1.0 for nid in nrb_ids}
+    return _nrb_roster_page_response(
+        qs,
+        sort_by=sort_by,
+        order=order,
+        page=page,
+        page_size=page_size,
+        similarity_lookup=similarity_lookup,
+    )
+
+
+@discovery_router.get(
+    "/query/nrb-sequence/status/{task_id}/",
+    response=PaginatedNrbRosterResponse,
+    tags=["Query"],
+)
+def nrb_sequence_query_status(
+    request,
+    task_id: str,
+    page: int = 1,
+    page_size: int = 25,
+    sort_by: str = "similarity_score",
+    order: str = "desc",
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    source_tools: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+):
+    """Poll a ``sequence_similarity_search`` Celery task and return results
+    collapsed to NRB level.
+
+    The task itself is the same one ``POST /query/sequence/`` dispatches —
+    only the result shape differs. Each NRB keeps the best-bitscore hit
+    among its source BGCs as ``similarity_score``. Tasks still PENDING raise
+    503 so the client can poll on a fixed interval; FAILURE raises 500.
+    """
+    from celery.result import AsyncResult
+
+    res = AsyncResult(task_id)
+    if res.failed():
+        raise HttpError(500, "Sequence search failed")
+    if not res.ready():
+        raise HttpError(503, "Sequence search still running")
+
+    raw_result = res.result or {}
+    bgc_metrics: dict[int, dict[str, float]] = {
+        int(k): v for k, v in raw_result.items()
+    }
+    if not bgc_metrics:
+        return PaginatedNrbRosterResponse(
+            items=[],
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0,
+            ),
+        )
+
+    # Collapse BGC hits → NRB id with best bitscore.
+    bgc_to_nrb = dict(
+        DashboardBgc.objects.filter(id__in=bgc_metrics.keys())
+        .values_list("id", "non_redundant_bgc_id")
+    )
+    nrb_best: dict[int, float] = {}
+    for bgc_id, nrb_id in bgc_to_nrb.items():
+        if nrb_id is None:
+            continue
+        bs = float(bgc_metrics[bgc_id].get("bitscore", 0.0))
+        if bs > nrb_best.get(nrb_id, float("-inf")):
+            nrb_best[nrb_id] = bs
+
+    if not nrb_best:
+        return PaginatedNrbRosterResponse(
+            items=[],
+            pagination=PaginationMeta(
+                page=1, page_size=page_size, total_count=0, total_pages=0,
+            ),
+        )
+
+    qs = _apply_nrb_filters(
+        NonRedundantBGC.objects.all(),
+        nrb_ids=list(nrb_best.keys()),
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        source_tools=source_tools,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        assembly_accession=assembly_accession,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    )
+    return _nrb_roster_page_response(
+        qs,
+        sort_by=sort_by,
+        order=order,
+        page=page,
+        page_size=page_size,
+        similarity_lookup=nrb_best,
     )
 
 

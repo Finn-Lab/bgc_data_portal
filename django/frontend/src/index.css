@@ -90,3 +90,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Print stylesheet for the Shortlist Report ──────────────────────────
+   Applied to all pages; the report root keeps its layout while everything
+   flagged with `data-print-hide` (download buttons, nav, etc.) is hidden.
+   Plotly canvases print as raster bitmaps in the default browser flow. */
+@media print {
+  header,
+  nav,
+  [data-print-hide] {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  [data-report-root] {
+    padding: 0 !important;
+  }
+  [data-report-root] [data-radix-scroll-area-viewport],
+  [data-report-root] .overflow-auto,
+  [data-report-root] .overflow-y-auto {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  [data-report-root] > * {
+    page-break-inside: avoid;
+  }
+}
