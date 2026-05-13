@@ -26,7 +26,6 @@ from __future__ import annotations
 import base64
 import csv
 import logging
-import struct
 import sys
 from pathlib import Path
 
@@ -36,7 +35,6 @@ from django.db.models.expressions import RawSQL
 from discovery.models import (
     AssemblySource,
     BgcDomain,
-    BgcEmbedding,
     CdsSequence,
     ContigSequence,
     DashboardAssembly,
@@ -49,7 +47,6 @@ from discovery.models import (
     DashboardNaturalProduct,
     DashboardRegion,
     NaturalProductChemOntClass,
-    ProteinEmbedding,
     RegionAccessionAlias,
 )
 
@@ -64,8 +61,6 @@ SEQUENCE_INSERT_BATCH_SIZE = 500  # smaller SQL batches for large binary sequenc
 # Tables in truncation order (respects FK CASCADE but explicit is safer)
 ALL_DISCOVERY_TABLES = [
     "discovery_region_accession_alias",
-    "discovery_protein_embedding",
-    "discovery_bgc_embedding",
     "discovery_bgc_domain",
     "discovery_cds_sequence",
     "discovery_cds",
@@ -393,16 +388,6 @@ def load_bgcs(
 
             assembly_id = contig_to_assembly.get(contig_id)
 
-            # Support both old (nearest_mibig_*) and new (nearest_validated_*) column names
-            nearest_val_acc = row.get(
-                "nearest_validated_accession",
-                row.get("nearest_mibig_accession", ""),
-            )
-            raw_dist = row.get(
-                "nearest_validated_distance",
-                row.get("nearest_mibig_distance", ""),
-            )
-
             batch.append(
                 DashboardBgc(
                     assembly_id=assembly_id,
@@ -414,8 +399,6 @@ def load_bgcs(
                     novelty_score=float(row.get("novelty_score", 0)),
                     domain_novelty=float(row.get("domain_novelty", 0)),
                     size_kb=float(row.get("size_kb", 0)),
-                    nearest_validated_accession=nearest_val_acc,
-                    nearest_validated_distance=float(raw_dist) if raw_dist else None,
                     is_partial=row.get("is_partial", "").lower() in ("true", "1"),
                     is_validated=row.get("is_validated", "").lower() in ("true", "1"),
                     umap_x=float(row.get("umap_x", 0)),
@@ -434,7 +417,7 @@ def load_bgcs(
                     unique_fields=["contig", "start_position", "end_position", "detector"],
                     update_fields=[
                         "assembly", "classification_path", "novelty_score", "domain_novelty",
-                        "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                        "size_kb",
                         "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
                     ],
                 )
@@ -448,7 +431,7 @@ def load_bgcs(
             unique_fields=["contig", "start_position", "end_position", "detector"],
             update_fields=[
                 "assembly", "classification_path", "novelty_score", "domain_novelty",
-                "size_kb", "nearest_validated_accession", "nearest_validated_distance",
+                "size_kb",
                 "is_partial", "is_validated", "umap_x", "umap_y", "gene_cluster_family",
             ],
         )
@@ -647,95 +630,6 @@ def load_domains(
         total += len(deduped)
 
     logger.info("Loaded %d domain rows", total)
-    return total
-
-
-def load_embeddings(
-    data_dir: Path,
-    bgc_lookup: dict[tuple[str, int, int, str], int],
-) -> int:
-    """Load embeddings_bgc.tsv → BgcEmbedding. Returns row count."""
-    path = data_dir / "embeddings_bgc.tsv"
-    if not path.exists():
-        logger.info("embeddings_bgc.tsv not found, skipping")
-        return 0
-
-    batch: list[BgcEmbedding] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            bgc_id = _resolve_bgc_key(row, bgc_lookup)
-            if bgc_id is None:
-                continue
-
-            raw = base64.b64decode(row["vector_base64"])
-            vector = list(struct.unpack(f"<{len(raw)//4}f", raw))
-
-            batch.append(BgcEmbedding(bgc_id=bgc_id, vector=vector))
-
-            if len(batch) >= BATCH_SIZE:
-                BgcEmbedding.objects.bulk_create(
-                    batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
-                )
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        BgcEmbedding.objects.bulk_create(
-            batch, update_conflicts=True, unique_fields=["bgc"], update_fields=["vector"],
-        )
-        total += len(batch)
-
-    logger.info("Loaded %d BGC embeddings", total)
-    return total
-
-
-def load_protein_embeddings(data_dir: Path) -> int:
-    """Load embeddings_protein.tsv → ProteinEmbedding. Returns row count."""
-    path = data_dir / "embeddings_protein.tsv"
-    if not path.exists():
-        logger.info("embeddings_protein.tsv not found, skipping")
-        return 0
-
-    batch: list[ProteinEmbedding] = []
-    total = 0
-
-    with open(path, newline="") as f:
-        reader = csv.DictReader(f, delimiter="\t")
-        for row in reader:
-            raw = base64.b64decode(row["vector_base64"])
-            vector = list(struct.unpack(f"<{len(raw)//4}f", raw))
-
-            batch.append(
-                ProteinEmbedding(
-                    protein_sha256=row["protein_sha256"],
-                    vector=vector,
-                    source_protein_id=None,
-                )
-            )
-
-            if len(batch) >= BATCH_SIZE:
-                ProteinEmbedding.objects.bulk_create(
-                    batch,
-                    update_conflicts=True,
-                    unique_fields=["protein_sha256"],
-                    update_fields=["vector"],
-                )
-                total += len(batch)
-                batch.clear()
-
-    if batch:
-        ProteinEmbedding.objects.bulk_create(
-            batch,
-            update_conflicts=True,
-            unique_fields=["protein_sha256"],
-            update_fields=["vector"],
-        )
-        total += len(batch)
-
-    logger.info("Loaded %d protein embeddings", total)
     return total
 
 
@@ -990,11 +884,9 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # 6. Domains
     load_domains(data_dir, bgc_lookup, cds_lookup)
 
-    # 7. BGC embeddings
-    load_embeddings(data_dir, bgc_lookup)
-
-    # 7.5. Protein embeddings
-    load_protein_embeddings(data_dir)
+    # ESM embedding loaders removed in v2 (P1.4b) — discovery no longer
+    # ingests embeddings; similarity is computed via composite-Dice over
+    # the domain + adjacency matrices in the clustering pipeline.
 
     # 8. Natural products
     load_natural_products(data_dir, bgc_lookup)

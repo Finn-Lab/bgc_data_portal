@@ -2,7 +2,6 @@ import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { ExploreLayout } from "./panels/ExploreLayout";
 import { QueryLayout } from "./panels/QueryLayout";
-import { AssessLayout } from "./panels/AssessLayout";
 import { useModeStore } from "@/stores/mode-store";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -46,14 +45,9 @@ export function DashboardShell() {
           </Sheet>
         </div>
 
-        {/* Main content */}
-        {mode === "explore" ? (
-          <ExploreLayout />
-        ) : mode === "query" ? (
-          <QueryLayout />
-        ) : (
-          <AssessLayout />
-        )}
+        {/* Main content — Evaluate Asset mode retired in v2 (P1.4b);
+            legacy `/legacy/*` route now only exposes Explore + Query. */}
+        {mode === "query" ? <QueryLayout /> : <ExploreLayout />}
       </div>
     </div>
   );

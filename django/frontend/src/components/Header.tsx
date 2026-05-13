@@ -2,6 +2,7 @@ import { useModeStore } from "@/stores/mode-store";
 import { useOnboardingStore } from "@/stores/onboarding-store";
 import { cn } from "@/lib/utils";
 import { HelpCircle, BookOpen } from "lucide-react";
+import { ShortlistDropdown } from "@/components/discovery/ShortlistDropdown";
 
 export function Header() {
   const mode = useModeStore((s) => s.mode);
@@ -67,22 +68,12 @@ export function Header() {
                 Search BGCs
               </a>
             </li>
-            <li className="vf-tabs__item">
-              <a
-                className={cn(
-                  "vf-tabs__link",
-                  mode === "assess" && "is-active"
-                )}
-                href="#assess"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setMode("assess");
-                }}
-              >
-                Evaluate Asset
-              </a>
-            </li>
           </ul>
+        </div>
+
+        {/* Spacer pushes the shortlist menu to the right edge. */}
+        <div className="ml-auto">
+          <ShortlistDropdown />
         </div>
       </div>
     </header>

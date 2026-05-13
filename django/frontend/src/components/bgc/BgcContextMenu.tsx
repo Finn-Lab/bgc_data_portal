@@ -5,11 +5,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useModeStore } from "@/stores/mode-store";
-import { useQueryStore } from "@/stores/query-store";
-import { useSelectionStore } from "@/stores/selection-store";
-import { useAssessStore } from "@/stores/assess-store";
-import { Plus, Replace, Search, Microscope } from "lucide-react";
+import { Plus, Replace } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -19,13 +15,14 @@ interface BgcContextMenuProps {
   label: string;
 }
 
+/**
+ * Legacy `/legacy/*` context menu. "Find similar BGCs" (embedding) and
+ * "Evaluate BGC" (Assessment) were retired in v2 (P1.4b). The new dashboard
+ * uses ``components/discovery/NrbContextMenu`` instead.
+ */
 export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) {
   const addBgc = useShortlistStore((s) => s.addBgc);
   const replaceBgcs = useShortlistStore((s) => s.replaceBgcs);
-  const setMode = useModeStore((s) => s.setMode);
-  const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
-  const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);
-  const startAssessment = useAssessStore((s) => s.startAssessment);
 
   return (
     <ContextMenu>
@@ -34,7 +31,7 @@ export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) 
         <ContextMenuItem
           onClick={() => {
             const ok = addBgc({ id: bgcId, label });
-            if (!ok) toast.error("Shortlist full (max 20)");
+            if (!ok) toast.error("Shortlist full");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -43,25 +40,6 @@ export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) 
         <ContextMenuItem onClick={() => replaceBgcs({ id: bgcId, label })}>
           <Replace className="mr-2 h-4 w-4" />
           Clear shortlist and add
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => {
-            setSimilarBgcSourceId(bgcId);
-            setActiveBgcId(bgcId);
-            setMode("query");
-          }}
-        >
-          <Search className="mr-2 h-4 w-4" />
-          Find similar BGCs
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => {
-            startAssessment("bgc", bgcId, label);
-            setMode("assess");
-          }}
-        >
-          <Microscope className="mr-2 h-4 w-4" />
-          Evaluate BGC
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

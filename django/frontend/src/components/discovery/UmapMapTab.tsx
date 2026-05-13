@@ -1,38 +1,61 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNrbUmap } from "@/api/nrbs";
 import { Loader2 } from "lucide-react";
+import { useDiscoveryStore } from "@/stores/discovery-store";
+import { NrbScatterPlot } from "./NrbScatterPlot";
 
-/**
- * UMAP tab — fetches NRB UMAP coordinates (including ``umap_projected``
- * partial-derived points). Plotly rendering ships in P2.2b; for now the
- * tab confirms the data wiring is alive.
- */
 export function UmapMapTab() {
+  const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const resultSimilarityById = useDiscoveryStore(
+    (s) => s.resultSimilarityById,
+  );
+
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["nrb-umap"],
     queryFn: () => fetchNrbUmap({ include_partials: true }),
   });
 
-  const primary = data?.filter((p) => !p.umap_projected).length ?? 0;
-  const projected = data?.filter((p) => p.umap_projected).length ?? 0;
+  const points = useMemo(() => {
+    if (!data) return [];
+    const filtered = resultNrbIds
+      ? data.filter((p) => resultNrbIds.includes(p.id))
+      : data;
+    return filtered.map((p) => ({
+      id: p.id,
+      x: p.umap_x,
+      y: p.umap_y,
+      is_partial: p.is_partial,
+      is_validated: p.is_validated,
+      umap_projected: p.umap_projected,
+      classification_path: p.classification_path,
+      novelty_score: p.novelty_score,
+      label: p.label,
+      similarity_score: resultSimilarityById?.[p.id] ?? null,
+    }));
+  }, [data, resultNrbIds, resultSimilarityById]);
 
   return (
-    <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
-      {isLoading ? (
-        <span>
-          <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
-          Loading UMAP…
-        </span>
-      ) : isError ? (
-        <span className="text-destructive">
-          {(error as Error)?.message ?? "Failed to load UMAP"}
-        </span>
-      ) : (
-        <span>
-          {primary.toLocaleString()} primary · {projected.toLocaleString()}{" "}
-          projected partials · Plotly view wires up next
-        </span>
-      )}
+    <div className="flex h-full flex-col p-3">
+      <div className="flex flex-1 items-stretch overflow-hidden rounded border bg-card">
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+            Loading UMAP…
+          </div>
+        ) : isError ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-destructive">
+            {(error as Error)?.message ?? "Failed to load UMAP"}
+          </div>
+        ) : (
+          <NrbScatterPlot
+            points={points}
+            xLabel="UMAP 1"
+            yLabel="UMAP 2"
+            flagProjected
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,6 @@ from django.contrib import admin
 from .models import (
     DashboardAssembly,
     DashboardBgc,
-    BgcEmbedding,
     BgcDomain,
     ClusteringRun,
     DashboardGCF,

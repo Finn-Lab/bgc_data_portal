@@ -15,9 +15,7 @@ from discovery.cache_utils import set_job_cache
 
 log = logging.getLogger(__name__)
 
-ASSESSMENT_TTL = 86_400  # 24 hours
 KEYWORD_TTL = 300  # 5 minutes
-UPLOAD_ASSESSMENT_TTL = 14_400  # 4 hours
 CHEMICAL_QUERY_TTL = 3_600  # 1 hour
 
 
@@ -38,122 +36,6 @@ def keyword_resolve(self, search_key: str, keyword: str) -> bool:
         timeout=KEYWORD_TTL,
     )
     log.info("Keyword resolved: %r → %s (task %s)", keyword, result.get("match_type"), task_id)
-    return True
-
-
-@shared_task(name="discovery.tasks.assess_assembly", bind=True, acks_late=True)
-def assess_assembly(self, assembly_id: int) -> bool:
-    """Run a full assembly assessment and cache the result."""
-    task_id = self.request.id
-    search_key = f"assess_assembly:{assembly_id}"
-
-    # Mark as pending
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=ASSESSMENT_TTL)
-
-    from discovery.services.assessment import compute_assembly_assessment
-
-    result = compute_assembly_assessment(assembly_id)
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=ASSESSMENT_TTL,
-    )
-    log.info("Assembly assessment completed for assembly %s (task %s)", assembly_id, task_id)
-    return True
-
-
-@shared_task(name="discovery.tasks.assess_bgc", bind=True, acks_late=True)
-def assess_bgc(self, bgc_id: int) -> bool:
-    """Run a full BGC assessment and cache the result."""
-    task_id = self.request.id
-    search_key = f"assess_bgc:{bgc_id}"
-
-    # Mark as pending
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=ASSESSMENT_TTL)
-
-    from discovery.services.assessment import compute_bgc_assessment
-
-    result = compute_bgc_assessment(bgc_id)
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=ASSESSMENT_TTL,
-    )
-    log.info("BGC assessment completed for BGC %s (task %s)", bgc_id, task_id)
-    return True
-
-
-@shared_task(name="discovery.tasks.assess_uploaded_bgc", bind=True, acks_late=True)
-def assess_uploaded_bgc(self, upload_key: str) -> bool:
-    """Run a full BGC assessment on uploaded (cached) data."""
-    from django.core.cache import cache
-
-    task_id = self.request.id
-    search_key = f"assess_upload_bgc:{upload_key}"
-
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=UPLOAD_ASSESSMENT_TTL)
-
-    uploaded_data = cache.get(upload_key)
-    if not uploaded_data:
-        set_job_cache(
-            search_key=search_key,
-            results={"error": "Upload expired — please re-upload"},
-            task_id=task_id,
-            timeout=UPLOAD_ASSESSMENT_TTL,
-        )
-        log.warning("Upload key %s expired before assessment (task %s)", upload_key, task_id)
-        return False
-
-    from discovery.services.uploaded_assessment import compute_uploaded_bgc_assessment
-
-    result = compute_uploaded_bgc_assessment(uploaded_data)
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=UPLOAD_ASSESSMENT_TTL,
-    )
-    log.info("Uploaded BGC assessment completed (task %s)", task_id)
-    return True
-
-
-@shared_task(name="discovery.tasks.assess_uploaded_assembly", bind=True, acks_late=True)
-def assess_uploaded_assembly(self, upload_key: str) -> bool:
-    """Run a full assembly assessment on uploaded (cached) data."""
-    from django.core.cache import cache
-
-    task_id = self.request.id
-    search_key = f"assess_upload_assembly:{upload_key}"
-
-    set_job_cache(search_key=search_key, task_id=task_id, timeout=UPLOAD_ASSESSMENT_TTL)
-
-    uploaded_data = cache.get(upload_key)
-    if not uploaded_data:
-        set_job_cache(
-            search_key=search_key,
-            results={"error": "Upload expired — please re-upload"},
-            task_id=task_id,
-            timeout=UPLOAD_ASSESSMENT_TTL,
-        )
-        log.warning("Upload key %s expired before assessment (task %s)", upload_key, task_id)
-        return False
-
-    from discovery.services.uploaded_assessment import compute_uploaded_assembly_assessment
-
-    result = compute_uploaded_assembly_assessment(uploaded_data)
-
-    set_job_cache(
-        search_key=search_key,
-        results=result,
-        task_id=task_id,
-        timeout=UPLOAD_ASSESSMENT_TTL,
-    )
-    log.info("Uploaded assembly assessment completed (task %s)", task_id)
     return True
 
 
@@ -455,57 +337,6 @@ def project_partial_nrbs_task(
         "project_partial_nrbs complete (task %s): %s", task_id, result
     )
     return result
-
-
-# ── Single-BGC classifier (used by uploaded BGC assessment) ───────────────────
-
-
-def _classify_uploaded_bgc(embedding: list[float]) -> dict:
-    """Place an ad-hoc uploaded BGC under the latest ClusteringRun's hierarchy.
-
-    Uses BGC embedding nearest-neighbour against the run's primary BGCs
-    (no pair-table lookup is possible without protein sha256s). Returns a
-    dict with the inherited leaf path plus the source ClusteringRun id.
-    """
-    import numpy as np
-    from pgvector.django import CosineDistance
-
-    from discovery.models import BgcEmbedding, ClusteringRun, DashboardBgc
-
-    run = ClusteringRun.objects.order_by("-created_at").first()
-    if run is None:
-        return {}
-
-    nearest = (
-        BgcEmbedding.objects.filter(
-            bgc__classification_run_id=run.pk,
-            bgc__classification_source="primary",
-        )
-        .annotate(distance=CosineDistance("vector", embedding))
-        .order_by("distance")
-        .values_list("bgc_id", "distance")
-        .first()
-    )
-    if nearest is None:
-        return {"run_id": run.pk}
-
-    nearest_bgc_id, distance = nearest
-    bgc = (
-        DashboardBgc.objects.filter(pk=nearest_bgc_id)
-        .values("gene_cluster_family")
-        .first()
-    )
-    leaf = (bgc or {}).get("gene_cluster_family") or ""
-    return {
-        "cluster_label": leaf,
-        "run_id": run.pk,
-        "distance": float(distance) if distance is not None else None,
-        "assigned_by_knn": True,
-    }
-
-
-# Backwards-compatible alias for callers that haven't been updated yet.
-_classify_with_knn = _classify_uploaded_bgc
 
 
 @shared_task(name="discovery.tasks.sequence_similarity_search", bind=True, acks_late=True)

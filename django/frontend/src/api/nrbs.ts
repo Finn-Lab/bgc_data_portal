@@ -35,6 +35,8 @@ export interface NrbRosterParams extends NrbFilterParams {
   order?: "asc" | "desc";
   page?: number;
   page_size?: number;
+  /** Comma-separated NRB ids — restricts the roster to this allow-list. */
+  nrb_ids?: string;
 }
 
 export function fetchNrbRoster(params: NrbRosterParams = {}) {

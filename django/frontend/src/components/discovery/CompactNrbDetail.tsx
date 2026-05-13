@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNrbDetail } from "@/api/nrbs";
+import { fetchBgcRegion } from "@/api/bgcs";
+import { RegionPlot } from "@/components/bgc/RegionPlot";
+import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -124,7 +127,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
         <NrbMoreSheet nrb={nrb} />
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-2 p-3 pt-0">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
           compounds={compoundsCount}
           parentAcc={parentAcc}
@@ -144,9 +147,48 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
           </div>
         </div>
 
+        <RegionStrip
+          representativeBgcId={nrb.representative_bgc_id}
+        />
+
         <MemberBgcStrip memberBgcs={nrb.member_bgcs} />
       </CardContent>
     </Card>
+  );
+}
+
+function RegionStrip({
+  representativeBgcId,
+}: {
+  representativeBgcId: number | null;
+}) {
+  const setSelectedCds = useDiscoveryStore((s) => s.setSelectedCds);
+  const selectedCds = useDiscoveryStore((s) => s.selectedCds);
+  const { data, isLoading } = useQuery({
+    queryKey: ["bgc-region", representativeBgcId],
+    queryFn: () => fetchBgcRegion(representativeBgcId as number),
+    enabled: representativeBgcId !== null,
+  });
+
+  if (representativeBgcId === null) return null;
+  if (isLoading) {
+    return (
+      <div className="flex h-12 items-center justify-center rounded border bg-muted/20 text-xs text-muted-foreground">
+        <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+        Loading region…
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto rounded border bg-card">
+      <RegionPlot
+        data={data}
+        onCdsClick={(cds) => setSelectedCds(cds)}
+        selectedCdsId={selectedCds?.protein_id ?? null}
+      />
+    </div>
   );
 }
 

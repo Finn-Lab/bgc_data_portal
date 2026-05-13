@@ -48,8 +48,6 @@ from discovery.models import (
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
-    AssessmentAccepted,
-    AssessmentStatusResponse,
     SequenceQueryAccepted,
     SequenceQueryStatusResponse,
     BgcClassCount,
@@ -1166,10 +1164,22 @@ def nrb_roster(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
+    nrb_ids: Optional[str] = None,
 ):
-    """Paginated, filterable NRB roster (v2 Discovery primary unit)."""
+    """Paginated, filterable NRB roster (v2 Discovery primary unit).
+
+    ``nrb_ids`` is an optional comma-separated id allow-list so the dashboard
+    can refilter to a Run Query result set without re-issuing the query.
+    """
+    parsed_ids: Optional[list[int]] = None
+    if nrb_ids:
+        parsed_ids = [
+            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+        ] or None
+
     qs = _apply_nrb_filters(
         NonRedundantBGC.objects.all(),
+        nrb_ids=parsed_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         min_length_kb=min_length_kb,
@@ -2847,144 +2857,8 @@ def export_bgc_shortlist(request, body: ShortlistExportRequest):
     return response
 
 
-# ── Assessment endpoints ─────────────────────────────────────────────────────
-
-
-@discovery_router.post(
-    "/assess/assembly/{assembly_id}/",
-    response={202: AssessmentAccepted},
-    tags=["Assessment"],
-)
-def assess_assembly(request, assembly_id: int):
-    if not DashboardAssembly.objects.filter(pk=assembly_id).exists():
-        raise HttpError(404, "Assembly not found")
-
-    from discovery.tasks import assess_assembly as assess_assembly_task
-
-    result = assess_assembly_task.delay(assembly_id)
-    return 202, AssessmentAccepted(task_id=result.id, asset_type="assembly")
-
-
-@discovery_router.post(
-    "/assess/bgc/{bgc_id}/",
-    response={202: AssessmentAccepted},
-    tags=["Assessment"],
-)
-def assess_bgc(request, bgc_id: int):
-    if not DashboardBgc.objects.filter(pk=bgc_id).exists():
-        raise HttpError(404, "BGC not found")
-
-    from discovery.tasks import assess_bgc as assess_bgc_task
-
-    result = assess_bgc_task.delay(bgc_id)
-    return 202, AssessmentAccepted(task_id=result.id, asset_type="bgc")
-
-
-@discovery_router.get(
-    "/assess/status/{task_id}/",
-    response=AssessmentStatusResponse,
-    tags=["Assessment"],
-)
-def assess_status(request, task_id: str):
-    from discovery.cache_utils import get_job_status
-
-    status_data = get_job_status(task_id=task_id)
-    return AssessmentStatusResponse(
-        status=status_data.get("status", "UNKNOWN"),
-        result=status_data.get("result"),
-    )
-
-
-@discovery_router.get(
-    "/assess/assembly/{assembly_id}/similar-assemblies/",
-    response=list[int],
-    tags=["Assessment"],
-)
-def similar_assemblies(request, assembly_id: int):
-    if not DashboardAssembly.objects.filter(pk=assembly_id).exists():
-        raise HttpError(404, "Assembly not found")
-
-    from discovery.services.assessment import find_similar_assemblies
-
-    return find_similar_assemblies(assembly_id, k=10)
-
-
-@discovery_router.get(
-    "/assess/export/{task_id}/",
-    tags=["Assessment"],
-)
-def export_assessment(request, task_id: str):
-    from discovery.cache_utils import get_job_status
-
-    status_data = get_job_status(task_id=task_id)
-    if status_data.get("status") != "SUCCESS":
-        raise HttpError(404, "Assessment not found or not yet complete")
-
-    result = status_data.get("result", {})
-    content = json.dumps(result, indent=2, default=str)
-    response = HttpResponse(content, content_type="application/json")
-    response["Content-Disposition"] = f'attachment; filename="assessment_{task_id[:8]}.json"'
-    return response
-
-
-@discovery_router.post(
-    "/assess/upload/",
-    response={202: AssessmentAccepted},
-    tags=["Assessment"],
-)
-def upload_for_assessment(request):
-    """Upload a .tar.gz / .tgz of TSV files for ephemeral asset evaluation.
-
-    Expects a multipart form with:
-    - ``type``: ``"bgc"`` or ``"assembly"``
-    - ``file``: the .tar.gz or .tgz archive
-    """
-    from uuid import uuid4
-
-    from django.core.cache import cache
-
-    from discovery.services.upload_parser import (
-        UploadValidationError,
-        parse_assembly_upload,
-        parse_bgc_upload,
-    )
-
-    upload_type = request.POST.get("type", "").strip()
-    if upload_type not in ("bgc", "assembly"):
-        raise HttpError(400, "type must be 'bgc' or 'assembly'")
-
-    uploaded_file = request.FILES.get("file")
-    if not uploaded_file:
-        raise HttpError(400, "No file provided")
-    name = (uploaded_file.name or "").lower()
-    if not (name.endswith(".tar.gz") or name.endswith(".tgz")):
-        raise HttpError(400, "File must be a .tar.gz or .tgz archive")
-    if uploaded_file.size > 20 * 1024 * 1024:
-        raise HttpError(400, "File too large (max 20 MB)")
-
-    tar_bytes = uploaded_file.read()
-
-    try:
-        if upload_type == "bgc":
-            parsed = parse_bgc_upload(tar_bytes)
-        else:
-            parsed = parse_assembly_upload(tar_bytes)
-    except UploadValidationError as e:
-        raise HttpError(400, str(e))
-
-    upload_key = f"upload:{uuid4().hex}"
-    cache.set(upload_key, parsed, 14_400)  # 4h TTL
-
-    if upload_type == "bgc":
-        from discovery.tasks import assess_uploaded_bgc
-
-        result = assess_uploaded_bgc.delay(upload_key)
-    else:
-        from discovery.tasks import assess_uploaded_assembly
-
-        result = assess_uploaded_assembly.delay(upload_key)
-
-    return 202, AssessmentAccepted(task_id=result.id, asset_type=upload_type)
+# Assessment endpoints removed in v2 — the Evaluate Asset feature is
+# superseded by the Shortlist Report flow (see /report/snapshot/).
 
 
 # ── Platform overview ─────────────────────────────────────────────────────────

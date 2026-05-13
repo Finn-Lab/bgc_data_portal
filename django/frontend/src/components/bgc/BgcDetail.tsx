@@ -11,7 +11,6 @@ import { useModeStore } from "@/stores/mode-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useAssessStore } from "@/stores/assess-store";
 import { ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
 import type { ChemOntAnnotationNode } from "@/api/types";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
@@ -36,7 +35,6 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
   const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const addBgc = useShortlistStore((s) => s.addBgc);
-  const startAssessment = useAssessStore((s) => s.startAssessment);
   const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
 
   // Reset selected CDS when bgcId changes
@@ -113,23 +111,11 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
             onClick={() => {
               const ok = addBgc({ id: bgc.id, label: bgc.accession });
               if (ok) toast.success("Added to BGC shortlist");
-              else toast.error("Shortlist full (max 20)");
+              else toast.error("Shortlist full");
             }}
           >
             <ListPlus className="h-3 w-3" />
             Add to BGC Shortlist
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1 text-xs"
-            onClick={() => {
-              startAssessment("bgc", bgc.id, bgc.accession);
-              setMode("assess");
-            }}
-          >
-            <Microscope className="h-3 w-3" />
-            Evaluate Asset
           </Button>
         </div>
       </div>

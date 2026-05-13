@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { NrbScatterAxis } from "@/api/types";
+import type { NrbScatterAxis, RegionCds } from "@/api/types";
 
 /**
  * Session state for the v2 Discovery dashboard.
@@ -19,9 +19,11 @@ interface DiscoveryState {
   compareNrbId: number | null;
   setCompareNrbId: (id: number | null) => void;
 
-  // Selected CDS feeds the Protein Information panel below the detail stack.
-  selectedCdsId: number | null;
-  setSelectedCdsId: (id: number | null) => void;
+  // Selected CDS feeds the Protein Information panel below the detail
+  // stack. We carry the full ``RegionCds`` object so the panel can render
+  // Pfam annotations + protein sequence without an extra round-trip.
+  selectedCds: RegionCds | null;
+  setSelectedCds: (cds: RegionCds | null) => void;
 
   // Results card tab + axis selectors for the Variables Map.
   activeResultsTab: ResultsTab;
@@ -30,6 +32,17 @@ interface DiscoveryState {
   variablesAxisX: NrbScatterAxis;
   variablesAxisY: NrbScatterAxis;
   setVariablesAxes: (x: NrbScatterAxis, y: NrbScatterAxis) => void;
+
+  // Run Query result set — NRB id allow-list applied by the roster + maps
+  // when populated. Null = no active query, show everything.
+  resultNrbIds: number[] | null;
+  /** Optional NRB → similarity-score lookup populated by sequence/domain
+   *  queries; used to colour scatter points by score. */
+  resultSimilarityById: Record<number, number> | null;
+  setQueryResult: (
+    ids: number[] | null,
+    similarity?: Record<number, number> | null,
+  ) => void;
 
   // Convenience: clear all selections (e.g., on a fresh Run Query).
   clearSelections: () => void;
@@ -42,8 +55,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   compareNrbId: null,
   setCompareNrbId: (id) => set({ compareNrbId: id }),
 
-  selectedCdsId: null,
-  setSelectedCdsId: (id) => set({ selectedCdsId: id }),
+  selectedCds: null,
+  setSelectedCds: (cds) => set({ selectedCds: cds }),
 
   activeResultsTab: "roster",
   setActiveResultsTab: (tab) => set({ activeResultsTab: tab }),
@@ -52,6 +65,23 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   variablesAxisY: "domain_novelty",
   setVariablesAxes: (x, y) => set({ variablesAxisX: x, variablesAxisY: y }),
 
+  resultNrbIds: null,
+  resultSimilarityById: null,
+  setQueryResult: (ids, similarity = null) =>
+    set({
+      resultNrbIds: ids,
+      resultSimilarityById: similarity,
+      // A fresh query resets compare/protein selections.
+      compareNrbId: null,
+      selectedCds: null,
+    }),
+
   clearSelections: () =>
-    set({ referenceNrbId: null, compareNrbId: null, selectedCdsId: null }),
+    set({
+      referenceNrbId: null,
+      compareNrbId: null,
+      selectedCds: null,
+      resultNrbIds: null,
+      resultSimilarityById: null,
+    }),
 }));

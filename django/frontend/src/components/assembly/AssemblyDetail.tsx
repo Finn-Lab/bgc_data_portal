@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useAssessStore } from "@/stores/assess-store";
-import { useModeStore } from "@/stores/mode-store";
-import { Star, ExternalLink, ListPlus, Microscope } from "lucide-react";
+import { Star, ExternalLink, ListPlus } from "lucide-react";
 import { toast } from "sonner";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 
@@ -35,8 +33,6 @@ function ScoreBar({ label, value, tooltipKey }: { label: string; value: number; 
 export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
   const { data: assembly, isLoading } = useAssemblyDetail(assemblyId);
   const addAssembly = useShortlistStore((s) => s.addAssembly);
-  const startAssessment = useAssessStore((s) => s.startAssessment);
-  const setMode = useModeStore((s) => s.setMode);
 
   if (isLoading) {
     return (
@@ -68,23 +64,11 @@ export function AssemblyDetail({ assemblyId }: AssemblyDetailProps) {
           onClick={() => {
             const ok = addAssembly({ id: assembly.id, label });
             if (ok) toast.success("Added to assembly shortlist");
-            else toast.error("Shortlist full (max 20)");
+            else toast.error("Shortlist full");
           }}
         >
           <ListPlus className="h-3 w-3" />
           Add to Assembly Shortlist
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-1 text-xs"
-          onClick={() => {
-            startAssessment("assembly", assembly.id, label);
-            setMode("assess");
-          }}
-        >
-          <Microscope className="h-3 w-3" />
-          Evaluate Asset
         </Button>
       </div>
 

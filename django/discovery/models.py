@@ -13,12 +13,6 @@ hierarchical queries (``<@``, ``@>``, ``subpath``, ``nlevel``) when cast to ``lt
 import zlib
 
 from django.db import models
-from pgvector.django import HalfVectorField, HnswIndex
-
-
-# Single source of truth for the BGC/protein embedding dimension.
-# Reflects the esmc_300m model (layer 26); must match the halfvec column size.
-EMBEDDING_DIM = 960
 
 
 # ── Assembly source lookup ─────────────────────────────────────────────────────
@@ -443,8 +437,6 @@ class DashboardBgc(models.Model):
     novelty_score = models.FloatField(default=0.0)
     domain_novelty = models.FloatField(default=0.0)
     size_kb = models.FloatField(default=0.0)
-    nearest_validated_accession = models.CharField(max_length=50, blank=True, default="")
-    nearest_validated_distance = models.FloatField(null=True, blank=True)
 
     # Flags
     is_partial = models.BooleanField(default=False)
@@ -545,60 +537,6 @@ class DashboardBgc(models.Model):
         return self.bgc_accession
 
 
-# ── Embeddings (separate tables, half precision) ───────────────────────────────
-
-
-class BgcEmbedding(models.Model):
-    """BGC embedding vector in a dedicated table (halfvec for storage efficiency)."""
-
-    bgc = models.OneToOneField(
-        DashboardBgc,
-        on_delete=models.CASCADE,
-        primary_key=True,
-        related_name="embedding",
-    )
-    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
-
-    class Meta:
-        db_table = "discovery_bgc_embedding"
-        indexes = [
-            HnswIndex(
-                fields=["vector"],
-                name="idx_bgc_emb_hnsw",
-                opclasses=["halfvec_cosine_ops"],
-                m=16,
-                ef_construction=512,
-            ),
-        ]
-
-    def __str__(self):
-        return f"Embedding for {self.bgc_id}"
-
-
-class ProteinEmbedding(models.Model):
-    """Protein embedding vector in a dedicated table (halfvec)."""
-
-    id = models.BigAutoField(primary_key=True)
-    source_protein_id = models.IntegerField(unique=True, db_index=True, null=True, blank=True)
-    protein_sha256 = models.CharField(max_length=64, unique=True)
-    vector = HalfVectorField(dimensions=EMBEDDING_DIM)
-
-    class Meta:
-        db_table = "discovery_protein_embedding"
-        indexes = [
-            HnswIndex(
-                fields=["vector"],
-                name="idx_prot_emb_hnsw",
-                opclasses=["halfvec_cosine_ops"],
-                m=16,
-                ef_construction=512,
-            ),
-        ]
-
-    def __str__(self):
-        return f"Embedding for protein {self.source_protein_id}"
-
-
 # ── BGC–Domain association (denormalized) ───────────────────────────────────────
 
 
@@ -626,7 +564,7 @@ class DashboardCds(models.Model):
         blank=True,
         default="",
         db_index=True,
-        help_text="SHA-256 hash of the amino acid sequence (links to ProteinEmbedding)",
+        help_text="SHA-256 hash of the amino acid sequence (used by the pyhmmer search index)",
     )
 
     class Meta:

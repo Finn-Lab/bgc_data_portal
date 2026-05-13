@@ -1,27 +1,21 @@
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { SidebarShortlists } from "@/components/trays/SidebarShortlists";
-import { UploadForEvaluation } from "@/components/assess/UploadForEvaluation";
 import { Separator } from "@/components/ui/separator";
-import { useModeStore } from "@/stores/mode-store";
 
+/**
+ * Legacy sidebar used only by ``/legacy/*``. Evaluate Asset mode + the
+ * UploadForEvaluation panel were retired in v2 (P1.4b); the new dashboard
+ * doesn't render this component at all.
+ */
 export function Sidebar() {
-  const mode = useModeStore((s) => s.mode);
-
   return (
-    <aside className="hidden h-full w-80 shrink-0 overflow-y-auto border-r xl:block" data-tour="sidebar">
+    <aside
+      className="hidden h-full w-80 shrink-0 overflow-y-auto border-r xl:block"
+      data-tour="sidebar"
+    >
       <div className="space-y-4 p-4">
-        {mode === "assess" && (
-          <>
-            <UploadForEvaluation />
-            <Separator />
-          </>
-        )}
-        {mode !== "assess" && (
-          <>
-            <FilterPanel />
-            <Separator />
-          </>
-        )}
+        <FilterPanel />
+        <Separator />
         <SidebarShortlists />
       </div>
     </aside>

@@ -19,8 +19,12 @@ import { NrbContextMenu } from "./NrbContextMenu";
 
 type SortKey = "novelty_score" | "domain_novelty" | "size_kb" | "id";
 
-const COLUMNS: { key: SortKey | "label" | "tools" | "assembly"; label: string }[] = [
+const COLUMNS: {
+  key: SortKey | "label" | "tools" | "assembly" | "similarity";
+  label: string;
+}[] = [
   { key: "label", label: "NRB" },
+  { key: "similarity", label: "Sim." },
   { key: "size_kb", label: "Size (kb)" },
   { key: "novelty_score", label: "Novelty" },
   { key: "domain_novelty", label: "Dom. nov." },
@@ -40,15 +44,18 @@ export function NrbRosterTable() {
 
   const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
   const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
+  const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
 
+  const nrbIdsCsv = resultNrbIds ? resultNrbIds.join(",") : undefined;
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["nrb-roster", page, pageSize, sortBy, order],
+    queryKey: ["nrb-roster", page, pageSize, sortBy, order, nrbIdsCsv],
     queryFn: () =>
       fetchNrbRoster({
         page,
         page_size: pageSize,
         sort_by: sortBy,
         order,
+        nrb_ids: nrbIdsCsv,
       }),
   });
 
@@ -177,6 +184,9 @@ function NrbRosterRow({ nrb, selected, onSelect }: NrbRosterRowProps) {
               projected
             </Badge>
           )}
+        </TableCell>
+        <TableCell className="font-mono">
+          {nrb.similarity_score != null ? nrb.similarity_score.toFixed(3) : "—"}
         </TableCell>
         <TableCell>{nrb.size_kb.toFixed(1)}</TableCell>
         <TableCell>{fmtScore(nrb.novelty_score)}</TableCell>

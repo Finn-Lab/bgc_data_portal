@@ -139,8 +139,6 @@ def build_bgc_json(bgc: DashboardBgc) -> dict:
         "scores": {
             "novelty_score": bgc.novelty_score,
             "domain_novelty": bgc.domain_novelty,
-            "nearest_validated_accession": bgc.nearest_validated_accession,
-            "nearest_validated_distance": bgc.nearest_validated_distance,
         },
         "flags": {
             "is_partial": bgc.is_partial,

@@ -5,9 +5,7 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useModeStore } from "@/stores/mode-store";
-import { useAssessStore } from "@/stores/assess-store";
-import { Plus, Replace, Microscope } from "lucide-react";
+import { Plus, Replace } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -17,6 +15,10 @@ interface AssemblyContextMenuProps {
   label: string;
 }
 
+/**
+ * Legacy `/legacy/*` context menu. "Evaluate Assembly" was retired in v2
+ * (P1.4b) along with the Assessment service.
+ */
 export function AssemblyContextMenu({
   children,
   assemblyId,
@@ -24,8 +26,6 @@ export function AssemblyContextMenu({
 }: AssemblyContextMenuProps) {
   const addAssembly = useShortlistStore((s) => s.addAssembly);
   const replaceAssemblies = useShortlistStore((s) => s.replaceAssemblies);
-  const setMode = useModeStore((s) => s.setMode);
-  const startAssessment = useAssessStore((s) => s.startAssessment);
 
   return (
     <ContextMenu>
@@ -34,7 +34,7 @@ export function AssemblyContextMenu({
         <ContextMenuItem
           onClick={() => {
             const ok = addAssembly({ id: assemblyId, label });
-            if (!ok) toast.error("Shortlist full (max 20)");
+            if (!ok) toast.error("Shortlist full");
           }}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -45,15 +45,6 @@ export function AssemblyContextMenu({
         >
           <Replace className="mr-2 h-4 w-4" />
           Clear shortlist and add
-        </ContextMenuItem>
-        <ContextMenuItem
-          onClick={() => {
-            startAssessment("assembly", assemblyId, label);
-            setMode("assess");
-          }}
-        >
-          <Microscope className="mr-2 h-4 w-4" />
-          Evaluate Assembly
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
