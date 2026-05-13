@@ -7,6 +7,7 @@ import { useTaxonomyTree } from "@/hooks/use-filter-data";
 import { useFilterStore } from "@/stores/filter-store";
 import { cn } from "@/lib/utils";
 import type { TaxonomyNode } from "@/api/types";
+import { FilterChip } from "./FilterChip";
 
 function TaxonomyNodeItem({
   node,
@@ -31,7 +32,7 @@ function TaxonomyNodeItem({
       <div
         className={cn(
           "flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-sm hover:bg-accent",
-          isSelected && "bg-primary/10 font-medium"
+          isSelected && "bg-primary/10 font-medium",
         )}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={() => {
@@ -84,7 +85,6 @@ export function TaxonomyFilter() {
   const [searchText, setSearchText] = useState("");
   const filterStore = useFilterStore();
 
-  // Parse the current taxonomy path to determine deepest selection
   const taxonomyPath = filterStore.taxonomyPath;
   const pathParts = taxonomyPath ? taxonomyPath.split(";").filter(Boolean) : [];
   const RANK_ORDER = ["kingdom", "phylum", "class", "order", "family", "genus"];
@@ -96,16 +96,13 @@ export function TaxonomyFilter() {
 
   function handleSelect(rank: string, value: string) {
     if (!value) {
-      // Clearing a rank: truncate path at this rank level
       const rankIndex = RANK_ORDER.indexOf(rank);
       const newParts = pathParts.slice(0, rankIndex);
       filterStore.setTaxonomyPath(newParts.length > 0 ? newParts.join(";") : "");
     } else {
-      // Setting a rank: build path up to this rank
       const rankIndex = RANK_ORDER.indexOf(rank);
       const newParts = [...pathParts];
       newParts[rankIndex] = value;
-      // Truncate anything deeper
       const trimmed = newParts.slice(0, rankIndex + 1);
       filterStore.setTaxonomyPath(trimmed.join(";"));
     }
@@ -127,52 +124,52 @@ export function TaxonomyFilter() {
     }, []);
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-6 w-full" />
-        <Skeleton className="h-6 w-full" />
-      </div>
-    );
-  }
-
   const displayed = filterTree(tree ?? []);
+  const label = deepest
+    ? `Taxonomy: ${deepest.key} ${deepest.value}`
+    : "Taxonomy";
 
   return (
-    <div className="space-y-2" data-tour="taxonomy-filter">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">Taxonomy</span>
-        {deepest && (
-          <Badge variant="outline" className="text-xs">
-            {deepest.key}: {deepest.value}
-          </Badge>
-        )}
-      </div>
-      <Input
-        placeholder="Search taxonomy..."
-        value={searchText}
-        onChange={(e) => setSearchText(e.target.value)}
-        className="h-8 text-sm"
-      />
-      <div className="max-h-64 overflow-auto">
-        {displayed.map((node) => (
-          <TaxonomyNodeItem
-            key={`${node.rank}-${node.name}`}
-            node={node}
-            depth={0}
-            selectedRank={deepest?.key ?? ""}
-            selectedValue={deepest?.value ?? ""}
-            onSelect={handleSelect}
+    <FilterChip
+      label={label}
+      active={!!deepest}
+      onClear={() => filterStore.setTaxonomyPath("")}
+      dataTour="taxonomy-filter"
+      width="md"
+    >
+      {isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-6 w-full" />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Input
+            placeholder="Search taxonomy..."
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            className="h-8 text-sm"
           />
-        ))}
-        {displayed.length === 0 && (
-          <p className="py-2 text-center text-xs text-muted-foreground">
-            No matches
-          </p>
-        )}
-      </div>
-    </div>
+          <div className="max-h-64 overflow-auto">
+            {displayed.map((node) => (
+              <TaxonomyNodeItem
+                key={`${node.rank}-${node.name}`}
+                node={node}
+                depth={0}
+                selectedRank={deepest?.key ?? ""}
+                selectedValue={deepest?.value ?? ""}
+                onSelect={handleSelect}
+              />
+            ))}
+            {displayed.length === 0 && (
+              <p className="py-2 text-center text-xs text-muted-foreground">
+                No matches
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </FilterChip>
   );
 }

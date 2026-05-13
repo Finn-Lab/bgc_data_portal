@@ -1,8 +1,10 @@
 import { useFilterStore } from "@/stores/filter-store";
+import { FilterChip } from "./FilterChip";
+import { cn } from "@/lib/utils";
 
 const TYPES = ["", "metagenome", "genome", "region"] as const;
 const LABELS: Record<string, string> = {
-  "": "All types",
+  "": "All",
   metagenome: "Metagenome",
   genome: "Genome",
   region: "Region",
@@ -11,19 +13,31 @@ const LABELS: Record<string, string> = {
 export function AssemblyTypeFilter() {
   const assemblyType = useFilterStore((s) => s.assemblyType);
   const setAssemblyType = useFilterStore((s) => s.setAssemblyType);
+  const isActive = !!assemblyType;
 
   return (
-    <div className="space-y-1" data-tour="assembly-type-filter">
-      <label className="text-xs font-medium text-muted-foreground">Assembly Type</label>
-      <select
-        value={assemblyType}
-        onChange={(e) => setAssemblyType(e.target.value)}
-        className="w-full rounded-md border bg-background px-2 py-1 text-sm"
-      >
+    <FilterChip
+      label={isActive ? `Type: ${LABELS[assemblyType]}` : "Assembly Type"}
+      active={isActive}
+      onClear={() => setAssemblyType("")}
+      dataTour="assembly-type-filter"
+      width="sm"
+    >
+      <div className="flex flex-col gap-1">
         {TYPES.map((t) => (
-          <option key={t} value={t}>{LABELS[t]}</option>
+          <button
+            key={t}
+            type="button"
+            onClick={() => setAssemblyType(t)}
+            className={cn(
+              "rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent",
+              assemblyType === t && "bg-primary/10 font-medium",
+            )}
+          >
+            {LABELS[t]}
+          </button>
         ))}
-      </select>
-    </div>
+      </div>
+    </FilterChip>
   );
 }

@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useChemOntClasses } from "@/hooks/use-filter-data";
 import { useFilterStore } from "@/stores/filter-store";
 import type { ChemOntClassNode } from "@/api/types";
-import { HelpTooltip } from "@/components/ui/help-tooltip";
+import { FilterChip } from "./FilterChip";
 
 function ChemOntNode({
   node,
@@ -86,24 +86,29 @@ export function ChemOntClassFilter() {
     setChemontIds(next);
   }
 
-  if (isLoading) {
-    return <Skeleton className="h-20 w-full" />;
-  }
-
   return (
-    <div className="space-y-2 min-w-0" data-tour="chemont-filter">
-      <span className="flex items-center gap-1 text-sm font-medium">ChemOnt Chemical Class <HelpTooltip tooltipKey="chemont_class" side="right" /></span>
-      <div className="max-h-48 overflow-auto min-w-0">
-        {(chemontClasses ?? []).map((node) => (
-          <ChemOntNode
-            key={node.chemont_id}
-            node={node}
-            depth={0}
-            selected={chemontIds}
-            onToggle={handleToggle}
-          />
-        ))}
-      </div>
-    </div>
+    <FilterChip
+      label="ChemOnt"
+      count={chemontIds.length}
+      onClear={() => setChemontIds([])}
+      dataTour="chemont-filter"
+      width="md"
+    >
+      {isLoading ? (
+        <Skeleton className="h-20 w-full" />
+      ) : (
+        <div className="max-h-64 overflow-auto min-w-0">
+          {(chemontClasses ?? []).map((node) => (
+            <ChemOntNode
+              key={node.chemont_id}
+              node={node}
+              depth={0}
+              selected={chemontIds}
+              onToggle={handleToggle}
+            />
+          ))}
+        </div>
+      )}
+    </FilterChip>
   );
 }

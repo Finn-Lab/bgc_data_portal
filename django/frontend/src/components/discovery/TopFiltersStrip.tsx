@@ -8,13 +8,9 @@ import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Loader2, Play, X } from "lucide-react";
 
 /**
- * Top strip that replaces the v1 sidebar. Hosts:
- *   - DB-stats badges (left)
- *   - Filter accordion (middle) — re-uses the existing FilterPanel until P2
- *     gets a dedicated NRB-filter form
- *   - Run Query button (bottom-right)
- *
- * Wired as a single Card so it visually anchors the top of the page.
+ * Top strip that replaces the v1 sidebar. Two rows:
+ *   - meta row: DB-stats badges (left) + Clear/Run-Query actions (right)
+ *   - filter row: chip-style filters (scrollable, max-h ≈ 20vh)
  */
 export function TopFiltersStrip() {
   const { data: stats } = useDiscoveryStats();
@@ -23,20 +19,15 @@ export function TopFiltersStrip() {
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
 
   return (
-    <Card className="m-2 mb-0 p-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-stretch lg:justify-between">
+    <Card className="mx-2 mt-2 mb-0 overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b px-3 py-1.5">
         <DbStatsBadges stats={stats} />
-
-        <div className="flex-1 lg:px-4">
-          <FilterPanel />
-        </div>
-
-        <div className="flex flex-col items-end justify-end gap-1">
+        <div className="flex items-center gap-1">
           {resultNrbIds !== null && (
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1 text-xs"
+              className="h-7 gap-1 text-xs"
               onClick={() => setQueryResult(null, null)}
             >
               <X className="h-3 w-3" />
@@ -44,20 +35,23 @@ export function TopFiltersStrip() {
             </Button>
           )}
           <Button
-            size="lg"
-            className="gap-2"
+            size="sm"
+            className="h-8 gap-1.5"
             data-tour="run-query"
             onClick={run}
             disabled={isRunning}
           >
             {isRunning ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Play className="h-4 w-4" />
+              <Play className="h-3.5 w-3.5" />
             )}
             Run Query
           </Button>
         </div>
+      </div>
+      <div className="max-h-[20vh] overflow-y-auto px-3 py-2">
+        <FilterPanel />
       </div>
     </Card>
   );
@@ -76,23 +70,26 @@ interface DbStatsBadgesProps {
 function DbStatsBadges({ stats }: DbStatsBadgesProps) {
   const fmt = (n?: number) => (n == null ? "—" : n.toLocaleString());
   return (
-    <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:items-start lg:gap-1">
-      <Badge variant="outline" className="font-mono">
-        Regions <span className="ml-2 font-semibold">{fmt(stats?.regions)}</span>
+    <div className="flex flex-wrap items-center gap-1.5">
+      <Badge variant="outline" className="h-6 font-mono text-[10px]">
+        Regions{" "}
+        <span className="ml-1.5 font-semibold">{fmt(stats?.regions)}</span>
       </Badge>
-      <Badge variant="outline" className="font-mono">
+      <Badge variant="outline" className="h-6 font-mono text-[10px]">
         BGCs{" "}
-        <span className="ml-2 font-semibold">
+        <span className="ml-1.5 font-semibold">
           {fmt(stats?.total_bgc_predictions)}
         </span>
       </Badge>
-      <Badge variant="outline" className="font-mono">
+      <Badge variant="outline" className="h-6 font-mono text-[10px]">
         Validated{" "}
-        <span className="ml-2 font-semibold">{fmt(stats?.validated_bgcs)}</span>
+        <span className="ml-1.5 font-semibold">
+          {fmt(stats?.validated_bgcs)}
+        </span>
       </Badge>
-      <Badge variant="outline" className="font-mono">
+      <Badge variant="outline" className="h-6 font-mono text-[10px]">
         Genomes{" "}
-        <span className="ml-2 font-semibold">{fmt(stats?.genomes)}</span>
+        <span className="ml-1.5 font-semibold">{fmt(stats?.genomes)}</span>
       </Badge>
     </div>
   );
