@@ -9,6 +9,12 @@ import type {
   BgcRegionData,
   RegionCds,
 } from "@/api/types";
+import {
+  GO_SLIM_COLOR_MAP,
+  UNANNOTATED_COLOR,
+  UNANNOTATED_LABEL,
+  getGoSlimColor,
+} from "./goSlimPalette";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -30,40 +36,6 @@ const DETECTOR_COLORS: Record<string, string> = {
   antismash: "#bebada",
 };
 const DEFAULT_CLUSTER_COLOR = "#c8c8c8";
-
-// ── Color generation (port of make_distinct_color_map) ───────────────────────
-
-function hlsToRgb(h: number, l: number, s: number): [number, number, number] {
-  if (s === 0) return [l, l, l];
-  const hue2rgb = (p: number, q: number, t: number) => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return [hue2rgb(p, q, h + 1 / 3), hue2rgb(p, q, h), hue2rgb(p, q, h - 1 / 3)];
-}
-
-function makeDistinctColorMap(keys: string[]): Record<string, string> {
-  const PHI = 0.618033988749895;
-  const SEED = 0.12;
-  const L0 = 0.6, L1 = 0.66;
-  const S0 = 0.78, S1 = 0.86;
-  const unique = [...new Set(keys)].sort();
-  const out: Record<string, string> = {};
-  for (let i = 0; i < unique.length; i++) {
-    const h = (SEED + i * PHI) % 1.0;
-    const l = i % 2 === 0 ? L0 : L1;
-    const s = Math.floor(i / 2) % 2 === 0 ? S0 : S1;
-    const [r, g, b] = hlsToRgb(h, l, s);
-    out[unique[i]!] = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
-  }
-  return out;
-}
 
 // ── Lane assignment (port of _assign_nonoverlap_lanes) ───────────────────────
 
@@ -142,12 +114,6 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
   );
   const maxLane = clusterLanes.length > 0 ? Math.max(...clusterLanes) : 0;
 
-  // GO Slim color map keyed on all GO slim terms in this region
-  const goSlimColorMap = useMemo(() => {
-    const allSlims = data.domain_list.flatMap((d) => d.go_slim);
-    return makeDistinctColorMap(allSlims);
-  }, [data.domain_list]);
-
   // Per-CDS dominant GO slim (most frequent across its domains)
   const cdsGoSlimMap = useMemo(() => {
     const cdsDomainSlims: Record<string, string[]> = {};
@@ -191,14 +157,28 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
           seen.add(gs);
           entries.push({
             label: gs,
-            color: goSlimColorMap[gs] || "#cfcfcf",
+            color: GO_SLIM_COLOR_MAP[gs] ?? UNANNOTATED_COLOR,
             group: "Pfam GO Slim",
           });
         }
       }
     }
+
+    // "Unannotated" swatch — only when at least one CDS in the plot has no
+    // dominant GO slim term and so renders in grey.
+    const hasUnannotated = data.cds_list.some(
+      (cds) => !cdsGoSlimMap[cds.protein_id],
+    );
+    if (hasUnannotated) {
+      entries.push({
+        label: UNANNOTATED_LABEL,
+        color: UNANNOTATED_COLOR,
+        group: "Pfam GO Slim",
+      });
+    }
+
     return entries;
-  }, [data.cluster_list, data.domain_list, goSlimColorMap]);
+  }, [data.cluster_list, data.cds_list, data.domain_list, cdsGoSlimMap]);
 
   // Dynamic SVG height based on cluster lane count
   const svgHeight = CLUSTER_TRACK_Y + (maxLane + 1) * CLUSTER_LANE_GAP + 30;
@@ -295,7 +275,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
             const isSelected = selectedCdsId === cds.protein_id;
             const isHovered = hoveredCdsId === cds.protein_id;
             const dominantSlim = cdsGoSlimMap[cds.protein_id];
-            const fill = dominantSlim ? (goSlimColorMap[dominantSlim] ?? "#e8e8e8") : "#e8e8e8";
+            const fill = getGoSlimColor(dominantSlim);
             return (
               <Tooltip key={`cds-${cds.protein_id}`}>
                 <TooltipTrigger asChild>
