@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNrbRoster } from "@/api/nrbs";
 import type { NrbRosterItem } from "@/api/types";
@@ -45,10 +45,38 @@ export function NrbRosterTable() {
   const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
   const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const applied = useDiscoveryStore((s) => s.appliedFilters);
 
   const nrbIdsCsv = resultNrbIds ? resultNrbIds.join(",") : undefined;
+  const filterParams = {
+    source_tools:
+      applied.sourceNames.length > 0
+        ? applied.sourceNames.join(",")
+        : undefined,
+    taxonomy_path: applied.taxonomyPath || undefined,
+    bgc_class: applied.bgcClass || undefined,
+    biome_lineage: applied.biomeLineage || undefined,
+    assembly_accession: applied.assemblyAccession || undefined,
+    organism: applied.organism || undefined,
+  };
+
+  // Reset to page 1 whenever the applied filter set or result allow-list
+  // changes — otherwise a deep-page user could see an empty page after
+  // narrowing filters.
+  const filterKey = JSON.stringify({ ...filterParams, nrbIdsCsv });
+  useEffect(() => {
+    setPage(1);
+  }, [filterKey]);
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["nrb-roster", page, pageSize, sortBy, order, nrbIdsCsv],
+    queryKey: [
+      "nrb-roster",
+      page,
+      pageSize,
+      sortBy,
+      order,
+      nrbIdsCsv,
+      filterParams,
+    ],
     queryFn: () =>
       fetchNrbRoster({
         page,
@@ -56,6 +84,7 @@ export function NrbRosterTable() {
         sort_by: sortBy,
         order,
         nrb_ids: nrbIdsCsv,
+        ...filterParams,
       }),
   });
 

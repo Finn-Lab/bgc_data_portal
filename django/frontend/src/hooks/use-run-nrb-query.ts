@@ -6,16 +6,18 @@ import {
 import { postSequenceQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import { useDiscoveryStore } from "@/stores/discovery-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { ApiError } from "@/api/client";
 import { toast } from "sonner";
 
 /**
  * Hook that drives the Run Query button in the v2 dashboard.
  *
- * Resolves the union of the active query inputs in ``query-store`` (domain
- * conditions + sequence) into a single NRB id allow-list and writes it
- * into the discovery-store. The roster, variables map and UMAP all key off
- * ``resultNrbIds`` so they refilter automatically.
+ * On every press it (a) snapshots the current filter-chip values into
+ * ``discovery-store.appliedFilters`` — that's what the roster/maps key
+ * off, so toggling chips alone does NOT refetch — and (b) resolves any
+ * active advanced searches (domain conditions + sequence) into an NRB id
+ * allow-list intersected with the filters.
  *
  * The chemical query path is not surfaced in v2 yet — it lives in P1.5b's
  * follow-up.
@@ -32,13 +34,28 @@ export function useRunNrbQuery() {
   const sequenceMinQcov = useQueryStore((s) => s.sequenceMinQcov);
 
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
+  const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
 
   const run = async () => {
     setError(null);
+
+    // Snapshot chip values → applied filters every time Run Query is
+    // pressed, regardless of whether an advanced query is also active.
+    const f = useFilterStore.getState();
+    setAppliedFilters({
+      sourceNames: f.sourceNames,
+      taxonomyPath: f.taxonomyPath,
+      bgcClass: f.bgcClass,
+      biomeLineage: f.biomeLineage,
+      assemblyAccession: f.assemblyAccession,
+      organism: f.search,
+    });
+
     if (domainConditions.length === 0 && !sequenceQuery.trim()) {
-      // Nothing to query — clear the filter and show the full roster.
+      // Filters-only run: clear any prior advanced-query allow-list so the
+      // roster reflects the new filter snapshot.
       setQueryResult(null, null);
-      toast.info("No query criteria — showing all NRBs");
+      toast.success("Filters applied");
       return;
     }
 

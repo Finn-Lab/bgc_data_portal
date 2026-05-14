@@ -44,9 +44,33 @@ interface DiscoveryState {
     similarity?: Record<number, number> | null,
   ) => void;
 
+  // Snapshot of filter-store values taken when the user last pressed Run
+  // Query. The roster/maps key off this — toggling a chip without pressing
+  // Run Query does NOT refetch.
+  appliedFilters: AppliedNrbFilters;
+  setAppliedFilters: (filters: AppliedNrbFilters) => void;
+
   // Convenience: clear all selections (e.g., on a fresh Run Query).
   clearSelections: () => void;
 }
+
+export interface AppliedNrbFilters {
+  sourceNames: string[];
+  taxonomyPath: string;
+  bgcClass: string;
+  biomeLineage: string;
+  assemblyAccession: string;
+  organism: string;
+}
+
+export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
+  sourceNames: [],
+  taxonomyPath: "",
+  bgcClass: "",
+  biomeLineage: "",
+  assemblyAccession: "",
+  organism: "",
+};
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   referenceNrbId: null,
@@ -76,6 +100,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       selectedCds: null,
     }),
 
+  appliedFilters: EMPTY_APPLIED_FILTERS,
+  setAppliedFilters: (filters) => set({ appliedFilters: filters }),
+
   clearSelections: () =>
     set({
       referenceNrbId: null,
@@ -83,5 +110,6 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       selectedCds: null,
       resultNrbIds: null,
       resultSimilarityById: null,
+      appliedFilters: EMPTY_APPLIED_FILTERS,
     }),
 }));

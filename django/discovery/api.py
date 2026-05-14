@@ -1035,7 +1035,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
         .values(
             "non_redundant_bgc_id", "is_validated",
             "assembly_id", "assembly__assembly_accession", "assembly__organism_name",
-            "contig__contig_accession",
+            "contig__accession",
         )
     )
     for r in rows:
@@ -1052,7 +1052,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
                 "organism_name": r["assembly__organism_name"],
             })()
         if not f["contig_accession"]:
-            f["contig_accession"] = r["contig__contig_accession"]
+            f["contig_accession"] = r["contig__accession"]
     return facts
 
 
@@ -1330,7 +1330,7 @@ def nrb_detail(request, nrb_id: int):
         size_kb=round((nrb.end_position - nrb.start_position) / 1000.0, 3),
         start_position=nrb.start_position,
         end_position=nrb.end_position,
-        contig_accession=nrb.contig.contig_accession if nrb.contig else None,
+        contig_accession=nrb.contig.accession if nrb.contig else None,
         source_tools=list(nrb.source_tools or []),
         novelty_score=nrb.novelty_score,
         domain_novelty=nrb.domain_novelty,
