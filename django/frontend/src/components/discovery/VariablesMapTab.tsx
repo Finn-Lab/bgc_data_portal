@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNrbScatter } from "@/api/nrbs";
-import { useDiscoveryStore } from "@/stores/discovery-store";
+import {
+  appliedFiltersToApiParams,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 import type { NrbScatterAxis } from "@/api/types";
 import {
   Select,
@@ -33,15 +36,18 @@ export function VariablesMapTab() {
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
+  const applied = useDiscoveryStore((s) => s.appliedFilters);
 
   const wantsSimilarity =
     xAxis === "similarity_score" || yAxis === "similarity_score";
   const useQueryAxes = wantsSimilarity && resultSimilarityById != null;
+  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
 
   // ── Scatter from /nrbs/scatter/ for stored axes ─────────────────────
   const { data: scatterData, isLoading, isError, error } = useQuery({
-    queryKey: ["nrb-scatter", xAxis, yAxis],
-    queryFn: () => fetchNrbScatter({ x_axis: xAxis, y_axis: yAxis }),
+    queryKey: ["nrb-scatter", xAxis, yAxis, filterParams],
+    queryFn: () =>
+      fetchNrbScatter({ x_axis: xAxis, y_axis: yAxis, ...filterParams }),
     enabled: !wantsSimilarity,
   });
 
@@ -69,10 +75,7 @@ export function VariablesMapTab() {
       });
     }
     if (!scatterData) return [];
-    const filtered = resultNrbIds
-      ? scatterData.filter((p) => resultNrbIds.includes(p.id))
-      : scatterData;
-    return filtered.map((p) => ({
+    return scatterData.map((p) => ({
       id: p.id,
       x: p.x,
       y: p.y,

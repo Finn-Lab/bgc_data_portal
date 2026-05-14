@@ -1081,10 +1081,16 @@ def _apply_nrb_filters(
     max_novelty: Optional[float] = None,
     min_domain_novelty: Optional[float] = None,
     max_domain_novelty: Optional[float] = None,
-    source_tools: Optional[str] = None,  # CSV, any-of (OR) semantics
+    detector_tools: Optional[str] = None,  # CSV; "any of" on NRB.source_tools JSON
+    source_tools: Optional[str] = None,    # Deprecated alias for detector_tools
+    source_names: Optional[str] = None,    # CSV of AssemblySource.name
+    assembly_type: Optional[str] = None,   # AssemblyType label (metagenome/genome/region)
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,     # CSV of ChemOnt class ids
+    bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,    # CSV of DashboardAssembly ids
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
@@ -1092,10 +1098,21 @@ def _apply_nrb_filters(
 ):
     """Apply NRB-level filters to a ``NonRedundantBGC`` queryset.
 
-    Used by ``/nrbs/roster/`` and by the NRB-collapsed query endpoints
-    (``/query/nrb-domain/``, ``/query/nrb-sequence/status/``) so the same
-    filter surface is available regardless of how the initial NRB id set
-    was produced.
+    Used by ``/nrbs/roster/``, ``/nrbs/umap/``, ``/nrbs/scatter/`` and the
+    NRB-collapsed query endpoints (``/query/nrb-domain/``,
+    ``/query/nrb-sequence/status/``) so the same filter surface is
+    available regardless of how the initial NRB id set was produced.
+
+    ``detector_tools`` filters on the NRB's ``source_tools`` JSON column
+    (which stores the contributing detection tools, e.g. ``antiSMASH``,
+    ``MIBiG``, ``GECCO``, ``SanntiS``). ``source_tools`` is kept as a
+    deprecated alias so old callers continue to work.
+
+    Joins through ``source_bgcs → assembly`` are used for
+    ``source_names``, ``assembly_type``, ``assembly_ids`` and
+    ``bgc_accession``; through ``source_bgcs → natural_product →
+    chemont_classes`` for ``chemont_ids``. All such filters apply
+    ``.distinct()``.
     """
     if nrb_ids is not None:
         qs = qs.filter(id__in=nrb_ids)
@@ -1117,29 +1134,96 @@ def _apply_nrb_filters(
         qs = qs.filter(domain_novelty__gte=min_domain_novelty)
     if max_domain_novelty is not None:
         qs = qs.filter(domain_novelty__lte=max_domain_novelty)
-    if source_tools:
-        tools = [t.strip() for t in source_tools.split(",") if t.strip()]
+    # ── Detector tools (NRB.source_tools JSON, "any of") ───────────────────
+    detector_csv = detector_tools or source_tools
+    if detector_csv:
+        tools = [t.strip() for t in detector_csv.split(",") if t.strip()]
         if tools:
             # JSONField "any of" — Postgres ?| operator: at least one tool
-            # in `tools` is present in the source_tools array.
+            # in `tools` is present in the NRB's source_tools array.
             tool_q = Q()
             for t in tools:
                 tool_q |= Q(source_tools__contains=[t])
             qs = qs.filter(tool_q)
+    if source_names:
+        names = [n.strip() for n in source_names.split(",") if n.strip()]
+        if names:
+            qs = qs.filter(
+                source_bgcs__assembly__source__name__in=names
+            ).distinct()
+    if assembly_type:
+        from discovery.models import AssemblyType
+        type_map = {v.label: v.value for v in AssemblyType}
+        key = assembly_type.strip().lower()
+        if key in type_map:
+            qs = qs.filter(
+                source_bgcs__assembly__assembly_type=type_map[key]
+            ).distinct()
     if leaf_path_prefix:
+        # leaf_path_prefix targets the cluster-family ltree on the NRB
+        # itself (e.g. "cluster.0042"); see ``ClusteringRun`` outputs.
         qs = qs.filter(
             Q(gene_cluster_family__istartswith=leaf_path_prefix + ".")
             | Q(gene_cluster_family__iexact=leaf_path_prefix)
         )
     if bgc_class:
+        # ``bgc_class`` is the chemical class (e.g. "Polyketide") served
+        # by /filters/bgc-classes/ and stored on each source BGC's
+        # ``classification_path`` ltree — NOT on the NRB's
+        # ``gene_cluster_family`` (which is the cluster path). Join
+        # through ``source_bgcs`` so the filter actually matches.
         qs = qs.filter(
-            Q(gene_cluster_family__istartswith=bgc_class + ".")
-            | Q(gene_cluster_family__iexact=bgc_class)
-        )
+            Q(source_bgcs__classification_path__istartswith=bgc_class + ".")
+            | Q(source_bgcs__classification_path__iexact=bgc_class)
+        ).distinct()
+    if chemont_ids:
+        ids = [c.strip() for c in chemont_ids.split(",") if c.strip()]
+        if ids:
+            qs = qs.filter(
+                source_bgcs__natural_products__chemont_classes__chemont_id__in=ids
+            ).distinct()
+    if bgc_accession:
+        # Reuse the assembly-side MGYB-aware semantics: structured accession
+        # → exact match; bare MGYBxxx region accession → match by region id
+        # or alias; everything else → substring.
+        acc = bgc_accession.strip()
+        upper = acc.upper()
+        if "." in upper and upper.startswith("MGYB"):
+            qs = qs.filter(source_bgcs__bgc_accession__iexact=acc).distinct()
+        elif upper.startswith("MGYB") and "." not in upper:
+            from discovery.models import RegionAccessionAlias
+            region_ids: set[int] = set()
+            try:
+                region_ids.add(int(upper.lstrip("MGYB")))
+            except ValueError:
+                pass
+            region_ids.update(
+                RegionAccessionAlias.objects.filter(
+                    alias_accession__iexact=upper
+                ).values_list("region_id", flat=True)
+            )
+            if region_ids:
+                qs = qs.filter(
+                    source_bgcs__region_id__in=region_ids
+                ).distinct()
+            else:
+                qs = qs.filter(
+                    source_bgcs__bgc_accession__icontains=acc
+                ).distinct()
+        else:
+            qs = qs.filter(
+                source_bgcs__bgc_accession__icontains=acc
+            ).distinct()
     if assembly_accession:
         qs = qs.filter(
             source_bgcs__assembly__assembly_accession__icontains=assembly_accession.strip()
         ).distinct()
+    if assembly_ids:
+        ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
+        if ids:
+            qs = qs.filter(source_bgcs__assembly_id__in=ids).distinct()
+        else:
+            qs = qs.none()
     if organism:
         qs = qs.filter(
             source_bgcs__assembly__organism_name__icontains=organism.strip()
@@ -1171,10 +1255,16 @@ def nrb_roster(
     max_novelty: Optional[float] = None,
     min_domain_novelty: Optional[float] = None,
     max_domain_novelty: Optional[float] = None,
-    source_tools: Optional[str] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
@@ -1202,10 +1292,16 @@ def nrb_roster(
         max_novelty=max_novelty,
         min_domain_novelty=min_domain_novelty,
         max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
         source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
@@ -1257,16 +1353,55 @@ def nrb_umap(
     request,
     include_partials: bool = True,
     max_points: int = 10_000,
+    validated_only: bool = False,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    nrb_ids: Optional[str] = None,
 ):
-    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords."""
+    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords.
+
+    Accepts the same filter surface as ``/nrbs/roster/`` so the v2 dashboard
+    can keep the UMAP map in lockstep with the roster after a Run Query.
+    """
+    parsed_ids: Optional[list[int]] = None
+    if nrb_ids:
+        parsed_ids = [
+            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+        ] or None
+
     qs = (
         NonRedundantBGC.objects
         .exclude(umap_x__isnull=True)
         .exclude(umap_y__isnull=True)
-        .order_by("id")
     )
-    if not include_partials:
-        qs = qs.filter(umap_projected=False)
+    qs = _apply_nrb_filters(
+        qs,
+        nrb_ids=parsed_ids,
+        include_partials=include_partials,
+        validated_only=validated_only,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    ).order_by("id")
 
     # Materialise once and downsample in Python — re-filtering with
     # ``id__in=[…]`` on a multi-thousand-id list trips the DEBUG SQL
@@ -1300,15 +1435,50 @@ def nrb_scatter(
     y_axis: str = "domain_novelty",
     include_partials: bool = True,
     max_points: int = 5_000,
+    validated_only: bool = False,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    nrb_ids: Optional[str] = None,
 ):
     if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
         raise HttpError(
             400, f"axes must be one of: {', '.join(sorted(_NRB_AXES))}"
         )
 
-    qs = NonRedundantBGC.objects.all()
-    if not include_partials:
-        qs = qs.filter(classification_run_id__isnull=False)
+    parsed_ids: Optional[list[int]] = None
+    if nrb_ids:
+        parsed_ids = [
+            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+        ] or None
+
+    qs = _apply_nrb_filters(
+        NonRedundantBGC.objects.all(),
+        nrb_ids=parsed_ids,
+        include_partials=include_partials,
+        validated_only=validated_only,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    )
 
     # similarity_score is not a stored column — only meaningful when supplied
     # by a similar-NRB or domain query. For the bare scatter endpoint, treat
@@ -1837,10 +2007,16 @@ def nrb_domain_query(
     max_novelty: Optional[float] = None,
     min_domain_novelty: Optional[float] = None,
     max_domain_novelty: Optional[float] = None,
-    source_tools: Optional[str] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
@@ -1894,10 +2070,16 @@ def nrb_domain_query(
         max_novelty=max_novelty,
         min_domain_novelty=min_domain_novelty,
         max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
         source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
@@ -1934,10 +2116,16 @@ def nrb_sequence_query_status(
     max_novelty: Optional[float] = None,
     min_domain_novelty: Optional[float] = None,
     max_domain_novelty: Optional[float] = None,
-    source_tools: Optional[str] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
     leaf_path_prefix: Optional[str] = None,
     bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
     assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
@@ -2002,10 +2190,16 @@ def nrb_sequence_query_status(
         max_novelty=max_novelty,
         min_domain_novelty=min_domain_novelty,
         max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
         source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
         leaf_path_prefix=leaf_path_prefix,
         bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
         assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,

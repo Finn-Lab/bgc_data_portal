@@ -16,10 +16,17 @@ export interface NrbFilterParams {
   max_novelty?: number;
   min_domain_novelty?: number;
   max_domain_novelty?: number;
+  detector_tools?: string;
+  /** @deprecated use detector_tools — kept for backward compat */
   source_tools?: string;
+  source_names?: string;
+  assembly_type?: string;
   leaf_path_prefix?: string;
   bgc_class?: string;
+  chemont_ids?: string;
+  bgc_accession?: string;
   assembly_accession?: string;
+  assembly_ids?: string;
   organism?: string;
   biome_lineage?: string;
   taxonomy_path?: string;
@@ -103,9 +110,10 @@ export function fetchNrbDetail(nrbId: number) {
   return apiGet<NrbDetail>(`/nrbs/${nrbId}/`);
 }
 
-export interface NrbUmapParams {
-  include_partials?: boolean;
+export interface NrbUmapParams extends NrbFilterParams {
   max_points?: number;
+  /** Comma-separated NRB ids — restricts the UMAP to this allow-list. */
+  nrb_ids?: string;
 }
 
 export function fetchNrbUmap(params: NrbUmapParams = {}) {
@@ -115,11 +123,12 @@ export function fetchNrbUmap(params: NrbUmapParams = {}) {
   );
 }
 
-export interface NrbScatterParams {
+export interface NrbScatterParams extends NrbFilterParams {
   x_axis?: NrbScatterAxis;
   y_axis?: NrbScatterAxis;
-  include_partials?: boolean;
   max_points?: number;
+  /** Comma-separated NRB ids — restricts the scatter to this allow-list. */
+  nrb_ids?: string;
 }
 
 export function fetchNrbScatter(params: NrbScatterParams = {}) {

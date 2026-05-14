@@ -41,13 +41,20 @@ export function useRunNrbQuery() {
 
     // Snapshot chip values → applied filters every time Run Query is
     // pressed, regardless of whether an advanced query is also active.
+    // Every chip in FilterPanel must be represented here, otherwise its
+    // value is silently discarded between presses.
     const f = useFilterStore.getState();
     setAppliedFilters({
       sourceNames: f.sourceNames,
+      detectorTools: f.detectorTools,
+      assemblyType: f.assemblyType,
       taxonomyPath: f.taxonomyPath,
       bgcClass: f.bgcClass,
+      chemontIds: f.chemontIds,
       biomeLineage: f.biomeLineage,
+      bgcAccession: f.bgcAccession,
       assemblyAccession: f.assemblyAccession,
+      assemblyIds: f.assemblyIds,
       organism: f.search,
     });
 

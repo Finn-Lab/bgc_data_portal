@@ -56,21 +56,69 @@ interface DiscoveryState {
 
 export interface AppliedNrbFilters {
   sourceNames: string[];
+  detectorTools: string[];
+  assemblyType: string;
   taxonomyPath: string;
   bgcClass: string;
+  chemontIds: string[];
   biomeLineage: string;
+  bgcAccession: string;
   assemblyAccession: string;
+  assemblyIds: string;
   organism: string;
 }
 
 export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
   sourceNames: [],
+  detectorTools: [],
+  assemblyType: "",
   taxonomyPath: "",
   bgcClass: "",
+  chemontIds: [],
   biomeLineage: "",
+  bgcAccession: "",
   assemblyAccession: "",
+  assemblyIds: "",
   organism: "",
 };
+
+/**
+ * Build the NRB API query-string surface from an applied-filter snapshot
+ * plus the optional Run Query allow-list. Empty values are dropped so the
+ * resulting object only carries active params (cleaner cache keys and URLs).
+ *
+ * Used by ``NrbRosterTable``, the UMAP hook and the Variables-Map scatter
+ * hook so all three stay in lockstep with the same filter contract.
+ */
+export function appliedFiltersToApiParams(
+  applied: AppliedNrbFilters,
+  resultNrbIds: number[] | null = null,
+): Record<string, string> {
+  const params: Record<string, string> = {};
+  if (applied.sourceNames.length > 0) {
+    params.source_names = applied.sourceNames.join(",");
+  }
+  if (applied.detectorTools.length > 0) {
+    params.detector_tools = applied.detectorTools.join(",");
+  }
+  if (applied.assemblyType) params.assembly_type = applied.assemblyType;
+  if (applied.taxonomyPath) params.taxonomy_path = applied.taxonomyPath;
+  if (applied.bgcClass) params.bgc_class = applied.bgcClass;
+  if (applied.chemontIds.length > 0) {
+    params.chemont_ids = applied.chemontIds.join(",");
+  }
+  if (applied.biomeLineage) params.biome_lineage = applied.biomeLineage;
+  if (applied.bgcAccession) params.bgc_accession = applied.bgcAccession;
+  if (applied.assemblyAccession) {
+    params.assembly_accession = applied.assemblyAccession;
+  }
+  if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
+  if (applied.organism) params.organism = applied.organism;
+  if (resultNrbIds && resultNrbIds.length > 0) {
+    params.nrb_ids = resultNrbIds.join(",");
+  }
+  return params;
+}
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   referenceNrbId: null,

@@ -14,7 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
-import { useDiscoveryStore } from "@/stores/discovery-store";
+import {
+  appliedFiltersToApiParams,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 import { NrbContextMenu } from "./NrbContextMenu";
 
 type SortKey = "novelty_score" | "domain_novelty" | "size_kb" | "id";
@@ -47,23 +50,12 @@ export function NrbRosterTable() {
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
 
-  const nrbIdsCsv = resultNrbIds ? resultNrbIds.join(",") : undefined;
-  const filterParams = {
-    source_tools:
-      applied.sourceNames.length > 0
-        ? applied.sourceNames.join(",")
-        : undefined,
-    taxonomy_path: applied.taxonomyPath || undefined,
-    bgc_class: applied.bgcClass || undefined,
-    biome_lineage: applied.biomeLineage || undefined,
-    assembly_accession: applied.assemblyAccession || undefined,
-    organism: applied.organism || undefined,
-  };
+  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
 
   // Reset to page 1 whenever the applied filter set or result allow-list
   // changes — otherwise a deep-page user could see an empty page after
   // narrowing filters.
-  const filterKey = JSON.stringify({ ...filterParams, nrbIdsCsv });
+  const filterKey = JSON.stringify(filterParams);
   useEffect(() => {
     setPage(1);
   }, [filterKey]);
@@ -74,7 +66,6 @@ export function NrbRosterTable() {
       pageSize,
       sortBy,
       order,
-      nrbIdsCsv,
       filterParams,
     ],
     queryFn: () =>
@@ -83,7 +74,6 @@ export function NrbRosterTable() {
         page_size: pageSize,
         sort_by: sortBy,
         order,
-        nrb_ids: nrbIdsCsv,
         ...filterParams,
       }),
   });

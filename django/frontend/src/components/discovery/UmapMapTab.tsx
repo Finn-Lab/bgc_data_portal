@@ -2,7 +2,10 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchNrbUmap } from "@/api/nrbs";
 import { Loader2 } from "lucide-react";
-import { useDiscoveryStore } from "@/stores/discovery-store";
+import {
+  appliedFiltersToApiParams,
+  useDiscoveryStore,
+} from "@/stores/discovery-store";
 import { NrbScatterPlot } from "./NrbScatterPlot";
 
 export function UmapMapTab() {
@@ -10,18 +13,19 @@ export function UmapMapTab() {
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
+  const applied = useDiscoveryStore((s) => s.appliedFilters);
+
+  const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["nrb-umap"],
-    queryFn: () => fetchNrbUmap({ include_partials: true }),
+    queryKey: ["nrb-umap", filterParams],
+    queryFn: () =>
+      fetchNrbUmap({ include_partials: true, ...filterParams }),
   });
 
   const points = useMemo(() => {
     if (!data) return [];
-    const filtered = resultNrbIds
-      ? data.filter((p) => resultNrbIds.includes(p.id))
-      : data;
-    return filtered.map((p) => ({
+    return data.map((p) => ({
       id: p.id,
       x: p.umap_x,
       y: p.umap_y,
@@ -33,7 +37,7 @@ export function UmapMapTab() {
       label: p.label,
       similarity_score: resultSimilarityById?.[p.id] ?? null,
     }));
-  }, [data, resultNrbIds, resultSimilarityById]);
+  }, [data, resultSimilarityById]);
 
   return (
     <div className="flex h-full flex-col p-3">

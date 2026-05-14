@@ -9,7 +9,9 @@ import { BiomeLineageFilter } from "./BiomeLineageFilter";
 import { BgcClassFilter } from "./BgcClassFilter";
 import { ChemOntClassFilter } from "./ChemOntClassFilter";
 import { AccessionsFilter } from "./AccessionsFilter";
-import { AdvancedQuerySheet } from "./AdvancedQuerySheet";
+import { DomainsFilter } from "./DomainsFilter";
+import { SequenceFilter } from "./SequenceFilter";
+import { ChemicalStructureFilter } from "./ChemicalStructureFilter";
 import { useFilterStore } from "@/stores/filter-store";
 import { useModeStore } from "@/stores/mode-store";
 
@@ -42,7 +44,9 @@ export function FilterPanel() {
       {mode === "query" && (
         <>
           <AccessionsFilter />
-          <AdvancedQuerySheet />
+          <DomainsFilter />
+          <SequenceFilter />
+          <ChemicalStructureFilter />
         </>
       )}
 
