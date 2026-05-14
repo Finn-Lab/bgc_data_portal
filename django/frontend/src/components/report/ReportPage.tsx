@@ -176,10 +176,7 @@ function ReportHeader({ payload }: { payload: ReportPayload }) {
         <div>
           <h1 className="text-2xl font-semibold">BGC Shortlist Report</h1>
           <p className="text-xs text-muted-foreground">
-            {payload.n_nrbs} NRB(s) · {payload.n_assemblies} assembly(ies) ·
-            generated {new Date(payload.generated_at).toLocaleString()} ·
-            cache expires{" "}
-            {new Date(payload.expires_at).toLocaleString()}
+            {payload.n_nrbs} NRB(s) · {payload.n_assemblies} assembly(ies)
           </p>
         </div>
         <ReportDownloadButtons
@@ -461,17 +458,23 @@ function DomainGoslimHeatmapPanel({ matrix }: { matrix: DomainGoslimMatrix }) {
               gridTemplateColumns: `minmax(80px, auto) repeat(${matrix.categories.length}, minmax(40px, 1fr))`,
             }}
           >
-            {/* Header row */}
-            <div />
+            {/* Header row — vertical labels so long GO slim names fit */}
+            <div className="h-32" />
             {matrix.categories.map((cat) => (
               <div
                 key={`hdr-${cat}`}
-                className="px-1 pb-2 text-center text-[10px] font-medium text-muted-foreground"
+                className="flex h-32 items-end justify-center pb-1"
                 title={cat}
               >
-                <div className="-rotate-45 origin-bottom-left whitespace-nowrap">
+                <span
+                  className="whitespace-nowrap text-[10px] font-medium text-muted-foreground"
+                  style={{
+                    writingMode: "vertical-rl",
+                    transform: "rotate(180deg)",
+                  }}
+                >
                   {cat}
-                </div>
+                </span>
               </div>
             ))}
             {/* Tier rows */}
