@@ -31,6 +31,7 @@ export function UmapMapTab() {
       y: p.umap_y,
       is_partial: p.is_partial,
       is_validated: p.is_validated,
+      is_type_strain: p.is_type_strain,
       umap_projected: p.umap_projected,
       classification_path: p.classification_path,
       novelty_score: p.novelty_score,
@@ -56,7 +57,6 @@ export function UmapMapTab() {
             points={points}
             xLabel="UMAP 1"
             yLabel="UMAP 2"
-            flagProjected
           />
         )}
       </div>

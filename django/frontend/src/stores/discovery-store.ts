@@ -10,6 +10,16 @@ import type { NrbScatterAxis, RegionCds } from "@/api/types";
 
 export type ResultsTab = "roster" | "variables" | "umap";
 
+/** Which advanced-query path produced the current ``resultNrbIds`` set.
+ *  Lets the roster swap the "Sim." column for sequence-search-specific
+ *  columns. ``null`` = no advanced query (filter-only run or fresh load). */
+export type SearchSource =
+  | "sequence"
+  | "domain"
+  | "chemical"
+  | "similar_nrb"
+  | null;
+
 interface DiscoveryState {
   // Reference NRB (top-right detail card, pinned across left-clicks).
   referenceNrbId: number | null;
@@ -39,9 +49,18 @@ interface DiscoveryState {
   /** Optional NRB → similarity-score lookup populated by sequence/domain
    *  queries; used to colour scatter points by score. */
   resultSimilarityById: Record<number, number> | null;
+  /** Optional NRB → best-hit protein_id lookup populated by sequence
+   *  protein search; overlaid onto roster rows since the standard
+   *  ``/nrbs/roster/`` endpoint does not carry per-query data. */
+  resultBestHitProteinById: Record<number, string> | null;
+  /** Which advanced-query path produced ``resultNrbIds``; toggles the
+   *  bitscore + best-hit-protein columns in the roster. */
+  searchSource: SearchSource;
   setQueryResult: (
     ids: number[] | null,
     similarity?: Record<number, number> | null,
+    source?: SearchSource,
+    bestHitProtein?: Record<number, string> | null,
   ) => void;
 
   // Snapshot of filter-store values taken when the user last pressed Run
@@ -139,10 +158,19 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
 
   resultNrbIds: null,
   resultSimilarityById: null,
-  setQueryResult: (ids, similarity = null) =>
+  resultBestHitProteinById: null,
+  searchSource: null,
+  setQueryResult: (
+    ids,
+    similarity = null,
+    source = null,
+    bestHitProtein = null,
+  ) =>
     set({
       resultNrbIds: ids,
       resultSimilarityById: similarity,
+      resultBestHitProteinById: bestHitProtein,
+      searchSource: source,
       // A fresh query resets compare/protein selections.
       compareNrbId: null,
       selectedCds: null,
@@ -158,6 +186,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
       selectedCds: null,
       resultNrbIds: null,
       resultSimilarityById: null,
+      resultBestHitProteinById: null,
+      searchSource: null,
       appliedFilters: EMPTY_APPLIED_FILTERS,
     }),
 }));

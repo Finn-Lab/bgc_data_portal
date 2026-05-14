@@ -9,6 +9,7 @@ interface NrbPoint {
   y: number;
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   umap_projected: boolean;
   classification_path?: string | null;
   novelty_score?: number | null;
@@ -21,8 +22,6 @@ interface Props {
   points: NrbPoint[];
   xLabel: string;
   yLabel: string;
-  /** When true (UMAP), partial-projected points use a hollow marker. */
-  flagProjected?: boolean;
 }
 
 /**
@@ -38,19 +37,14 @@ interface Props {
  *  Plotly events fire with the point's `customdata` so we route every
  *  click through the underlying NRB id.
  */
-export function NrbScatterPlot({
-  points,
-  xLabel,
-  yLabel,
-  flagProjected = false,
-}: Props) {
+export function NrbScatterPlot({ points, xLabel, yLabel }: Props) {
   const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
   const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
   const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
 
   const traces = useMemo(
-    () => buildTraces(points, flagProjected, referenceNrbId, compareNrbId),
-    [points, flagProjected, referenceNrbId, compareNrbId],
+    () => buildTraces(points, referenceNrbId, compareNrbId),
+    [points, referenceNrbId, compareNrbId],
   );
 
   if (points.length === 0) {
@@ -115,18 +109,19 @@ function CtxMenuOverlay({ nrbId }: { nrbId: number | null }) {
 
 function buildTraces(
   points: NrbPoint[],
-  flagProjected: boolean,
   referenceNrbId: number | null,
   compareNrbId: number | null,
 ) {
+  // Three mutually-exclusive classes: Validated wins over Type Strain when
+  // both flags are true (per design — Validated is the stronger signal).
   const validated: NrbPoint[] = [];
-  const primary: NrbPoint[] = [];
-  const projected: NrbPoint[] = [];
+  const typeStrain: NrbPoint[] = [];
+  const other: NrbPoint[] = [];
 
   for (const p of points) {
     if (p.is_validated) validated.push(p);
-    else if (flagProjected && p.umap_projected) projected.push(p);
-    else primary.push(p);
+    else if (p.is_type_strain) typeStrain.push(p);
+    else other.push(p);
   }
 
   const baseHover = (p: NrbPoint) =>
@@ -173,19 +168,20 @@ function buildTraces(
   // which the inferred toTrace return type does not). Widen the element
   // type so both flavours can live in the same array without TS noise.
   const traces: Record<string, unknown>[] = [];
-  if (primary.length) traces.push(toTrace(primary, "Primary", "#3b82f6", {}));
+  // Render order: Other first so the more important classes draw on top.
+  if (other.length) traces.push(toTrace(other, "Other", "#94a3b8", {}));
+  if (typeStrain.length)
+    traces.push(
+      toTrace(typeStrain, "Type Strain", "#018786", {
+        symbol: "square",
+        size: 8,
+      }),
+    );
   if (validated.length)
     traces.push(
       toTrace(validated, "Validated", "#16a34a", {
         symbol: "diamond",
         size: 9,
-      }),
-    );
-  if (projected.length)
-    traces.push(
-      toTrace(projected, "Projected partial", "#f97316", {
-        symbol: "circle-open",
-        size: 7,
       }),
     );
 

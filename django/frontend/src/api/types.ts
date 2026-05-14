@@ -542,12 +542,14 @@ export interface NrbRosterItem {
   domain_novelty: number | null;
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   umap_projected: boolean;
   parent_assembly_id: number | null;
   parent_assembly_accession: string | null;
   organism_name: string | null;
   contig_accession: string | null;
   similarity_score: number | null;
+  best_hit_protein_id: string | null;
 }
 
 export interface PaginatedNrbRosterResponse {
@@ -577,6 +579,7 @@ export interface NrbDetail {
   domain_novelty: number | null;
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   umap_projected: boolean;
   umap_x: number | null;
   umap_y: number | null;
@@ -596,6 +599,7 @@ export interface NrbScatterPoint {
   domain_novelty: number | null;
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   umap_projected: boolean;
   similarity_score: number | null;
 }
@@ -609,6 +613,7 @@ export interface NrbUmapPoint {
   novelty_score: number | null;
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   umap_projected: boolean;
 }
 
@@ -691,6 +696,7 @@ export interface ReportNrbRow {
   source_tools: string[];
   is_partial: boolean;
   is_validated: boolean;
+  is_type_strain: boolean;
   parent_assembly_accession: string | null;
   parent_assembly_id: number | null;
   organism_name: string | null;

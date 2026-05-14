@@ -61,7 +61,7 @@ export function useRunNrbQuery() {
     if (domainConditions.length === 0 && !sequenceQuery.trim()) {
       // Filters-only run: clear any prior advanced-query allow-list so the
       // roster reflects the new filter snapshot.
-      setQueryResult(null, null);
+      setQueryResult(null, null, null, null);
       toast.success("Filters applied");
       return;
     }
@@ -70,6 +70,7 @@ export function useRunNrbQuery() {
     try {
       const idSets: Set<number>[] = [];
       const similarities: Record<number, number> = {};
+      const bestHitProtein: Record<number, string> = {};
 
       // ── Domain branch ─────────────────────────────────────────────────
       if (domainConditions.length > 0) {
@@ -114,6 +115,9 @@ export function useRunNrbQuery() {
             // bitscore when both inputs hit the same NRB.
             similarities[item.id] = item.similarity_score;
           }
+          if (item.best_hit_protein_id) {
+            bestHitProtein[item.id] = item.best_hit_protein_id;
+          }
         }
       }
 
@@ -129,7 +133,22 @@ export function useRunNrbQuery() {
         );
       }
 
-      setQueryResult(intersection, similarities);
+      // When sequence search is one of the branches, label the result
+      // set as "sequence" so the roster shows bitscore + best-hit
+      // protein columns. Domain-only runs keep the standard similarity
+      // column. Mixed runs prefer the sequence label since that path
+      // carries the more useful per-NRB metadata.
+      const source: "sequence" | "domain" | null = sequenceQuery.trim()
+        ? "sequence"
+        : domainConditions.length > 0
+          ? "domain"
+          : null;
+      setQueryResult(
+        intersection,
+        similarities,
+        source,
+        source === "sequence" ? bestHitProtein : null,
+      );
       toast.success(`Query returned ${intersection.length} NRB(s)`);
     } catch (e) {
       const err = e as Error;

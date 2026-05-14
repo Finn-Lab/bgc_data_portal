@@ -118,7 +118,15 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
           <h3 className="font-mono text-sm font-semibold">{nrb.label}</h3>
           {nrb.is_validated && (
             <Badge variant="default" className="text-[10px]">
-              MIBiG
+              Validated
+            </Badge>
+          )}
+          {nrb.is_type_strain && (
+            <Badge
+              className="text-[10px] text-white border-transparent"
+              style={{ backgroundColor: "#018786" }}
+            >
+              Type Strain
             </Badge>
           )}
           {nrb.umap_projected && (

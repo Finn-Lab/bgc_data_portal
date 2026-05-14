@@ -220,7 +220,15 @@ function NrbResultsSection({ rows }: { rows: ReportNrbRow[] }) {
                     {r.label}
                     {r.is_validated && (
                       <Badge variant="default" className="ml-1 text-[10px]">
-                        MIBiG
+                        Validated
+                      </Badge>
+                    )}
+                    {r.is_type_strain && (
+                      <Badge
+                        className="ml-1 text-[10px] text-white border-transparent"
+                        style={{ backgroundColor: "#018786" }}
+                      >
+                        Type Strain
                       </Badge>
                     )}
                     {r.is_partial && (

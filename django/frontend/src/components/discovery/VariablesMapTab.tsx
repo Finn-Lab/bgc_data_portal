@@ -75,6 +75,7 @@ export function VariablesMapTab() {
       y: number;
       is_partial: boolean;
       is_validated: boolean;
+      is_type_strain: boolean;
       umap_projected: boolean;
       classification_path?: string | null;
       novelty_score?: number | null;
@@ -94,6 +95,7 @@ export function VariablesMapTab() {
           y: yAxis === "similarity_score" ? sim : sim,
           is_partial: false,
           is_validated: false,
+          is_type_strain: false,
           umap_projected: false,
           similarity_score: sim,
         };
@@ -105,6 +107,7 @@ export function VariablesMapTab() {
         y: p.y,
         is_partial: p.is_partial,
         is_validated: p.is_validated,
+        is_type_strain: p.is_type_strain,
         umap_projected: p.umap_projected,
         classification_path: p.classification_path,
         novelty_score: p.novelty_score,
@@ -132,6 +135,7 @@ export function VariablesMapTab() {
             y,
             is_partial: refDetail.is_partial,
             is_validated: refDetail.is_validated,
+            is_type_strain: refDetail.is_type_strain,
             umap_projected: refDetail.umap_projected,
             classification_path: refDetail.classification_path,
             novelty_score: refDetail.novelty_score,

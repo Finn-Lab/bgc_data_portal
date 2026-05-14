@@ -739,7 +739,10 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
 
     for cds in cds_qs:
         pfam_rows = []
-        for bd in cds.domains.all():
+        # Sorted by start_position so the Protein Information card and the
+        # CDS hover tooltip both render domains in N→C order.
+        sorted_domains = sorted(cds.domains.all(), key=lambda d: d.start_position)
+        for bd in sorted_domains:
             pfam_rows.append(
                 PfamAnnotationOut(
                     accession=bd.domain_acc,
@@ -991,8 +994,10 @@ def _nrb_to_roster_item(
     parent_assembly: Optional[DashboardAssembly] = None,
     n_source_bgcs: int = 0,
     is_validated: bool = False,
+    is_type_strain: bool = False,
     contig_accession: Optional[str] = None,
     similarity_score: Optional[float] = None,
+    best_hit_protein_id: Optional[str] = None,
 ) -> NrbRosterItem:
     return NrbRosterItem(
         id=nrb.id,
@@ -1005,6 +1010,7 @@ def _nrb_to_roster_item(
         domain_novelty=nrb.domain_novelty,
         is_partial=_nrb_is_partial(nrb),
         is_validated=is_validated,
+        is_type_strain=is_type_strain,
         umap_projected=nrb.umap_projected,
         parent_assembly_id=parent_assembly.id if parent_assembly else None,
         parent_assembly_accession=(
@@ -1013,6 +1019,7 @@ def _nrb_to_roster_item(
         organism_name=parent_assembly.organism_name if parent_assembly else None,
         contig_accession=contig_accession,
         similarity_score=similarity_score,
+        best_hit_protein_id=best_hit_protein_id,
     )
 
 
@@ -1024,7 +1031,11 @@ _MEMBER_FACTS_CHUNK = 500
 
 def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
     """Return per-NRB aggregates: ``n_source_bgcs``, ``is_validated``,
-    ``parent_assembly``, ``contig_accession``.
+    ``is_type_strain``, ``parent_assembly``, ``contig_accession``.
+
+    ``is_type_strain`` is ORed across every member BGC's parent assembly so
+    an NRB is flagged whenever *any* of its source BGCs sits on a
+    type-strain assembly. Mirrors the ``is_validated`` accumulator.
 
     The DashboardBgc lookup is chunked so the generated SQL stays under the
     DEBUG-mode SQL formatter's token limit on large id lists (umap / scatter
@@ -1034,6 +1045,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
         nid: {
             "n_source_bgcs": 0,
             "is_validated": False,
+            "is_type_strain": False,
             "parent_assembly": None,
             "contig_accession": None,
         }
@@ -1049,6 +1061,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
                 "non_redundant_bgc_id", "is_validated",
                 "assembly_id", "assembly__assembly_accession",
                 "assembly__organism_name",
+                "assembly__is_type_strain",
                 "contig__accession",
             )
         )
@@ -1059,6 +1072,9 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
                 continue
             f["n_source_bgcs"] += 1
             f["is_validated"] = f["is_validated"] or bool(r["is_validated"])
+            f["is_type_strain"] = (
+                f["is_type_strain"] or bool(r["assembly__is_type_strain"])
+            )
             if f["parent_assembly"] is None and r["assembly_id"]:
                 f["parent_assembly"] = type("AsmStub", (), {
                     "id": r["assembly_id"],
@@ -1336,6 +1352,7 @@ def nrb_roster(
             parent_assembly=facts[nrb.id]["parent_assembly"],
             n_source_bgcs=facts[nrb.id]["n_source_bgcs"],
             is_validated=facts[nrb.id]["is_validated"],
+            is_type_strain=facts[nrb.id]["is_type_strain"],
             contig_accession=facts[nrb.id]["contig_accession"],
         )
         for nrb in page_qs
@@ -1422,6 +1439,7 @@ def nrb_umap(
             novelty_score=nrb.novelty_score,
             is_partial=_nrb_is_partial(nrb),
             is_validated=facts[nrb.id]["is_validated"],
+            is_type_strain=facts[nrb.id]["is_type_strain"],
             umap_projected=nrb.umap_projected,
         )
         for nrb in all_nrbs
@@ -1525,6 +1543,7 @@ def nrb_scatter(
                 is_partial=not facts[nrb.id]["is_validated"]
                            and nrb.classification_run_id is None,
                 is_validated=facts[nrb.id]["is_validated"],
+                is_type_strain=facts[nrb.id]["is_type_strain"],
                 umap_projected=nrb.umap_projected,
             )
         )
@@ -1550,6 +1569,10 @@ def nrb_detail(request, nrb_id: int):
     )
     members = list(member_qs)
     is_validated = any(m.is_validated for m in members)
+    is_type_strain = any(
+        m.assembly is not None and m.assembly.is_type_strain
+        for m in members
+    )
 
     parent = None
     if members:
@@ -1633,6 +1656,7 @@ def nrb_detail(request, nrb_id: int):
         domain_novelty=nrb.domain_novelty,
         is_partial=_nrb_is_partial(nrb),
         is_validated=is_validated,
+        is_type_strain=is_type_strain,
         umap_projected=nrb.umap_projected,
         umap_x=nrb.umap_x,
         umap_y=nrb.umap_y,
@@ -1716,6 +1740,7 @@ def similar_nrb_query(
             parent_assembly=facts[nid]["parent_assembly"],
             n_source_bgcs=facts[nid]["n_source_bgcs"],
             is_validated=facts[nid]["is_validated"],
+            is_type_strain=facts[nid]["is_type_strain"],
             contig_accession=facts[nid]["contig_accession"],
             similarity_score=round(sim_lookup[nid], 4),
         )
@@ -1979,6 +2004,7 @@ def _nrb_roster_page_response(
     page: int,
     page_size: int,
     similarity_lookup: Optional[dict[int, float]] = None,
+    best_hit_protein_lookup: Optional[dict[int, str]] = None,
 ) -> PaginatedNrbRosterResponse:
     """Sort, paginate, and serialise a filtered ``NonRedundantBGC`` queryset.
 
@@ -1987,6 +2013,8 @@ def _nrb_roster_page_response(
     ``similarity_lookup`` is an optional ``{nrb_id: score}`` map that gets
     stamped onto each ``NrbRosterItem.similarity_score`` (used by the
     query endpoints; ``/nrbs/roster/`` leaves it null).
+    ``best_hit_protein_lookup`` is filled only by the sequence-search
+    endpoint and carries the protein_id of the winning CDS per NRB.
     """
     sort_map = {
         "novelty_score": "novelty_score",
@@ -2014,8 +2042,13 @@ def _nrb_roster_page_response(
                 parent_assembly=facts[n.id]["parent_assembly"],
                 n_source_bgcs=facts[n.id]["n_source_bgcs"],
                 is_validated=facts[n.id]["is_validated"],
+                is_type_strain=facts[n.id]["is_type_strain"],
                 contig_accession=facts[n.id]["contig_accession"],
                 similarity_score=similarity_lookup.get(n.id),
+                best_hit_protein_id=(
+                    best_hit_protein_lookup.get(n.id)
+                    if best_hit_protein_lookup else None
+                ),
             )
             for n in page_rows
         ]
@@ -2043,9 +2076,14 @@ def _nrb_roster_page_response(
             parent_assembly=facts[n.id]["parent_assembly"],
             n_source_bgcs=facts[n.id]["n_source_bgcs"],
             is_validated=facts[n.id]["is_validated"],
+            is_type_strain=facts[n.id]["is_type_strain"],
             contig_accession=facts[n.id]["contig_accession"],
             similarity_score=(
                 similarity_lookup.get(n.id) if similarity_lookup else None
+            ),
+            best_hit_protein_id=(
+                best_hit_protein_lookup.get(n.id)
+                if best_hit_protein_lookup else None
             ),
         )
         for n in page_qs
@@ -2227,7 +2265,7 @@ def nrb_sequence_query_status(
         raise HttpError(503, "Sequence search still running")
 
     raw_result = res.result or {}
-    bgc_metrics: dict[int, dict[str, float]] = {
+    bgc_metrics: dict[int, dict[str, float | str]] = {
         int(k): v for k, v in raw_result.items()
     }
     if not bgc_metrics:
@@ -2238,18 +2276,24 @@ def nrb_sequence_query_status(
             ),
         )
 
-    # Collapse BGC hits → NRB id with best bitscore.
+    # Collapse BGC hits → NRB id with best bitscore. Also carry the
+    # ``protein_id`` of the winning CDS so the roster can show which
+    # protein scored the best hit for each NRB.
     bgc_to_nrb = dict(
         DashboardBgc.objects.filter(id__in=bgc_metrics.keys())
         .values_list("id", "non_redundant_bgc_id")
     )
     nrb_best: dict[int, float] = {}
+    nrb_best_protein: dict[int, str] = {}
     for bgc_id, nrb_id in bgc_to_nrb.items():
         if nrb_id is None:
             continue
         bs = float(bgc_metrics[bgc_id].get("bitscore", 0.0))
         if bs > nrb_best.get(nrb_id, float("-inf")):
             nrb_best[nrb_id] = bs
+            pid = bgc_metrics[bgc_id].get("protein_id")
+            if pid:
+                nrb_best_protein[nrb_id] = str(pid)
 
     if not nrb_best:
         return PaginatedNrbRosterResponse(
@@ -2291,6 +2335,7 @@ def nrb_sequence_query_status(
         page=page,
         page_size=page_size,
         similarity_lookup=nrb_best,
+        best_hit_protein_lookup=nrb_best_protein,
     )
 
 

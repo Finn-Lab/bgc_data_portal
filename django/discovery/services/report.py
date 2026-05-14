@@ -93,6 +93,10 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
     for nrb in nrbs:
         mems = members_by_nrb.get(nrb.id, [])
         is_validated = any(m.is_validated for m in mems)
+        # ORed across all member assemblies — matches dashboard semantics.
+        is_type_strain = any(
+            m.assembly is not None and m.assembly.is_type_strain for m in mems
+        )
         first_asm = mems[0].assembly if mems else None
         if first_asm:
             assembly_ids.add(first_asm.id)
@@ -108,6 +112,7 @@ def build_report_payload(nrb_ids: list[int]) -> dict:
             "source_tools": list(nrb.source_tools or []),
             "is_partial": _is_partial(nrb),
             "is_validated": is_validated,
+            "is_type_strain": is_type_strain,
             "parent_assembly_accession": first_asm.assembly_accession if first_asm else None,
             "parent_assembly_id": first_asm.id if first_asm else None,
             "organism_name": first_asm.organism_name if first_asm else None,

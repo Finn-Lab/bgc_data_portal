@@ -22,18 +22,40 @@ import { NrbContextMenu } from "./NrbContextMenu";
 
 type SortKey = "novelty_score" | "domain_novelty" | "size_kb" | "id";
 
-const COLUMNS: {
-  key: SortKey | "label" | "tools" | "assembly" | "similarity";
-  label: string;
-}[] = [
-  { key: "label", label: "NRB" },
-  { key: "similarity", label: "Sim." },
+type ColumnKey =
+  | SortKey
+  | "label"
+  | "tools"
+  | "assembly"
+  | "similarity"
+  | "bitscore"
+  | "best_hit";
+
+const BASE_TAIL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "size_kb", label: "Size (kb)" },
   { key: "novelty_score", label: "Novelty" },
   { key: "domain_novelty", label: "Dom. nov." },
   { key: "tools", label: "Sources" },
   { key: "assembly", label: "Assembly" },
 ];
+
+function columnsFor(searchSource: string | null) {
+  // Sequence-search swaps the Sim. column for a Bitscore column and adds
+  // a Best hit column showing the protein_id of the winning CDS.
+  if (searchSource === "sequence") {
+    return [
+      { key: "label" as ColumnKey, label: "NRB" },
+      { key: "bitscore" as ColumnKey, label: "Bitscore" },
+      { key: "best_hit" as ColumnKey, label: "Best hit" },
+      ...BASE_TAIL_COLUMNS,
+    ];
+  }
+  return [
+    { key: "label" as ColumnKey, label: "NRB" },
+    { key: "similarity" as ColumnKey, label: "Sim." },
+    ...BASE_TAIL_COLUMNS,
+  ];
+}
 
 function fmtScore(v: number | null): string {
   return v == null ? "—" : v.toFixed(3);
@@ -48,7 +70,16 @@ export function NrbRosterTable() {
   const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
   const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const searchSource = useDiscoveryStore((s) => s.searchSource);
+  const resultSimilarityById = useDiscoveryStore(
+    (s) => s.resultSimilarityById,
+  );
+  const resultBestHitProteinById = useDiscoveryStore(
+    (s) => s.resultBestHitProteinById,
+  );
   const applied = useDiscoveryStore((s) => s.appliedFilters);
+
+  const COLUMNS = columnsFor(searchSource);
 
   const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
 
@@ -148,6 +179,13 @@ export function NrbRosterTable() {
                   key={nrb.id}
                   nrb={nrb}
                   selected={compareNrbId === nrb.id}
+                  searchSource={searchSource}
+                  similarityOverride={
+                    resultSimilarityById?.[nrb.id] ?? null
+                  }
+                  bestHitProteinOverride={
+                    resultBestHitProteinById?.[nrb.id] ?? null
+                  }
                   onSelect={() => setCompareNrbId(nrb.id)}
                 />
               ))}
@@ -178,10 +216,25 @@ export function NrbRosterTable() {
 interface NrbRosterRowProps {
   nrb: NrbRosterItem;
   selected: boolean;
+  searchSource: string | null;
+  /** Bitscore / Dice score from the active query, overlaid on the row
+   *  because ``/nrbs/roster/`` doesn't carry per-query metrics. */
+  similarityOverride: number | null;
+  bestHitProteinOverride: string | null;
   onSelect: () => void;
 }
 
-function NrbRosterRow({ nrb, selected, onSelect }: NrbRosterRowProps) {
+function NrbRosterRow({
+  nrb,
+  selected,
+  searchSource,
+  similarityOverride,
+  bestHitProteinOverride,
+  onSelect,
+}: NrbRosterRowProps) {
+  const isSeq = searchSource === "sequence";
+  const similarity = similarityOverride ?? nrb.similarity_score;
+  const bestHit = bestHitProteinOverride ?? nrb.best_hit_protein_id;
   return (
     <NrbContextMenu nrbId={nrb.id} nrbLabel={nrb.label}>
       <TableRow
@@ -197,7 +250,15 @@ function NrbRosterRow({ nrb, selected, onSelect }: NrbRosterRowProps) {
           {nrb.label}
           {nrb.is_validated && (
             <Badge variant="default" className="ml-2 h-4 px-1 text-[10px]">
-              MIBiG
+              Validated
+            </Badge>
+          )}
+          {nrb.is_type_strain && (
+            <Badge
+              className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"
+              style={{ backgroundColor: "#018786" }}
+            >
+              Type Strain
             </Badge>
           )}
           {nrb.umap_projected && (
@@ -206,9 +267,20 @@ function NrbRosterRow({ nrb, selected, onSelect }: NrbRosterRowProps) {
             </Badge>
           )}
         </TableCell>
-        <TableCell className="font-mono">
-          {nrb.similarity_score != null ? nrb.similarity_score.toFixed(3) : "—"}
-        </TableCell>
+        {isSeq ? (
+          <>
+            <TableCell className="font-mono">
+              {similarity != null ? similarity.toFixed(1) : "—"}
+            </TableCell>
+            <TableCell className="font-mono text-xs">
+              {bestHit ?? "—"}
+            </TableCell>
+          </>
+        ) : (
+          <TableCell className="font-mono">
+            {similarity != null ? similarity.toFixed(3) : "—"}
+          </TableCell>
+        )}
         <TableCell>{nrb.size_kb.toFixed(1)}</TableCell>
         <TableCell>{fmtScore(nrb.novelty_score)}</TableCell>
         <TableCell>{fmtScore(nrb.domain_novelty)}</TableCell>

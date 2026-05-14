@@ -346,14 +346,15 @@ def sequence_similarity_search(
     min_bitscore: float = 30.0,
     min_pident: float = 70.0,
     min_qcov: float = 70.0,
-) -> dict[int, dict[str, float]]:
+) -> dict[int, dict[str, float | str]]:
     """Run phmmer for a query protein against the on-disk reference DB and
     return BGCs that contain a matching protein passing all three filters.
 
-    Returns ``{bgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...}}``
-    where the values come from the highest-bitscore matched protein within
-    that BGC. The existing DESC sort on ``similarity_score`` continues to
-    work — ``similarity_score`` is set to ``bitscore`` at the API layer.
+    Returns ``{bgc_id: {"bitscore": ..., "pident": ..., "qcoverage": ...,
+    "protein_id": ...}}`` where the values come from the highest-bitscore
+    matched protein within that BGC. The existing DESC sort on
+    ``similarity_score`` continues to work — ``similarity_score`` is set to
+    ``bitscore`` at the API layer.
     """
     from discovery.models import DashboardCds
     from discovery.services.protein_search import phmmer_search
@@ -402,24 +403,27 @@ def sequence_similarity_search(
     cds_qs = (
         DashboardCds.objects
         .filter(protein_sha256__in=sha256_metrics.keys())
-        .values_list("bgc_id", "protein_sha256")
+        .values_list("bgc_id", "protein_sha256", "protein_id_str")
     )
 
-    # For each BGC, keep the metrics of its highest-bitscore matched protein.
-    bgc_best: dict[int, "ProteinHitMetrics"] = {}
-    for bgc_id, sha256 in cds_qs:
+    # For each BGC, keep the metrics + protein_id of its highest-bitscore
+    # matched protein. The protein_id flows out so the roster can show
+    # "which protein in the NRB scored the best hit".
+    bgc_best: dict[int, tuple["ProteinHitMetrics", str]] = {}
+    for bgc_id, sha256, protein_id in cds_qs:
         m = sha256_metrics[sha256]
         existing = bgc_best.get(bgc_id)
-        if existing is None or m.bitscore > existing.bitscore:
-            bgc_best[bgc_id] = m
+        if existing is None or m.bitscore > existing[0].bitscore:
+            bgc_best[bgc_id] = (m, protein_id)
 
-    bgc_scores: dict[int, dict[str, float]] = {
+    bgc_scores: dict[int, dict[str, float | str]] = {
         bgc_id: {
             "bitscore": float(m.bitscore),
             "pident": float(m.pident),
             "qcoverage": float(m.qcoverage),
+            "protein_id": protein_id,
         }
-        for bgc_id, m in bgc_best.items()
+        for bgc_id, (m, protein_id) in bgc_best.items()
     }
 
     log.info(

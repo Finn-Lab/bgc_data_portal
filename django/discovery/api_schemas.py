@@ -207,12 +207,16 @@ class NrbRosterItem(Schema):
     domain_novelty: Optional[float] = None
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False  # any source BGC sits on a type-strain assembly
     umap_projected: bool = False
     parent_assembly_id: Optional[int] = None
     parent_assembly_accession: Optional[str] = None
     organism_name: Optional[str] = None
     contig_accession: Optional[str] = None
     similarity_score: Optional[float] = None  # filled by similar-nrb / query
+    # Populated only by sequence-protein search responses — the protein_id
+    # of the highest-bitscore CDS within the NRB.
+    best_hit_protein_id: Optional[str] = None
 
 
 class PaginatedNrbRosterResponse(Schema):
@@ -244,6 +248,7 @@ class NrbDetail(Schema):
     domain_novelty: Optional[float] = None
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False
     umap_projected: bool = False
     umap_x: Optional[float] = None
     umap_y: Optional[float] = None
@@ -265,6 +270,7 @@ class NrbScatterPoint(Schema):
     domain_novelty: Optional[float] = None
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False
     umap_projected: bool = False
     similarity_score: Optional[float] = None
 
@@ -280,6 +286,7 @@ class NrbUmapPoint(Schema):
     novelty_score: Optional[float] = None
     is_partial: bool = False
     is_validated: bool = False
+    is_type_strain: bool = False
     umap_projected: bool = False
 
 
