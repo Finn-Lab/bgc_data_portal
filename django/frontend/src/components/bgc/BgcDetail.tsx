@@ -217,7 +217,7 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                       <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
                         <span className="max-w-[200px] truncate" title={np.smiles}>{np.smiles}</span>
                         <a
-                          href={`https://molview.org/?smiles=${encodeURIComponent(np.smiles)}`}
+                          href={`https://app.molview.com/?smiles=${encodeURIComponent(np.smiles)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="shrink-0 text-primary hover:underline"
