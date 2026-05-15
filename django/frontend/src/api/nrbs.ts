@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "./client";
 import type {
+  NrbCountResponse,
   NrbDetail,
   NrbScatterAxis,
   NrbScatterPoint,
@@ -49,6 +50,16 @@ export interface NrbRosterParams extends NrbFilterParams {
 export function fetchNrbRoster(params: NrbRosterParams = {}) {
   return apiGet<PaginatedNrbRosterResponse>(
     "/nrbs/roster/",
+    params as Record<string, string | number | boolean | undefined>,
+  );
+}
+
+/** Cheap COUNT over the NRB filter surface. Fired before the heavier
+ *  roster/UMAP/scatter calls to drive the empty-state guard and the
+ *  "Showing X of Y, sampled" banner. */
+export function fetchNrbCount(params: NrbFilterParams & { nrb_ids?: string } = {}) {
+  return apiGet<NrbCountResponse>(
+    "/nrbs/count/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
@@ -154,6 +165,38 @@ export function postSimilarNrbQuery(
   });
   return apiPost<PaginatedNrbRosterResponse>(
     `/query/similar-nrb/?${qs.toString()}`,
+    body,
+  );
+}
+
+export interface NrbArchitectureResponse {
+  id: number;
+  label: string;
+  ordered_accs: string[];
+}
+
+/** Pooled positional domain accessions for clipboard / copy actions. */
+export function fetchNrbArchitecture(nrbId: number) {
+  return apiGet<NrbArchitectureResponse>(`/nrbs/${nrbId}/architecture/`);
+}
+
+export interface NrbArchitectureQueryRequest {
+  architecture: string[];
+  weight: number;
+  k?: number;
+}
+
+export function postNrbArchitectureQuery(
+  body: NrbArchitectureQueryRequest,
+  page = 1,
+  pageSize = 25,
+) {
+  const qs = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return apiPost<PaginatedNrbRosterResponse>(
+    `/query/nrb-architecture/?${qs.toString()}`,
     body,
   );
 }

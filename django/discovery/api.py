@@ -46,6 +46,10 @@ from discovery.models import (
     NonRedundantBGC,
     PrecomputedStats,
 )
+from discovery.services.architecture import (
+    bgc_architecture,
+    nrb_architecture,
+)
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
     SequenceQueryAccepted,
@@ -75,6 +79,7 @@ from discovery.api_schemas import (
     DiscoveryStatsResponse,
     NaturalProductSummary,
     NpClassLevel,
+    NrbCountResponse,
     NrbDetail,
     NrbMemberBgc,
     NrbRosterItem,
@@ -89,6 +94,8 @@ from discovery.api_schemas import (
     ReportPayload,
     ReportSnapshotRequest,
     ReportSnapshotResponse,
+    NrbArchitectureQueryRequest,
+    NrbArchitectureResponse,
     SimilarNrbRequest,
     SourceOption,
     DetectorOption,
@@ -640,18 +647,21 @@ def bgc_detail(request, bgc_id: int):
     except DashboardBgc.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
-    # Domain architecture from BgcDomain (no positional data)
+    # Positional domain architecture pooled per BGC (PFAM + NCBIFAM hits,
+    # ordered by CDS start then domain start). Shared with the NRB-level
+    # rollup so the surfaced sequence matches what the clustering pipeline
+    # scored.
     domain_arch = [
         DomainArchitectureItem(
-            domain_acc=bd.domain_acc,
-            domain_name=bd.domain_name,
-            ref_db=bd.ref_db,
+            domain_acc=r["domain_acc"],
+            domain_name=r["domain_name"],
+            ref_db=r["ref_db"],
             start=0,
             end=0,
             score=None,
-            url=bd.url,
+            url=r["url"] or "",
         )
-        for bd in BgcDomain.objects.filter(bgc=bgc).order_by("domain_acc")
+        for r in bgc_architecture(bgc.id)
     ]
 
     # Parent assembly
@@ -967,6 +977,13 @@ _NRB_AXES = {
     "similarity_score",  # populated only from a similarity query context
 }
 
+# Soft cap applied uniformly across the dashboard's "show me all matching
+# NRBs" surfaces: /nrbs/umap/ (map points), /nrbs/scatter/ (Variables map
+# points), and the client-side top-K clip on scored query results. The
+# roster paginates and is *not* capped here. ``/nrbs/count/`` surfaces this
+# value so the UI can warn before firing the heavier requests.
+DASHBOARD_RESULT_CAP = 5_000
+
 
 def _nrb_label(nrb_id: int) -> str:
     return f"NRB-{nrb_id}"
@@ -1262,6 +1279,78 @@ def _apply_nrb_filters(
     return qs
 
 
+@discovery_router.get("/nrbs/count/", response=NrbCountResponse)
+def nrb_count(
+    request,
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias for detector_tools
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    nrb_ids: Optional[str] = None,
+):
+    """Cheap COUNT over the NRB filter surface.
+
+    The v2 dashboard hits this before firing /nrbs/roster/, /nrbs/umap/ and
+    /nrbs/scatter/ so it can (a) gate the empty-state CTA when no scope is
+    set and (b) warn the user when the result will be sampled by the maps
+    (count > ``DASHBOARD_RESULT_CAP``).
+    """
+    parsed_ids: Optional[list[int]] = None
+    if nrb_ids:
+        parsed_ids = [
+            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+        ] or None
+
+    qs = _apply_nrb_filters(
+        NonRedundantBGC.objects.all(),
+        nrb_ids=parsed_ids,
+        include_partials=include_partials,
+        validated_only=validated_only,
+        min_length_kb=min_length_kb,
+        max_length_kb=max_length_kb,
+        min_novelty=min_novelty,
+        max_novelty=max_novelty,
+        min_domain_novelty=min_domain_novelty,
+        max_domain_novelty=max_domain_novelty,
+        detector_tools=detector_tools,
+        source_tools=source_tools,
+        source_names=source_names,
+        assembly_type=assembly_type,
+        leaf_path_prefix=leaf_path_prefix,
+        bgc_class=bgc_class,
+        chemont_ids=chemont_ids,
+        bgc_accession=bgc_accession,
+        assembly_accession=assembly_accession,
+        assembly_ids=assembly_ids,
+        organism=organism,
+        biome_lineage=biome_lineage,
+        taxonomy_path=taxonomy_path,
+    )
+    total = qs.count()
+    return NrbCountResponse(
+        exact_count=total,
+        cap=DASHBOARD_RESULT_CAP,
+        will_sample=total > DASHBOARD_RESULT_CAP,
+    )
+
+
 @discovery_router.get("/nrbs/roster/", response=PaginatedNrbRosterResponse)
 def nrb_roster(
     request,
@@ -1375,7 +1464,7 @@ def nrb_roster(
 def nrb_umap(
     request,
     include_partials: bool = True,
-    max_points: int = 10_000,
+    max_points: int = DASHBOARD_RESULT_CAP,
     validated_only: bool = False,
     detector_tools: Optional[str] = None,
     source_tools: Optional[str] = None,  # deprecated alias for detector_tools
@@ -1424,15 +1513,18 @@ def nrb_umap(
         organism=organism,
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
-    ).order_by("id")
+    )
 
-    # Materialise once and downsample in Python — re-filtering with
-    # ``id__in=[…]`` on a multi-thousand-id list trips the DEBUG SQL
-    # formatter's 10k-token cap.
-    all_nrbs = list(qs)
-    if len(all_nrbs) > max_points:
-        stride = len(all_nrbs) // max_points + 1
-        all_nrbs = all_nrbs[::stride]
+    # Deterministic SQL-side stride: at multi-million-row scale we can't
+    # afford to materialise the full queryset and downsample in Python.
+    # ``id % stride = 0`` runs in the DB, returns the cap directly, and is
+    # reproducible across calls (so the UMAP doesn't flicker between
+    # refreshes).
+    total = qs.count()
+    if total > max_points:
+        stride = total // max_points + 1
+        qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
+    all_nrbs = list(qs.order_by("id"))
 
     facts = _nrb_member_facts([n.id for n in all_nrbs])
     return [
@@ -1526,9 +1618,13 @@ def nrb_scatter(
         n_cds=Subquery(n_cds_subq[:1]),
     )
 
+    # Deterministic SQL-side stride (same approach as /nrbs/umap/) — keeps
+    # the response reproducible across calls and avoids ``ORDER BY ?``,
+    # which is a full table sort at multi-million-row scale.
     total = qs.count()
     if total > max_points:
-        qs = qs.order_by("?")[:max_points]
+        stride = total // max_points + 1
+        qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
 
     points: list[NrbScatterPoint] = []
     nrb_list = list(qs)
@@ -1595,14 +1691,9 @@ def nrb_detail(request, nrb_id: int):
 
     representative_id = _pick_representative_bgc_id(nrb_id)
 
-    # Domain architecture: collapse domain_acc across all member BGCs.
-    domain_arch_rows = (
-        BgcDomain.objects
-        .filter(bgc_id__in=[m.id for m in members])
-        .values("domain_acc", "domain_name", "ref_db", "url")
-        .order_by("domain_acc")
-        .distinct()
-    )
+    # Pooled positional domain architecture across all member BGCs of the
+    # NRB. Mirrors the ordering rule the adjacency builder uses so the
+    # surfaced sequence is exactly what the clustering pipeline scored.
     domain_arch = [
         DomainArchitectureItem(
             domain_acc=r["domain_acc"],
@@ -1613,7 +1704,7 @@ def nrb_detail(request, nrb_id: int):
             score=None,
             url=r["url"] or "",
         )
-        for r in domain_arch_rows
+        for r in nrb_architecture([m.id for m in members])
     ]
 
     # Natural products: union over members (each NP attaches to one BGC).
@@ -1671,6 +1762,33 @@ def nrb_detail(request, nrb_id: int):
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
+    )
+
+
+@discovery_router.get(
+    "/nrbs/{nrb_id}/architecture/", response=NrbArchitectureResponse,
+)
+def nrb_architecture_endpoint(request, nrb_id: int):
+    """Pooled positional domain accessions for an NRB (clipboard payload).
+
+    Lightweight wrapper around the same ordering rule that ``nrb_detail``
+    uses for ``domain_architecture``.
+    """
+    try:
+        nrb = NonRedundantBGC.objects.get(id=nrb_id)
+    except NonRedundantBGC.DoesNotExist:
+        raise HttpError(404, "NRB not found")
+
+    member_ids = list(
+        DashboardBgc.objects
+        .filter(non_redundant_bgc_id=nrb_id)
+        .values_list("id", flat=True)
+    )
+    ordered_accs = [r["domain_acc"] for r in nrb_architecture(member_ids)]
+    return NrbArchitectureResponse(
+        id=nrb.id,
+        label=_nrb_label(nrb.id),
+        ordered_accs=ordered_accs,
     )
 
 
@@ -1734,6 +1852,86 @@ def similar_nrb_query(
     top_sims = [float(vals[i]) for i in order.tolist()]
     sim_lookup = dict(zip(top_ids, top_sims))
 
+    total_count = len(top_ids)
+    pg, ps, tp, offset = _paginate(page, page_size, total_count)
+    page_ids = top_ids[offset: offset + ps]
+
+    nrbs = {n.id: n for n in NonRedundantBGC.objects.filter(id__in=page_ids)}
+    facts = _nrb_member_facts(page_ids)
+    items = [
+        _nrb_to_roster_item(
+            nrbs[nid],
+            parent_assembly=facts[nid]["parent_assembly"],
+            n_source_bgcs=facts[nid]["n_source_bgcs"],
+            is_validated=facts[nid]["is_validated"],
+            is_type_strain=facts[nid]["is_type_strain"],
+            contig_accession=facts[nid]["contig_accession"],
+            similarity_score=round(sim_lookup[nid], 4),
+        )
+        for nid in page_ids
+        if nid in nrbs
+    ]
+    return PaginatedNrbRosterResponse(
+        items=items,
+        pagination=PaginationMeta(
+            page=pg, page_size=ps, total_count=total_count, total_pages=tp,
+        ),
+    )
+
+
+@discovery_router.post(
+    "/query/nrb-architecture/", response=PaginatedNrbRosterResponse,
+)
+def nrb_architecture_query(
+    request,
+    body: NrbArchitectureQueryRequest,
+    page: int = 1,
+    page_size: int = 25,
+):
+    """Top-K NRBs by composite-Dice to a user-supplied domain architecture.
+
+    Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)``
+    against the cached primary-NRB matrices for the latest ClusteringRun.
+    Accessions outside the run's domain vocabulary are silently dropped.
+    """
+    from discovery.services.clustering.architecture_search import (
+        architecture_search,
+        normalize_architecture_input,
+    )
+    from discovery.services.clustering.nrb_scoring import load_scoring_cache
+    from django.conf import settings
+
+    accs = normalize_architecture_input(body.architecture)
+    if not accs:
+        raise HttpError(400, "architecture must contain at least one accession")
+
+    run = ClusteringRun.objects.order_by("-created_at").first()
+    if run is None:
+        raise HttpError(404, "No ClusteringRun available")
+
+    cache_dir = settings.CLUSTERING_ARTIFACTS_DIR / run.sha256[:12]
+    try:
+        cache = load_scoring_cache(cache_dir)
+    except FileNotFoundError:
+        raise HttpError(
+            503,
+            "Scoring cache not present on this run — rerun "
+            "run_bgc_clustering with --score-nrbs (default) to materialise it.",
+        )
+
+    result = architecture_search(
+        accs, weight=body.weight, k=body.k, cache=cache,
+    )
+    top_ids: list[int] = result["nrb_ids"]
+    top_scores: list[float] = result["scores"]
+    if not top_ids:
+        raise HttpError(
+            400,
+            "No supplied accession matched the scoring cache vocabulary — "
+            "check the input or rerun clustering against a broader source set.",
+        )
+
+    sim_lookup = dict(zip(top_ids, top_scores))
     total_count = len(top_ids)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_ids = top_ids[offset: offset + ps]

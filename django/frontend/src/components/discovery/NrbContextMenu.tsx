@@ -11,6 +11,9 @@ import { useNrbActions } from "@/hooks/use-nrb-actions";
 interface Props {
   nrbId: number;
   nrbLabel: string;
+  /** True when the NRB is a projected partial — gates the find-similar
+   *  action because the backend only accepts primary seeds. */
+  isPartial?: boolean;
   children: React.ReactNode;
 }
 
@@ -19,8 +22,8 @@ interface Props {
  * (roster row, variables-map point, UMAP point). The action set is owned by
  * the ``useNrbActions`` hook; this component is just the right-click shell.
  */
-export function NrbContextMenu({ nrbId, nrbLabel, children }: Props) {
-  const items = useNrbActions(nrbId, nrbLabel);
+export function NrbContextMenu({ nrbId, nrbLabel, isPartial, children }: Props) {
+  const items = useNrbActions(nrbId, nrbLabel, { isPartial });
 
   return (
     <ContextMenu>
@@ -36,7 +39,12 @@ export function NrbContextMenu({ nrbId, nrbLabel, children }: Props) {
                 disabled={item.disabled}
               >
                 <Icon className="mr-2 h-4 w-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {item.disabledHint && (
+                  <span className="ml-2 text-[10px] text-muted-foreground">
+                    {item.disabledHint}
+                  </span>
+                )}
               </ContextMenuItem>
             </Fragment>
           );

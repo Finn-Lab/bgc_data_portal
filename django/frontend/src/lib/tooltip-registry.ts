@@ -69,6 +69,10 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     text: "S\u00F8rensen-Dice coefficient: fraction of query domains matched vs. total domains in the union (0\u20131). Used for domain query similarity scoring.",
     docsUrl: "/docs/similarity-scores.html#sorensen-dice",
   },
+  architecture_search: {
+    text: "Composite-Dice over a positional domain architecture. Each NRB is scored as w\u00B7Dice(domain set) + (1\u2212w)\u00B7Dice(adjacent-pair set). Adjacency rewards matching neighbour pairs in the supplied order; S\u00F8rensen-Dice measures unordered domain overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
+    docsUrl: "/docs/similarity-scores.html#architecture-search",
+  },
   tanimoto: {
     text: "Tanimoto coefficient comparing Morgan fingerprints of predicted natural products (0\u20131). Used in chemical structure (SMILES) search.",
     docsUrl: "/docs/similarity-scores.html#tanimoto",

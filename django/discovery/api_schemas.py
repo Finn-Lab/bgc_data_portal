@@ -293,9 +293,50 @@ class NrbUmapPoint(Schema):
     umap_projected: bool = False
 
 
+class NrbCountResponse(Schema):
+    """Filter-surface count + capping metadata for the dashboard.
+
+    Used by the v2 Discovery dashboard to drive the empty-state guard and
+    the "showing X of Y, sampled" banner *before* firing the expensive
+    roster / UMAP / Variables-map requests. Same filter surface as
+    ``/nrbs/roster/``.
+    """
+
+    exact_count: int
+    cap: int
+    will_sample: bool
+
+
 class SimilarNrbRequest(Schema):
     nrb_id: int
     k: int = 25
+
+
+class NrbArchitectureResponse(Schema):
+    """Pooled positional domain accessions for an NRB.
+
+    Lightweight payload for the "copy domain architecture" action — avoids
+    pulling the full NrbDetail. ``ordered_accs`` mirrors the ordering rule
+    used by the clustering pipeline (CDS start, then domain start).
+    """
+
+    id: int
+    label: str
+    ordered_accs: list[str]
+
+
+class NrbArchitectureQueryRequest(Schema):
+    """Composite-Dice query over a user-supplied domain architecture.
+
+    ``architecture`` is the ordered list of domain accessions; ``weight`` is
+    the Sørensen-Dice share (``1.0`` = pure Dice, ``0.0`` = pure adjacency).
+    Unknown accessions (not in the latest ClusteringRun's scoring cache)
+    are silently dropped.
+    """
+
+    architecture: list[str]
+    weight: float = 0.5
+    k: int = 100
 
 
 # ── Shortlist Report schemas ─────────────────────────────────────────────────

@@ -3,9 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FilterPanel } from "@/components/filters/FilterPanel";
 import { useDiscoveryStats } from "@/hooks/use-discovery-stats";
+import { useNrbCount } from "@/hooks/use-nrb-count";
 import { useRunNrbQuery } from "@/hooks/use-run-nrb-query";
 import { useDiscoveryStore } from "@/stores/discovery-store";
-import { Loader2, Play, X } from "lucide-react";
+import { Info, Loader2, Play, X } from "lucide-react";
 
 /**
  * Top strip that replaces the v1 sidebar. Two rows:
@@ -16,7 +17,25 @@ export function TopFiltersStrip() {
   const { data: stats } = useDiscoveryStats();
   const { run, isRunning } = useRunNrbQuery();
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const searchSource = useDiscoveryStore((s) => s.searchSource);
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
+
+  const clearLabel = (() => {
+    switch (searchSource) {
+      case "sequence":
+        return "Clear sequence";
+      case "domain":
+        return "Clear domain";
+      case "domain_architecture":
+        return "Clear architecture";
+      case "similar_nrb":
+        return "Clear similar";
+      case "chemical":
+        return "Clear chemical";
+      default:
+        return "Clear query";
+    }
+  })();
 
   return (
     <Card className="mx-2 mt-2 mb-0 overflow-hidden p-0">
@@ -31,7 +50,7 @@ export function TopFiltersStrip() {
               onClick={() => setQueryResult(null, null, null, null, null, null)}
             >
               <X className="h-3 w-3" />
-              Clear query ({resultNrbIds.length})
+              {clearLabel} ({resultNrbIds.length})
             </Button>
           )}
           <Button
@@ -53,7 +72,48 @@ export function TopFiltersStrip() {
       <div className="max-h-[20vh] overflow-y-auto px-3 py-2">
         <FilterPanel />
       </div>
+      <ResultScopeBanner />
     </Card>
+  );
+}
+
+/**
+ * Inline banner under the filter strip that surfaces the active result
+ * scope. Only renders when the dashboard has a scope set; stays silent on
+ * the empty landing so the empty-state CTAs in the surfaces do the
+ * talking.
+ *
+ * When the filter matches more than ``cap`` NRBs, the banner warns the
+ * user that the UMAP + Variables maps are showing a deterministic sample
+ * so they can narrow further if needed.
+ */
+function ResultScopeBanner() {
+  const { hasActiveScope, count, cap, willSample, isLoading } = useNrbCount();
+  if (!hasActiveScope) return null;
+  if (isLoading) return null;
+  if (count == null || cap == null) return null;
+
+  const fmt = (n: number) => n.toLocaleString();
+  return (
+    <div
+      className="flex items-center gap-2 border-t bg-muted/30 px-3 py-1.5 text-xs"
+      data-testid="result-scope-banner"
+    >
+      <Info className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      {willSample ? (
+        <span>
+          <span className="font-semibold">{fmt(cap)}</span> of{" "}
+          <span className="font-semibold">{fmt(count)}</span> matching NRBs
+          shown on the maps (deterministic sample). Narrow the filters to
+          see all results.
+        </span>
+      ) : (
+        <span className="text-muted-foreground">
+          <span className="font-semibold text-foreground">{fmt(count)}</span>{" "}
+          matching NRB{count === 1 ? "" : "s"}.
+        </span>
+      )}
+    </div>
   );
 }
 

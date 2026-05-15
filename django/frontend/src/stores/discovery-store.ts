@@ -16,6 +16,7 @@ export type ResultsTab = "roster" | "variables" | "umap";
 export type SearchSource =
   | "sequence"
   | "domain"
+  | "domain_architecture"
   | "chemical"
   | "similar_nrb"
   | null;
@@ -110,6 +111,26 @@ export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
   assemblyIds: "",
   organism: "",
 };
+
+/** True when no filter chip is set in the applied snapshot.
+ *  Combined with ``resultNrbIds == null`` it gates the dashboard's
+ *  empty-state CTA so we never fire an unbounded fetch on landing. */
+export function isAppliedFiltersEmpty(applied: AppliedNrbFilters): boolean {
+  return (
+    applied.sourceNames.length === 0 &&
+    applied.detectorTools.length === 0 &&
+    applied.chemontIds.length === 0 &&
+    applied.assemblyType === "" &&
+    applied.taxonomyPath === "" &&
+    applied.bgcClass === "" &&
+    applied.gcfPath === "" &&
+    applied.biomeLineage === "" &&
+    applied.bgcAccession === "" &&
+    applied.assemblyAccession === "" &&
+    applied.assemblyIds === "" &&
+    applied.organism === ""
+  );
+}
 
 /**
  * Build the NRB API query-string surface from an applied-filter snapshot

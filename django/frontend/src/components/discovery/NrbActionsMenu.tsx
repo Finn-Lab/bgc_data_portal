@@ -16,12 +16,15 @@ interface Props {
   /** Forwarded to ``useNrbActions`` so the menu disables "Set as reference"
    *  when the card it lives on is already the reference. */
   variant?: "reference" | "compare";
+  /** True when the NRB is a projected partial — gates the find-similar
+   *  action because the backend only accepts primary seeds. */
+  isPartial?: boolean;
 }
 
 /** Kebab dropdown surfacing the same actions as the NRB roster right-click
  *  menu, sized for the dense ``CompactNrbDetail`` header. */
-export function NrbActionsMenu({ nrbId, nrbLabel, variant }: Props) {
-  const items = useNrbActions(nrbId, nrbLabel, { variant });
+export function NrbActionsMenu({ nrbId, nrbLabel, variant, isPartial }: Props) {
+  const items = useNrbActions(nrbId, nrbLabel, { variant, isPartial });
 
   return (
     <DropdownMenu>

@@ -632,6 +632,12 @@ export interface NrbUmapPoint {
   umap_projected: boolean;
 }
 
+export interface NrbCountResponse {
+  exact_count: number;
+  cap: number;
+  will_sample: boolean;
+}
+
 export type NrbScatterAxis =
   | "size_kb"
   | "n_cds"

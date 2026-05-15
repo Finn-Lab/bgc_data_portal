@@ -20,6 +20,11 @@ pandas
 redis>=4.0.0
 pyrodigal==3.6.3
 numpy==2.0.1
+# scipy.sparse powers the cached composite-Dice scoring matrix loaded by
+# /query/similar-nrb/ and /query/nrb-architecture/ — both run synchronously
+# in the web pod, so scipy has to ship with the web image even though it's
+# nominally an "ML" dependency.
+scipy==1.14.1
 joblib==1.4.2
 seaborn==0.13.2
 requests==2.32.3

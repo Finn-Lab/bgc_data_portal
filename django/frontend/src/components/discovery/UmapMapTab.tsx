@@ -4,9 +4,11 @@ import { fetchNrbUmap } from "@/api/nrbs";
 import { Loader2 } from "lucide-react";
 import {
   appliedFiltersToApiParams,
+  isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
 import { NrbScatterPlot } from "./NrbScatterPlot";
+import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
 export function UmapMapTab() {
   const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
@@ -16,11 +18,14 @@ export function UmapMapTab() {
   const applied = useDiscoveryStore((s) => s.appliedFilters);
 
   const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const hasActiveScope =
+    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ["nrb-umap", filterParams],
     queryFn: () =>
       fetchNrbUmap({ include_partials: true, ...filterParams }),
+    enabled: hasActiveScope,
   });
 
   const points = useMemo(() => {
@@ -39,6 +44,16 @@ export function UmapMapTab() {
       similarity_score: resultSimilarityById?.[p.id] ?? null,
     }));
   }, [data, resultSimilarityById]);
+
+  if (!hasActiveScope) {
+    return (
+      <div className="flex h-full flex-col p-3">
+        <div className="flex flex-1 items-stretch overflow-hidden rounded border bg-card">
+          <EmptyScopeMessage surface="UMAP map" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col p-3">

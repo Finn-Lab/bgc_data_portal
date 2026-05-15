@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   postNrbDomainQuery,
+  postNrbArchitectureQuery,
   fetchNrbSequenceQueryStatus,
 } from "@/api/nrbs";
 import { postSequenceQuery } from "@/api/queries";
@@ -9,6 +10,15 @@ import { useDiscoveryStore } from "@/stores/discovery-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { ApiError } from "@/api/client";
 import { toast } from "sonner";
+
+/**
+ * Soft cap on how many NRBs we propagate from a scored query into the
+ * dashboard's roster + maps. Mirrors the server-side
+ * ``DASHBOARD_RESULT_CAP`` so the maps don't bother downsampling further.
+ * When more than this many NRBs come back, we keep the top-N by score —
+ * that's what users actually care about for similarity-driven queries.
+ */
+const QUERY_RESULT_CAP = 5_000;
 
 /**
  * Hook that drives the Run Query button in the v2 dashboard.
@@ -27,7 +37,9 @@ export function useRunNrbQuery() {
   const [error, setError] = useState<Error | null>(null);
 
   const domainConditions = useQueryStore((s) => s.domainConditions);
-  const logic = useQueryStore((s) => s.logic);
+  const domainMode = useQueryStore((s) => s.domainMode);
+  const architectureText = useQueryStore((s) => s.domainArchitectureText);
+  const architectureWeight = useQueryStore((s) => s.architectureWeight);
   const sequenceQuery = useQueryStore((s) => s.sequenceQuery);
   const sequenceMinBitscore = useQueryStore((s) => s.sequenceMinBitscore);
   const sequenceMinPident = useQueryStore((s) => s.sequenceMinPident);
@@ -59,7 +71,18 @@ export function useRunNrbQuery() {
       organism: f.search,
     });
 
-    if (domainConditions.length === 0 && !sequenceQuery.trim()) {
+    // Active "domain" surface depends on which mode the user picked.
+    // In architecture mode we treat the textarea as the active input,
+    // not the chip conditions (the UI hides the chips while in arch mode).
+    const archAccs = architectureText
+      .split(/[,\s]+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    const archActive = domainMode === "architecture" && archAccs.length > 0;
+    const booleanActive =
+      domainMode !== "architecture" && domainConditions.length > 0;
+
+    if (!booleanActive && !archActive && !sequenceQuery.trim()) {
       // Filters-only run: clear any prior advanced-query allow-list so the
       // roster reflects the new filter snapshot.
       setQueryResult(null, null, null, null, null, null);
@@ -76,16 +99,36 @@ export function useRunNrbQuery() {
       const qcoverage: Record<number, number> = {};
 
       // ── Domain branch ─────────────────────────────────────────────────
-      if (domainConditions.length > 0) {
+      if (booleanActive) {
         const resp = await postNrbDomainQuery(
           {
             domains: domainConditions.map((c) => ({
               acc: c.acc,
               required: c.required,
             })),
-            logic,
+            logic: domainMode === "or" ? "or" : "and",
           },
           { page: 1, page_size: 500 },
+        );
+        const ids = resp.items.map((r) => r.id);
+        idSets.push(new Set(ids));
+        for (const item of resp.items) {
+          if (item.similarity_score != null) {
+            similarities[item.id] = item.similarity_score;
+          }
+        }
+      }
+
+      // ── Architecture branch (composite-Dice) ──────────────────────────
+      if (archActive) {
+        const resp = await postNrbArchitectureQuery(
+          {
+            architecture: archAccs,
+            weight: architectureWeight,
+            k: 500,
+          },
+          1,
+          500,
         );
         const ids = resp.items.map((r) => r.id);
         idSets.push(new Set(ids));
@@ -142,16 +185,39 @@ export function useRunNrbQuery() {
         );
       }
 
+      // Top-K clip by score: similarity-driven queries (architecture,
+      // sequence, similar-NRB) only carry useful information for the
+      // highest-scoring hits. Sort by score desc and clip to
+      // ``QUERY_RESULT_CAP`` so the downstream roster + maps inherit the
+      // cap via the ``nrb_ids`` allow-list without the server having to
+      // sample. Boolean-domain queries get similarity_score=1.0 for every
+      // hit so the sort is a no-op — they're effectively unsorted, which
+      // is fine since the cap rarely bites there.
+      if (intersection.length > QUERY_RESULT_CAP) {
+        intersection.sort((a, b) => {
+          const sa = similarities[a] ?? -Infinity;
+          const sb = similarities[b] ?? -Infinity;
+          return sb - sa;
+        });
+        intersection = intersection.slice(0, QUERY_RESULT_CAP);
+      }
+
       // When sequence search is one of the branches, label the result
       // set as "sequence" so the roster shows bitscore + best-hit
       // protein columns. Domain-only runs keep the standard similarity
       // column. Mixed runs prefer the sequence label since that path
       // carries the more useful per-NRB metadata.
-      const source: "sequence" | "domain" | null = sequenceQuery.trim()
+      const source:
+        | "sequence"
+        | "domain"
+        | "domain_architecture"
+        | null = sequenceQuery.trim()
         ? "sequence"
-        : domainConditions.length > 0
-          ? "domain"
-          : null;
+        : archActive
+          ? "domain_architecture"
+          : booleanActive
+            ? "domain"
+            : null;
       setQueryResult(
         intersection,
         similarities,

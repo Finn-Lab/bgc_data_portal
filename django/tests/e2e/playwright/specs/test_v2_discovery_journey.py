@@ -141,6 +141,52 @@ def test_v2_shortlist_add_and_count(page, e2e_v2_base_url):
 
 
 @pytest.mark.e2e
+def test_v2_architecture_tab_runs_query(page, e2e_v2_base_url):
+    """Open the Domains chip → switch to the ARCH tab → type accs → Run.
+
+    Defensive: the spec validates that the UI mounts the architecture
+    controls and dispatches the query. If no ClusteringRun is materialised
+    in the test environment the backend returns a 400/503; the toast/error
+    surface is acceptable — what matters is the UI flow doesn't break.
+    """
+    page.set_default_timeout(60_000)
+    page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
+    page.wait_for_selector('[data-testid="nrb-dashboard"]', timeout=30_000)
+
+    # Open the Domains chip (it lives in the filter strip).
+    domains_chip = page.get_by_role(
+        "button", name=re.compile(r"^Domains", re.I)
+    ).first
+    domains_chip.click()
+
+    # The query builder mounts with AND active by default. Switch to ARCH.
+    query_panel = page.locator('[data-tour="domain-query"]')
+    query_panel.wait_for(timeout=10_000)
+    arch_tab = query_panel.get_by_role(
+        "radio", name=re.compile(r"^ARCH$", re.I)
+    )
+    if arch_tab.count() == 0:
+        # Radix ToggleGroup may render as button; fall back.
+        arch_tab = query_panel.locator("button", has_text=re.compile(r"^ARCH$"))
+    arch_tab.first.click()
+
+    # Textarea + slider show up.
+    textarea = query_panel.locator("textarea")
+    textarea.wait_for(timeout=5_000)
+    textarea.fill("PF00109, PF02801, PF00501")
+
+    # The Sørensen-Dice ↔ Adjacency slider is a Radix slider — verify the
+    # accessible role is present (we don't move it; default 0.5 is fine).
+    slider = query_panel.get_by_role("slider")
+    assert slider.count() >= 1
+
+    # Press Run Query. We don't assert results — empty datasets return an
+    # error toast and that's expected on a freshly-seeded instance.
+    page.locator('[data-tour="run-query"]').click()
+    page.wait_for_timeout(1_500)
+
+
+@pytest.mark.e2e
 def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context):
     """Generate Report mints a token and opens the Report page in a new tab."""
     page.set_default_timeout(60_000)

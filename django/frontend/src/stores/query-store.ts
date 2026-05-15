@@ -1,9 +1,20 @@
 import { create } from "zustand";
 import type { DomainCondition, QueryResultBgc } from "@/api/types";
 
+export type DomainMode = "and" | "or" | "architecture";
+
 interface QueryState {
   domainConditions: DomainCondition[];
-  logic: "and" | "or";
+  /** Combinator for AND/OR sets; "architecture" swaps the chip UI for a
+   *  free-text positional-architecture composite-Dice search. */
+  domainMode: DomainMode;
+  /** Free-text comma/space-separated domain accessions used by the
+   *  "architecture" tab. Ordering is meaningful — adjacency pairs are
+   *  derived from this sequence. */
+  domainArchitectureText: string;
+  /** Sørensen-Dice share in the composite score (0..1). Adjacency share
+   *  is ``1 - architectureWeight``. */
+  architectureWeight: number;
   similarBgcSourceId: number | null;
   resultBgcIds: number[];
   resultBgcData: QueryResultBgc[];
@@ -26,7 +37,9 @@ interface QueryState {
   addDomainCondition: (condition: DomainCondition) => void;
   removeDomainCondition: (acc: string) => void;
   toggleDomainRequired: (acc: string) => void;
-  setLogic: (logic: "and" | "or") => void;
+  setDomainMode: (mode: DomainMode) => void;
+  setDomainArchitectureText: (v: string) => void;
+  setArchitectureWeight: (v: number) => void;
   setSimilarBgcSourceId: (id: number | null) => void;
   setResultBgcIds: (ids: number[]) => void;
   setResultBgcData: (data: QueryResultBgc[]) => void;
@@ -73,7 +86,9 @@ function intersectResults(
 
 export const useQueryStore = create<QueryState>((set, get) => ({
   domainConditions: [],
-  logic: "and",
+  domainMode: "and",
+  domainArchitectureText: "",
+  architectureWeight: 0.5,
   similarBgcSourceId: null,
   resultBgcIds: [],
   resultBgcData: [],
@@ -106,7 +121,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         d.acc === acc ? { ...d, required: !d.required } : d
       ),
     })),
-  setLogic: (logic) => set({ logic }),
+  setDomainMode: (mode) => set({ domainMode: mode }),
+  setDomainArchitectureText: (v) => set({ domainArchitectureText: v }),
+  setArchitectureWeight: (v) => set({ architectureWeight: v }),
   setSimilarBgcSourceId: (id) => set({ similarBgcSourceId: id }),
   setResultBgcIds: (ids) => set({ resultBgcIds: ids }),
   setResultBgcData: (data) => set({ resultBgcData: data }),
@@ -140,7 +157,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   clearQuery: () =>
     set({
       domainConditions: [],
-      logic: "and",
+      domainMode: "and",
+      domainArchitectureText: "",
+      architectureWeight: 0.5,
       similarBgcSourceId: null,
       resultBgcIds: [],
       resultBgcData: [],

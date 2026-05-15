@@ -16,9 +16,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import {
   appliedFiltersToApiParams,
+  isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
 import { NrbContextMenu } from "./NrbContextMenu";
+import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
 type SortKey = "novelty_score" | "domain_novelty" | "size_kb" | "id";
 
@@ -82,6 +84,8 @@ export function NrbRosterTable() {
   const COLUMNS = columnsFor(searchSource);
 
   const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const hasActiveScope =
+    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
 
   // Reset to page 1 whenever the applied filter set or result allow-list
   // changes — otherwise a deep-page user could see an empty page after
@@ -107,6 +111,7 @@ export function NrbRosterTable() {
         order,
         ...filterParams,
       }),
+    enabled: hasActiveScope,
   });
 
   const items = data?.items ?? [];
@@ -121,6 +126,14 @@ export function NrbRosterTable() {
     }
     setPage(1);
   };
+
+  if (!hasActiveScope) {
+    return (
+      <div className="flex h-full flex-col" data-testid="nrb-roster">
+        <EmptyScopeMessage surface="NRB roster" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col" data-testid="nrb-roster">
@@ -236,7 +249,11 @@ function NrbRosterRow({
   const similarity = similarityOverride ?? nrb.similarity_score;
   const bestHit = bestHitProteinOverride ?? nrb.best_hit_protein_id;
   return (
-    <NrbContextMenu nrbId={nrb.id} nrbLabel={nrb.label}>
+    <NrbContextMenu
+      nrbId={nrb.id}
+      nrbLabel={nrb.label}
+      isPartial={nrb.umap_projected}
+    >
       <TableRow
         onClick={onSelect}
         data-testid="nrb-roster-row"

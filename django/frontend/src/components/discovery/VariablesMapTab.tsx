@@ -3,9 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchNrbDetail, fetchNrbScatter } from "@/api/nrbs";
 import {
   appliedFiltersToApiParams,
+  isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
 import type { NrbDetail, NrbScatterAxis, NrbScatterPoint } from "@/api/types";
+import { EmptyScopeMessage } from "./EmptyScopeMessage";
 import {
   Select,
   SelectContent,
@@ -83,6 +85,8 @@ export function VariablesMapTab() {
   const queryAxesUnplottable = anyQueryAxis && resultSimilarityById == null;
 
   const filterParams = appliedFiltersToApiParams(applied, resultNrbIds);
+  const hasActiveScope =
+    !isAppliedFiltersEmpty(applied) || resultNrbIds !== null;
 
   // When at least one axis is stable, fetch ``/nrbs/scatter/`` for it. If
   // only one axis is stable, request it on both x and y so we get the
@@ -106,7 +110,7 @@ export function VariablesMapTab() {
         y_axis: scatterY,
         ...filterParams,
       }),
-    enabled: anyStableAxis,
+    enabled: anyStableAxis && hasActiveScope,
   });
 
   // ── Reference NRB detail ────────────────────────────────────────────
@@ -118,7 +122,7 @@ export function VariablesMapTab() {
   const { data: refDetail } = useQuery({
     queryKey: ["nrb-detail", referenceNrbId],
     queryFn: () => fetchNrbDetail(referenceNrbId as number),
-    enabled: referenceNrbId !== null,
+    enabled: referenceNrbId !== null && hasActiveScope,
   });
 
   const points = useMemo(() => {
@@ -241,6 +245,16 @@ export function VariablesMapTab() {
     refDetail,
     queryAxesUnplottable,
   ]);
+
+  if (!hasActiveScope) {
+    return (
+      <div className="flex h-full flex-col p-3">
+        <div className="flex flex-1 items-stretch overflow-hidden rounded border bg-card">
+          <EmptyScopeMessage surface="Variables map" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col p-3">

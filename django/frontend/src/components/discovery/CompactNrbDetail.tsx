@@ -136,7 +136,12 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
             </Badge>
           )}
         </div>
-        <NrbActionsMenu nrbId={nrb.id} nrbLabel={nrb.label} variant={variant} />
+        <NrbActionsMenu
+          nrbId={nrb.id}
+          nrbLabel={nrb.label}
+          variant={variant}
+          isPartial={nrb.umap_projected}
+        />
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">

@@ -9,7 +9,11 @@ export function useDomainQuery() {
   const [sortBy, setSortBy] = useState("novelty_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const conditions = useQueryStore((s) => s.domainConditions);
-  const logic = useQueryStore((s) => s.logic);
+  const domainMode = useQueryStore((s) => s.domainMode);
+  // Legacy BGC-level endpoint only knows AND/OR; the v2 "architecture"
+  // mode lives on a different endpoint, so we coerce here for the
+  // surfaces still wired to ``useDomainQuery``.
+  const logic: "and" | "or" = domainMode === "or" ? "or" : "and";
   const setDomainResultData = useQueryStore((s) => s.setDomainResultData);
   const computeIntersection = useQueryStore((s) => s.computeIntersection);
   const domainQueryTriggered = useQueryStore((s) => s.domainQueryTriggered);

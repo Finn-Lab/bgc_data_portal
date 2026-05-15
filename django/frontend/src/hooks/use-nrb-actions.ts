@@ -1,11 +1,17 @@
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
-import { Pin, Search, Plus, RefreshCw } from "lucide-react";
+import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { fetchNrbArchitecture, postSimilarNrbQuery } from "@/api/nrbs";
 
 export interface NrbActionItem {
-  key: "set-ref" | "find-similar" | "add-shortlist" | "clear-add-shortlist";
+  key:
+    | "set-ref"
+    | "find-similar"
+    | "copy-architecture"
+    | "add-shortlist"
+    | "clear-add-shortlist";
   label: string;
   icon: LucideIcon;
   onClick: () => void;
@@ -21,6 +27,18 @@ interface UseNrbActionsOptions {
   /** When set to "reference", "Set as reference NRB" is shown disabled
    *  because this NRB is already pinned in the reference slot. */
   variant?: "reference" | "compare";
+  /** When true the NRB is a partial (umap_projected) — find-similar is
+   *  disabled because the backend rejects partial seeds. */
+  isPartial?: boolean;
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function useNrbActions(
@@ -29,19 +47,75 @@ export function useNrbActions(
   options: UseNrbActionsOptions = {},
 ): NrbActionItem[] {
   const setReferenceNrbId = useDiscoveryStore((s) => s.setReferenceNrbId);
+  const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
   const addBgc = useShortlistStore((s) => s.addBgc);
   const replaceBgcs = useShortlistStore((s) => s.replaceBgcs);
 
   const isReference = options.variant === "reference";
+  const isPartial = options.isPartial === true;
 
   const onSetRef = () => {
     setReferenceNrbId(nrbId);
     toast.success(`Pinned ${nrbLabel} as reference`);
   };
 
-  const onFindSimilar = () => {
+  const onFindSimilar = async () => {
     setReferenceNrbId(nrbId);
-    toast.info(`Finding NRBs similar to ${nrbLabel}…`);
+    const toastId = toast.loading(`Finding NRBs similar to ${nrbLabel}…`);
+    try {
+      const resp = await postSimilarNrbQuery(
+        { nrb_id: nrbId, k: 100 },
+        1,
+        100,
+      );
+      const ids = resp.items.map((r) => r.id);
+      const similarity: Record<number, number> = {};
+      for (const item of resp.items) {
+        if (item.similarity_score != null) {
+          similarity[item.id] = item.similarity_score;
+        }
+      }
+      setQueryResult(ids, similarity, "similar_nrb", null, null, null);
+      toast.success(
+        `Found ${ids.length} similar NRB(s)`,
+        { id: toastId },
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Find similar failed: ${msg}`, { id: toastId });
+    }
+  };
+
+  const onCopyArchitecture = async () => {
+    const toastId = toast.loading(`Copying domain architecture…`);
+    try {
+      const resp = await fetchNrbArchitecture(nrbId);
+      if (resp.ordered_accs.length === 0) {
+        toast.warning(
+          `${nrbLabel} has no PFAM/NCBIFAM domains to copy`,
+          { id: toastId },
+        );
+        return;
+      }
+      const text = resp.ordered_accs.join(", ");
+      const ok = await copyToClipboard(text);
+      if (ok) {
+        toast.success(
+          `Copied ${resp.ordered_accs.length} domains to clipboard`,
+          { id: toastId },
+        );
+      } else {
+        // Clipboard API blocked (insecure context, etc.) — surface the
+        // string in the toast so the user can copy manually.
+        toast.message(`Copy unavailable — here's the architecture:`, {
+          id: toastId,
+          description: text,
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Copy failed: ${msg}`, { id: toastId });
+    }
   };
 
   const onAddToShortlist = () => {
@@ -69,6 +143,14 @@ export function useNrbActions(
       label: "Find similar NRBs",
       icon: Search,
       onClick: onFindSimilar,
+      disabled: isPartial,
+      disabledHint: isPartial ? "Partial NRB" : undefined,
+    },
+    {
+      key: "copy-architecture",
+      label: "Copy domain architecture",
+      icon: Clipboard,
+      onClick: onCopyArchitecture,
     },
     {
       key: "add-shortlist",
