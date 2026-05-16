@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListChecks, FileBarChart, X, Trash2, Loader2 } from "lucide-react";
 import { useShortlistStore } from "@/stores/shortlist-store";
+import { useDiscoveryStore } from "@/stores/discovery-store";
 import { useReportSnapshot } from "@/hooks/use-report";
 import { buildAppUrl } from "@/lib/router-base";
 import { toast } from "sonner";
@@ -29,6 +30,7 @@ export function ShortlistDropdown() {
   const bgcs = useShortlistStore((s) => s.bgcs);
   const removeBgc = useShortlistStore((s) => s.removeBgc);
   const clearBgcs = useShortlistStore((s) => s.clearBgcs);
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
   const snapshot = useReportSnapshot();
 
   const onGenerate = () => {
@@ -36,8 +38,16 @@ export function ShortlistDropdown() {
       toast.info("Shortlist is empty — add NRBs via right-click");
       return;
     }
+    const nrbIds = bgcs.map((b) => b.id);
+    const hasAssetIds = nrbIds.some((id) => id < 0);
+    if (hasAssetIds && !assetToken) {
+      toast.error(
+        "Asset upload no longer in cache — re-upload to include those NRBs in a report.",
+      );
+      return;
+    }
     snapshot.mutate(
-      bgcs.map((b) => b.id),
+      { nrbIds, assetToken },
       {
         onSuccess: (resp) => {
           // window.open bypasses React Router, so we need the absolute

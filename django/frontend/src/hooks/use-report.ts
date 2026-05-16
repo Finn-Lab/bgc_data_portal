@@ -24,10 +24,16 @@ export function useReport(token: string | null) {
  * a given shortlist, so re-running for the same ids resolves to the same
  * cached entry server-side.
  */
+export interface ReportSnapshotVariables {
+  nrbIds: number[];
+  assetToken?: string | null;
+}
+
 export function useReportSnapshot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (nrbIds: number[]) => postReportSnapshot(nrbIds),
+    mutationFn: ({ nrbIds, assetToken }: ReportSnapshotVariables) =>
+      postReportSnapshot(nrbIds, assetToken),
     onSuccess: (resp) => {
       qc.invalidateQueries({ queryKey: ["report", resp.token] });
     },

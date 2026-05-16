@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import Plot from "react-plotly.js";
 import { useReport, useReportSnapshot } from "@/hooks/use-report";
+import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -51,6 +52,7 @@ export function ReportPage() {
   const nrbsParam = searchParams.get("nrbs");
 
   const snapshot = useReportSnapshot();
+  const assetToken = useDiscoveryStore((s) => s.assetToken);
   const { data, isLoading, isError, error } = useReport(token);
 
   // If only ``?nrbs=`` was supplied (or token expired), mint a token from
@@ -63,11 +65,14 @@ export function ReportPage() {
       .map((s) => parseInt(s, 10))
       .filter((n) => Number.isFinite(n));
     if (ids.length === 0) return;
-    snapshot.mutate(ids, {
-      onSuccess: (resp) => {
-        setSearchParams({ token: resp.token }, { replace: true });
+    snapshot.mutate(
+      { nrbIds: ids, assetToken },
+      {
+        onSuccess: (resp) => {
+          setSearchParams({ token: resp.token }, { replace: true });
+        },
       },
-    });
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, nrbsParam]);
 
