@@ -109,7 +109,14 @@ def inspect_tarball(raw: bytes) -> ValidatedTarball:
                 )
 
             if basename not in ALLOWED_FILES:
-                raise AssetValidationError(f"Unexpected file in upload: {basename!r}")
+                # Bundles produced by upstream pipelines (e.g. ESM embedding
+                # exports) sometimes carry extra TSVs we don't consume here.
+                # Skip them — safety gates above (path-traversal, symlink,
+                # nested-path, entry/size caps) have already rejected
+                # anything dangerous, and the parser only reads allow-listed
+                # basenames so the extra bytes never get interpreted.
+                log.debug("inspect_tarball: skipping unexpected member %r", basename)
+                continue
 
             if member.size > MAX_FILE_BYTES:
                 raise AssetValidationError(

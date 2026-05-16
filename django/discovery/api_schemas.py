@@ -118,7 +118,8 @@ class DomainArchitectureItem(Schema):
 
 
 class ParentAssemblySummary(Schema):
-    assembly_id: int
+    # ``None`` for ephemeral asset-upload assemblies that have no DB row.
+    assembly_id: Optional[int] = None
     accession: str
     organism_name: Optional[str] = None
     source_name: Optional[str] = None

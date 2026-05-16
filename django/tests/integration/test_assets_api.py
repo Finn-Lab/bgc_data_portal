@@ -108,7 +108,7 @@ def synchronous_task():
         class _Self:
             request = type("R", (), {"id": "task-sync-id"})
 
-        # Bound-task signature: (self, token, tmp_path)
+        # Bound-task signature: (self, token)
         real_fn.run(*args, **kwargs)
         return _StubResult()
 

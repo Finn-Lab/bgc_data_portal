@@ -2,6 +2,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { useFilterStore } from "@/stores/filter-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
@@ -54,6 +55,7 @@ export function useNrbActions(
 ): NrbActionItem[] {
   const setReferenceNrbId = useDiscoveryStore((s) => s.setReferenceNrbId);
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
+  const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   const addBgc = useShortlistStore((s) => s.addBgc);
   const replaceBgcs = useShortlistStore((s) => s.replaceBgcs);
@@ -69,6 +71,27 @@ export function useNrbActions(
 
   const onFindSimilar = async () => {
     setReferenceNrbId(nrbId);
+    // Re-snapshot the current filter-chip values into ``appliedFilters``
+    // before the result lands. The roster/maps intersect ``nrb_ids`` with
+    // ``appliedFilters``, and that snapshot is otherwise only updated by
+    // the Run Query button — so without this step, clearing chips in the
+    // UI would not affect a subsequent Find Similar run. Mirrors the
+    // snapshot block in ``useRunNrbQuery.run``.
+    const f = useFilterStore.getState();
+    setAppliedFilters({
+      sourceNames: f.sourceNames,
+      detectorTools: f.detectorTools,
+      assemblyType: f.assemblyType,
+      taxonomyPath: f.taxonomyPath,
+      bgcClass: f.bgcClass,
+      gcfPath: f.gcfPath,
+      chemontIds: f.chemontIds,
+      biomeLineage: f.biomeLineage,
+      bgcAccession: f.bgcAccession,
+      assemblyAccession: f.assemblyAccession,
+      assemblyIds: f.assemblyIds,
+      organism: f.search,
+    });
     const toastId = toast.loading(`Finding NRBs similar to ${nrbLabel}…`);
     try {
       const resp = await postSimilarNrbQuery(
@@ -87,7 +110,9 @@ export function useNrbActions(
       // Detect filter chips still active in the Top Filters strip — the
       // roster intersects ``nrb_ids`` with those chips, which can silently
       // drop the visible row count below ``ids.length``. Surface that in
-      // the toast description so the user knows where the rows went.
+      // the toast description so the user knows where the rows went. Uses
+      // the freshly-snapshotted ``appliedFilters`` so it reflects what the
+      // user currently sees, not the previous Run Query state.
       const chipsActive = !isAppliedFiltersEmpty(
         useDiscoveryStore.getState().appliedFilters,
       );

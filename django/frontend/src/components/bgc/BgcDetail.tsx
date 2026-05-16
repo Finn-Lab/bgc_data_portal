@@ -78,13 +78,13 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          {bgc.parent_assembly && (
+          {bgc.parent_assembly && bgc.parent_assembly.assembly_id != null && (
             <Button
               variant="outline"
               size="sm"
               className="gap-1 text-xs"
               onClick={() => {
-                setActiveAssemblyId(bgc.parent_assembly!.assembly_id);
+                setActiveAssemblyId(bgc.parent_assembly!.assembly_id!);
                 setMode("explore");
               }}
             >

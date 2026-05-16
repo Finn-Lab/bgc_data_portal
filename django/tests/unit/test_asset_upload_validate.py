@@ -67,12 +67,18 @@ def test_rejects_missing_required_file():
         inspect_tarball(raw)
 
 
-def test_rejects_unknown_file():
+def test_unknown_files_are_silently_skipped():
+    """Unexpected basenames (e.g. ``embeddings_bgc.tsv`` from upstream
+    pipelines that bundle ESM exports) are ignored — the safety gates above
+    still reject anything dangerous, and the parser only reads allow-listed
+    files. Validation should succeed and the extra member must not appear
+    in the parsed result."""
     members = _minimal_required()
-    members["secrets.tsv"] = b"x\n"
+    members["embeddings_bgc.tsv"] = b"some\textra\tcolumns\n1\t2\t3\n"
     raw = _build_tarball(members)
-    with pytest.raises(AssetValidationError, match="Unexpected file"):
-        inspect_tarball(raw)
+    validated = inspect_tarball(raw)
+    assert "embeddings_bgc.tsv" not in validated.members
+    assert "bgcs.tsv" in validated.members
 
 
 def test_rejects_nested_path():

@@ -476,15 +476,14 @@ def update_discovery_stats_task(self) -> bool:
 
 
 @shared_task(name="discovery.tasks.process_asset_upload", bind=True, acks_late=True)
-def process_asset_upload_task(self, token: str, tmp_path: str) -> dict:
+def process_asset_upload_task(self, token: str) -> dict:
     """Validate, parse, build virtual NRBs and project an uploaded asset.
 
-    ``tmp_path`` points at the tar.gz the upload endpoint wrote to a
-    short-lived MEDIA_ROOT scratch location. The file is removed in
-    ``finally`` so the storage stays clean even on failure.
+    The upload bytes are read from Redis (``asset:{token}:upload``) — the API
+    handler parks them there because the worker runs in a separate pod with
+    its own filesystem. The key is dropped in ``finally`` so a successful
+    run doesn't pin ~100 MB until the TTL elapses.
     """
-    import os
-
     from discovery.services.asset_upload import cache as asset_cache
     from discovery.services.asset_upload.parse import parse_asset_tar
     from discovery.services.asset_upload.project import project_asset
@@ -497,14 +496,11 @@ def process_asset_upload_task(self, token: str, tmp_path: str) -> dict:
     asset_cache.mark_running(token, task_id=task_id, progress={"step": "validate"})
 
     try:
-        try:
-            with open(tmp_path, "rb") as f:
-                raw = f.read()
-        except OSError as exc:
-            asset_cache.mark_failed(
-                token, task_id=task_id, error=f"Could not read upload: {exc}"
-            )
-            return {"token": token, "state": "FAILED", "error": str(exc)}
+        raw = asset_cache.read_upload(token)
+        if raw is None:
+            error = "Upload bytes missing from cache (token expired or evicted)"
+            asset_cache.mark_failed(token, task_id=task_id, error=error)
+            return {"token": token, "state": "FAILED", "error": error}
 
         try:
             validated = inspect_tarball(raw)
@@ -512,6 +508,14 @@ def process_asset_upload_task(self, token: str, tmp_path: str) -> dict:
             data = parse_asset_tar(validated)
         except AssetValidationError as exc:
             asset_cache.mark_failed(token, task_id=task_id, error=str(exc))
+            return {"token": token, "state": "FAILED", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001 — never let the UI hang on a 5-min poll timeout
+            log.exception("process_asset_upload: unexpected error during validate/parse")
+            asset_cache.mark_failed(
+                token,
+                task_id=task_id,
+                error=f"Could not parse upload: {exc}",
+            )
             return {"token": token, "state": "FAILED", "error": str(exc)}
 
         asset_cache.mark_running(token, task_id=task_id, progress={"step": "project"})
@@ -524,12 +528,4 @@ def process_asset_upload_task(self, token: str, tmp_path: str) -> dict:
 
         return {"token": token, "state": "SUCCESS", "summary": summary}
     finally:
-        try:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-                # Also remove the parent token dir if empty.
-                parent = os.path.dirname(tmp_path)
-                if parent and os.path.isdir(parent) and not os.listdir(parent):
-                    os.rmdir(parent)
-        except OSError:
-            log.warning("process_asset_upload: could not clean up %s", tmp_path)
+        asset_cache.evict_upload(token)

@@ -3721,9 +3721,10 @@ def discovery_stats(request):
 # ── Ephemeral asset upload ───────────────────────────────────────────────────
 
 
-# Upload size cap matches the asset-upload pipeline's per-tarball decompressed
-# cap. The streamed read is bounded so a hostile client can't OOM us.
-_ASSET_MAX_UPLOAD_BYTES = 100 * 1024 * 1024  # 100 MB
+# Compressed (.tar.gz) upload cap. The decompressed cap lives in
+# ``asset_upload/schemas.py:MAX_TARBALL_BYTES``; this one bounds the bytes we
+# accept on the wire so a hostile client can't OOM us before validation.
+_ASSET_MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 @discovery_router.post(
@@ -3740,10 +3741,6 @@ def asset_upload(request):
     The request body is ``multipart/form-data`` with a single ``file`` field.
     """
     import hashlib
-    import os
-    import tempfile
-
-    from django.conf import settings
 
     from discovery.services.asset_upload import cache as asset_cache
     from discovery.tasks import process_asset_upload_task
@@ -3753,28 +3750,25 @@ def asset_upload(request):
         raise HttpError(400, "Missing 'file' field in multipart upload")
 
     if upload.size and upload.size > _ASSET_MAX_UPLOAD_BYTES:
-        raise HttpError(413, "Upload exceeds 100 MB cap")
+        raise HttpError(413, "Upload exceeds 5 MB cap")
 
     raw = upload.read(_ASSET_MAX_UPLOAD_BYTES + 1)
     if len(raw) > _ASSET_MAX_UPLOAD_BYTES:
-        raise HttpError(413, "Upload exceeds 100 MB cap")
+        raise HttpError(413, "Upload exceeds 5 MB cap")
 
     if not raw.startswith(b"\x1f\x8b"):
         raise HttpError(400, "Upload must be a gzip-compressed tarball")
 
     token = hashlib.sha256(raw).hexdigest()[:24]
 
-    upload_root = settings.MEDIA_ROOT if getattr(settings, "MEDIA_ROOT", None) else tempfile.gettempdir()
-    token_dir = os.path.join(str(upload_root), "asset_uploads", token)
-    os.makedirs(token_dir, exist_ok=True)
-    tmp_path = os.path.join(token_dir, "upload.tar.gz")
-    with open(tmp_path, "wb") as f:
-        f.write(raw)
+    # Park the bytes in Redis so the Celery worker (separate pod, separate
+    # /tmp) can read them by token. Avoids any shared-filesystem coupling.
+    asset_cache.stash_upload(token, raw)
 
     # Mark pending up front so concurrent status polls don't return UNKNOWN
     # in the gap between dispatch and the worker writing RUNNING.
     asset_cache.mark_pending(token, task_id="")
-    async_result = process_asset_upload_task.delay(token, tmp_path)
+    async_result = process_asset_upload_task.delay(token)
     # If the cache still says PENDING, fold the actual task_id in. The worker
     # may have already written RUNNING / SUCCESS by now — leave that alone.
     status_payload = asset_cache.read_status(token)

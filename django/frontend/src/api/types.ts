@@ -85,7 +85,8 @@ export interface DomainArchitectureItem {
 }
 
 export interface ParentAssemblySummary {
-  assembly_id: number;
+  // null for asset-upload virtual assemblies that have no DB row.
+  assembly_id: number | null;
   accession: string;
   organism_name: string | null;
   source_name: string | null;
