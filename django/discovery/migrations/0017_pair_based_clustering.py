@@ -134,16 +134,22 @@ class Migration(migrations.Migration):
         migrations.RemoveField(model_name="dashboardgcf", name="family_id"),
         migrations.RemoveField(model_name="dashboardgcf", name="known_chemistry_annotation"),
         migrations.RemoveField(model_name="dashboardgcf", name="validated_accession"),
+        # Legacy GCF rows reference the pre-0017 PCA/UMAP/HDBSCAN pipeline
+        # and have no valid clustering_run target; drop them so the new
+        # non-nullable FK can be added cleanly. run_bgc_clustering --apply
+        # repopulates the table after migrate.
+        migrations.RunSQL(
+            sql="DELETE FROM discovery_gcf;",
+            reverse_sql=migrations.RunSQL.noop,
+        ),
         migrations.AddField(
             model_name="dashboardgcf",
             name="clustering_run",
             field=models.ForeignKey(
-                default=0,
                 on_delete=django.db.models.deletion.CASCADE,
                 related_name="gcfs",
                 to="discovery.clusteringrun",
             ),
-            preserve_default=False,
         ),
         migrations.AddField(
             model_name="dashboardgcf",
