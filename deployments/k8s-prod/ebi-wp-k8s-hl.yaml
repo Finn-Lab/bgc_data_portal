@@ -220,14 +220,20 @@ items:
                     - rabbitmq-diagnostics
                     - -q
                     - ping
-                periodSeconds: 5
+                initialDelaySeconds: 20
+                periodSeconds: 10
+                timeoutSeconds: 10
+                failureThreshold: 6
               livenessProbe:
                 exec:
                   command:
                     - rabbitmq-diagnostics
                     - -q
                     - ping
-                periodSeconds: 5
+                initialDelaySeconds: 60
+                periodSeconds: 30
+                timeoutSeconds: 15
+                failureThreshold: 3
 
   - apiVersion: v1
     kind: Service
