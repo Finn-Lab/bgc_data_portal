@@ -172,8 +172,8 @@ export function NrbRosterTable() {
                     "novelty_score",
                     "domain_novelty",
                     "similarity",
-                  ] as const
-                ).includes(col.key as SortKey);
+                  ] as readonly string[]
+                ).includes(col.key);
                 return (
                   <TableHead
                     key={col.key}

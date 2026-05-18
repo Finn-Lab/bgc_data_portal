@@ -132,17 +132,6 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Domain Novelty <HelpTooltip tooltipKey="domain_novelty" side="bottom" /></h3>
           <p className="vf-summary__text font-mono font-medium">{bgc.domain_novelty.toFixed(3)}</p>
         </article>
-        {bgc.nearest_validated_accession && (
-          <article className="vf-summary">
-            <h3 className="vf-summary__title flex items-center gap-1" style={{ fontSize: "0.75rem" }}>Nearest Validated <HelpTooltip tooltipKey="nearest_validated_distance" side="bottom" /></h3>
-            <p className="vf-summary__text font-mono font-medium">
-              {bgc.nearest_validated_accession}
-            </p>
-            <p className="vf-summary__text text-muted-foreground">
-              dist: {bgc.nearest_validated_distance?.toFixed(3)}
-            </p>
-          </article>
-        )}
       </div>
 
       <Separator />
