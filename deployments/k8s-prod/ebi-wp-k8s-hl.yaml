@@ -390,6 +390,8 @@ items:
                   value: /data/huggingface
                 - name: NUMBA_CACHE_DIR
                   value: /tmp/numba_cache
+                - name: PROTEIN_SEARCH_INDEX_DIR
+                  value: /data/huggingface/protein_search
               envFrom:
                 - secretRef:
                     name: bgc-data-portal-secret
