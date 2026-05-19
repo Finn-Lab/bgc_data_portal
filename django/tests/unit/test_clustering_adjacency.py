@@ -144,7 +144,7 @@ def test_adjacency_matches_mixed_case_stored_ref_db():
     _domain(bgc, cds=cds2, acc="B", ref_db="NCBIfam")
 
     M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(
-        sources=("PFAM", "NCBIFAM"),
+        sources=("PFAM", "NCBIFAM","TIGRFAM"),
     )
     assert list(row_ids) == [nrb.id]
     assert {tuple(p) for p in pair_vocab.tolist()} == {("A", "B")}
@@ -164,7 +164,7 @@ def test_ref_db_filter_applies_before_sequencing():
     _domain(bgc, cds=cds3, acc="B", ref_db="NCBIFAM")
 
     M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(
-        sources=("PFAM", "NCBIFAM"),
+        sources=("PFAM", "NCBIFAM","TIGRFAM"),
     )
     pairs = {tuple(p) for p in pair_vocab.tolist()}
     assert pairs == {("A", "B")}

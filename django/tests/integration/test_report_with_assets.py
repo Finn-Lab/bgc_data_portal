@@ -79,7 +79,7 @@ def _make_persistent_nrb_with_domain():
         ref_db="Pfam",
         start_position=0,
         end_position=100,
-        go_slim="Signal transducer activity",
+        go_slim=["Signal transducer activity"],
     )
     return nrb
 
@@ -123,7 +123,7 @@ def test_assets_feed_domain_gcf_and_source_panels():
             "domain_acc": "PF00001",
             "domain_name": "Pf001",
             "domain_description": "GPCR-like",
-            "go_slim": "Signal transducer activity",
+            "go_slim": ["Signal transducer activity"],
         },
         # Asset-only domain → should still show in the composition table.
         {
@@ -131,7 +131,7 @@ def test_assets_feed_domain_gcf_and_source_panels():
             "domain_acc": "PF00009",
             "domain_name": "Pf009",
             "domain_description": "Asset-only",
-            "go_slim": "Catalytic activity",
+            "go_slim": ["Catalytic activity"],
         },
     ]
 

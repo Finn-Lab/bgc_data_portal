@@ -159,6 +159,14 @@ def build_report_payload(
             "go_slim",
         )
     )
+    # BgcDomain.go_slim is a list of slim term names; the heatmap categories
+    # are keyed by a single string, so collapse to the first term (sorted)
+    # for now. Multi-slim heatmap explosion can be revisited later.
+    def _slim_str(value) -> str:
+        if isinstance(value, list):
+            return value[0] if value else ""
+        return value or ""
+
     for nid, acc, name, desc, slim in domain_pairs:
         if not acc:
             continue
@@ -167,8 +175,9 @@ def build_report_payload(
             domain_name_lookup[acc] = name
         if desc and acc not in domain_desc_lookup:
             domain_desc_lookup[acc] = desc
-        if slim and acc not in domain_goslim_lookup:
-            domain_goslim_lookup[acc] = slim
+        slim_str = _slim_str(slim)
+        if slim_str and acc not in domain_goslim_lookup:
+            domain_goslim_lookup[acc] = slim_str
 
     # Fold in asset domain hits (negative NRB ids); the set keyed by acc
     # treats them identically to persisted NRBs for the tier denominator.
@@ -184,7 +193,7 @@ def build_report_payload(
         desc = r.get("domain_description") or ""
         if desc and acc not in domain_desc_lookup:
             domain_desc_lookup[acc] = desc
-        slim = r.get("go_slim") or ""
+        slim = _slim_str(r.get("go_slim"))
         if slim and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim
 

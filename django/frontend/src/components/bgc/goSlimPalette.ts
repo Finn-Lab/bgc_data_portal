@@ -1,54 +1,11 @@
-// Global GO slim term → color map. Computed once over the full sorted
-// molecular-function vocabulary so the same term gets the same color in
-// every RegionPlot instance.
+// Stable colour assignment for GO-slim term names.
 //
-// Vocabulary source: django/discovery/management/commands/data/pfam2goSlim.json.
-// Capitalization matches discovery/management/commands/load_pfam_go_slim.py
-// (`desc.capitalize()`), which is what ends up in BgcDomain.go_slim. Regenerate
-// this list if the JSON gains new molecular_function entries.
-
-export const GO_SLIM_VOCABULARY: readonly string[] = Object.freeze([
-  "Amino acid binding",
-  "Antioxidant activity",
-  "Carbohydrate binding",
-  "Catalytic activity",
-  "Coenzyme binding",
-  "Drug transporter activity",
-  "Electron carrier activity",
-  "Hydrolase activity",
-  "Ion binding",
-  "Iron-sulfur cluster binding",
-  "Isomerase activity",
-  "Kinase activity",
-  "Ligase activity",
-  "Lyase activity",
-  "Metal ion binding",
-  "Molecular function",
-  "Nucleic acid binding",
-  "Nucleoside-triphosphatase activity",
-  "Nucleotide binding",
-  "Nucleotidyltransferase activity",
-  "Oxidoreductase activity",
-  "Penicillin binding",
-  "Peptidase activity",
-  "Peroxidase activity",
-  "Phosphatase activity",
-  "Protein binding",
-  "Pyridoxal phosphate binding",
-  "Receptor activity",
-  "Recombinase activity",
-  "Signal transducer activity",
-  "Structural constituent of ribosome",
-  "Tetrapyrrole binding",
-  "Transcription factor activity, sequence-specific dna binding",
-  "Transcription factor binding",
-  "Transferase activity",
-  "Transporter activity",
-  // Note: "activiy" typo is propagated from the source JSON. Do not "fix" it
-  // here — BgcDomain.go_slim rows already contain this exact string.
-  "Transposase activiy",
-  "Vitamin binding",
-]);
+// Previously seeded from a hardcoded vocabulary mirrored from pfam2goSlim.json
+// (single MF term per Pfam accession). The ingestion path now derives slim
+// names from per-signature GO terms via goatools.mapslim against
+// goslim_metagenomics (see `discovery/services/go_slim.py`), so the vocabulary
+// is open-ended. Colours are therefore derived deterministically from the
+// term string itself — same term ⇒ same colour, no regeneration needed.
 
 export const UNANNOTATED_COLOR = "#e8e8e8";
 export const UNANNOTATED_LABEL = "Unannotated";
@@ -68,38 +25,45 @@ function hlsToRgb(h: number, l: number, s: number): [number, number, number] {
   return [hue2rgb(p, q, h + 1 / 3), hue2rgb(p, q, h), hue2rgb(p, q, h - 1 / 3)];
 }
 
-function makeDistinctColorMap(keys: readonly string[]): Record<string, string> {
-  const PHI = 0.618033988749895;
-  const SEED = 0.12;
-  const L0 = 0.6, L1 = 0.66;
-  const S0 = 0.78, S1 = 0.86;
-  const unique = [...new Set(keys)].sort();
-  const out: Record<string, string> = {};
-  for (let i = 0; i < unique.length; i++) {
-    const h = (SEED + i * PHI) % 1.0;
-    const l = i % 2 === 0 ? L0 : L1;
-    const s = Math.floor(i / 2) % 2 === 0 ? S0 : S1;
-    const [r, g, b] = hlsToRgb(h, l, s);
-    out[unique[i]!] = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+// FNV-1a 32-bit hash, lifted into [0, 1).
+function hashTo01(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
   }
-  return out;
+  // Normalise — strip sign and divide by 2^32.
+  return ((h >>> 0) % 1_000_000) / 1_000_000;
 }
 
-export const GO_SLIM_COLOR_MAP: Readonly<Record<string, string>> = Object.freeze(
-  makeDistinctColorMap(GO_SLIM_VOCABULARY),
-);
-
-const warnedUnknown = new Set<string>();
+const colorCache = new Map<string, string>();
 
 export function getGoSlimColor(term: string | null | undefined): string {
   if (!term) return UNANNOTATED_COLOR;
-  const c = GO_SLIM_COLOR_MAP[term];
-  if (c) return c;
-  if (!warnedUnknown.has(term)) {
-    warnedUnknown.add(term);
-    // Surfaces vocabulary drift (e.g. pfam2goSlim.json gained new entries
-    // but goSlimPalette.ts wasn't regenerated).
-    console.warn(`[goSlimPalette] Unknown GO slim term: "${term}"`);
-  }
-  return UNANNOTATED_COLOR;
+  const cached = colorCache.get(term);
+  if (cached) return cached;
+
+  // Hue from a hash of the term; lightness/saturation alternate by hue band so
+  // adjacent terms in alphabetical view stay visually distinct.
+  const h = hashTo01(term);
+  const band = Math.floor(h * 16);
+  const l = band % 2 === 0 ? 0.6 : 0.66;
+  const s = Math.floor(band / 2) % 2 === 0 ? 0.78 : 0.86;
+  const [r, g, b] = hlsToRgb(h, l, s);
+  const color = `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`;
+  colorCache.set(term, color);
+  return color;
 }
+
+// Back-compat: existing call sites destructure GO_SLIM_COLOR_MAP[term] with a
+// `?? UNANNOTATED_COLOR` fallback. Expose a Proxy-shaped object that resolves
+// lazily so they keep working without refactor.
+export const GO_SLIM_COLOR_MAP: Record<string, string> = new Proxy(
+  {} as Record<string, string>,
+  {
+    get(_target, prop: string) {
+      if (typeof prop !== "string") return undefined;
+      return getGoSlimColor(prop);
+    },
+  },
+);

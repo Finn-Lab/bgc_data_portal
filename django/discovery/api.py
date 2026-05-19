@@ -48,6 +48,7 @@ from discovery.models import (
 )
 from discovery.services.architecture import (
     bgc_architecture,
+    collapse_to_interpro_rows,
     nrb_architecture,
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
@@ -105,6 +106,7 @@ from discovery.api_schemas import (
     PaginatedAssemblyResponse,
     PaginatedQueryResultResponse,
     PaginationMeta,
+    InterproAnnotationOut,
     ParentAssemblySummary,
     PfamAnnotationOut,
     QueryResultBgc,
@@ -765,7 +767,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                 PfamAnnotationOut(
                     accession=bd.domain_acc,
                     description=bd.domain_description or bd.domain_name or "",
-                    go_slim=bd.go_slim,
+                    go_slim=list(bd.go_slim or []),
                     envelope_start=bd.start_position,
                     envelope_end=bd.end_position,
                     e_value=str(bd.score) if bd.score is not None else None,
@@ -789,11 +791,18 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                     end=max(0, dom_nt_end - window_start),
                     strand=cds.strand,
                     score=bd.score,
-                    go_slim=[bd.go_slim] if bd.go_slim else [],
+                    go_slim=list(bd.go_slim or []),
                     parent_cds_id=cds.protein_id_str,
                     url=bd.url,
                 )
             )
+
+        # Non-redundant InterPro annotations for the Protein Information
+        # card (deduped by interpro_entry_acc, fallback to signature acc).
+        interpro_rows = [
+            InterproAnnotationOut(**row)
+            for row in collapse_to_interpro_rows(sorted_domains)
+        ]
 
         rep = cds.cluster_representative
 
@@ -817,6 +826,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                 ),
                 sequence=cds.seq.get_sequence() if hasattr(cds, "seq") else "",
                 pfam=pfam_rows,
+                interpro=interpro_rows,
                 chemont_id=chemont_row.chemont_id if chemont_row else None,
                 chemont_name=chemont_row.chemont_name if chemont_row else None,
                 chemont_probability=chemont_row.probability if chemont_row else None,

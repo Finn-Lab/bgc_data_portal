@@ -635,7 +635,10 @@ class BgcDomain(models.Model):
     domain_name = models.CharField(max_length=255)
     domain_description = models.TextField(blank=True, default="")
     ref_db = models.CharField(max_length=50, blank=True, default="")
-    go_slim = models.CharField(max_length=100, blank=True, default="")
+    # Deduplicated, sorted list of GO-slim term names derived from go_terms
+    # via discovery.services.go_slim.go_slim_for_terms. Populated inline at
+    # ingestion / asset projection time.
+    go_slim = models.JSONField(default=list, blank=True)
     # InterPro entry the signature maps to (populated when IPS runs with --iprlookup;
     # blank for signatures that do not map to an InterPro entry).
     interpro_entry_acc = models.CharField(max_length=20, blank=True, default="")
@@ -881,10 +884,18 @@ class DashboardNaturalProduct(models.Model):
 class DashboardCdsChemOnt(models.Model):
     """Deepest ChemOnt class predicted by CHAMOIS for a single CDS.
 
-    One row per CDS that received a confident-enough classification (BGC-level
-    probability of the argmax class > 0.5, iteratively descended to the deepest
-    ChemOnt child whose gene weight > 1.0). CDSs that fail the threshold do not
-    produce a row.
+    The class is chosen with **cross-BGC** evidence: per-BGC ``chamois explain
+    --cds`` TSVs are conceptually concatenated and, for each protein, the
+    (class, BGC) cell with the largest gene weight is the *argmax*. The protein
+    is kept only if ``argmax_weight > 1.0`` AND the BGC-level probability of the
+    argmax cell is ``> 0.5``. The reported class is then the **globally
+    deepest** descendant of the argmax class whose cross-BGC max gene weight is
+    also ``> 1.0`` (ties broken by higher weight); if no descendant qualifies,
+    the argmax class itself is reported.
+
+    The same selected class is written to every CDS row of the protein —
+    one ``DashboardCdsChemOnt`` per (BGC, protein), since each
+    ``DashboardCds`` is scoped to a single BGC.
     """
 
     id = models.BigAutoField(primary_key=True)

@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 
 CHUNK = 200_000
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM")
+DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM","TIGRFAM")
 
 
 def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:

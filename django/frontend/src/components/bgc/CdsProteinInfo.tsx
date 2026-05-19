@@ -112,17 +112,18 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
         )}
       </div>
 
-      {/* Pfam annotations table */}
+      {/* InterPro annotations table — deduped by InterPro entry, with fallback
+          to the signature accession for signatures that don't map to an entry. */}
       <div className="mb-3">
-        <h6 className="font-semibold text-xs mb-1">Pfam Annotations</h6>
-        {cds.pfam.length === 0 ? (
-          <p className="text-muted-foreground italic">No Pfam annotations</p>
+        <h6 className="font-semibold text-xs mb-1">InterPro Annotations</h6>
+        {cds.interpro.length === 0 ? (
+          <p className="text-muted-foreground italic">No InterPro annotations</p>
         ) : (
           <div className="max-h-48 overflow-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-[10px] h-7 px-1.5">PFAM</TableHead>
+                  <TableHead className="text-[10px] h-7 px-1.5">Accession</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">Description</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">GO Slim</TableHead>
                   <TableHead className="text-[10px] h-7 px-1.5">Start</TableHead>
@@ -131,27 +132,29 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cds.pfam.map((pf, i) => (
-                  <TableRow key={`${pf.accession}-${i}`}>
+                {cds.interpro.map((row, i) => (
+                  <TableRow key={`${row.accession}-${i}`}>
                     <TableCell className="text-[10px] px-1.5 py-1">
-                      {pf.url ? (
+                      {row.url ? (
                         <a
-                          href={pf.url}
+                          href={row.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-blue-600 hover:underline"
                         >
-                          {pf.accession}
+                          {row.accession}
                         </a>
                       ) : (
-                        pf.accession
+                        row.accession
                       )}
                     </TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1">{pf.description}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1">{pf.go_slim || "—"}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.envelope_start}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.envelope_end}</TableCell>
-                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{pf.e_value ?? "—"}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1">{row.description}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1">
+                      {row.go_slim.length > 0 ? row.go_slim.join(", ") : "—"}
+                    </TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.envelope_start}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.envelope_end}</TableCell>
+                    <TableCell className="text-[10px] px-1.5 py-1 font-mono">{row.e_value ?? "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

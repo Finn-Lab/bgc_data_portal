@@ -43,7 +43,7 @@ from typing import Any
 
 from django.conf import settings
 
-from discovery.services.go_slim import go_slim_for
+from discovery.services.go_slim import go_slim_for_terms
 
 from . import cache as asset_cache
 from .matrices import (
@@ -410,7 +410,7 @@ def _ordered_architecture(vnrb: VirtualNrb, sources: tuple[str, ...]) -> list[di
                     "start": 0,
                     "end": 0,
                     "score": None,
-                    "go_slim": go_slim_for(d.domain_acc),
+                    "go_slim": go_slim_for_terms(d.go_terms),
                 },
             )
         )
@@ -544,6 +544,8 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
         (c.bgc_key, c.protein_id_str): c for c in vnrb.cds_chemont
     }
 
+    from discovery.services.architecture import collapse_to_interpro_rows
+
     for cds in vnrb.cds:
         sequence = ""
         if cds.sequence_zlib_b64:
@@ -556,9 +558,14 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
             except Exception:  # noqa: BLE001
                 sequence = ""
 
+        cds_domains = domains_by_cds_pid.get((cds.bgc_key, cds.protein_id_str), [])
+        interpro = collapse_to_interpro_rows(
+            cds_domains, slim_for=lambda d: go_slim_for_terms(d.go_terms)
+        )
+
         pfam = []
-        for d in domains_by_cds_pid.get((cds.bgc_key, cds.protein_id_str), []):
-            slim = go_slim_for(d.domain_acc)
+        for d in cds_domains:
+            slim = go_slim_for_terms(d.go_terms)
             pfam.append(
                 {
                     "accession": d.domain_acc,
@@ -588,7 +595,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
                     "end": max(0, dom_nt_end - window_start),
                     "strand": cds.strand,
                     "score": d.score,
-                    "go_slim": [slim] if slim else [],
+                    "go_slim": list(slim),
                     "parent_cds_id": cds.protein_id_str,
                     "url": d.url or "",
                 }
@@ -607,6 +614,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
                 "cluster_representative_url": None,
                 "sequence": sequence,
                 "pfam": pfam,
+                "interpro": interpro,
                 "chemont_id": chemont_hit.chemont_id if chemont_hit else None,
                 "chemont_name": chemont_hit.chemont_name if chemont_hit else None,
                 "chemont_probability": (
@@ -680,7 +688,7 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
                 "domain_acc": d.domain_acc,
                 "domain_name": d.domain_name,
                 "domain_description": d.domain_description or d.domain_name,
-                "go_slim": go_slim_for(d.domain_acc),
+                "go_slim": go_slim_for_terms(d.go_terms),
             })
     asset_cache.write_domain_hits(token, domain_hits)
 

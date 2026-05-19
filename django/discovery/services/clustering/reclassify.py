@@ -71,7 +71,7 @@ def reclassify_bgcs(
         raise ValueError(f"scope must be one of {ALLOWED_SCOPES}, got {scope!r}")
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
-    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM")
+    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM","TIGRFAM")
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
 
     # ── 1. Determine query DashboardBgcs ─────────────────────────────────

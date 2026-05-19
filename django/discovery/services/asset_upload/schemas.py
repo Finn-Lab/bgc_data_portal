@@ -94,6 +94,10 @@ class AssetDomain:
     The ``cds_protein_id`` matches the parent ``AssetCds.protein_id_str`` —
     the projection step joins on (bgc_key, cds_protein_id) to align
     adjacency anchors with the CDS positions.
+
+    ``go_terms`` and ``interpro_entry_*`` mirror the columns the ETL writes
+    to ``domains.tsv``; the projection step folds ``go_terms`` down to slim
+    names with :func:`discovery.services.go_slim.go_slim_for_terms`.
     """
 
     bgc_key: tuple[str, int, int, str]
@@ -106,6 +110,9 @@ class AssetDomain:
     end_position: int = 0
     score: float | None = None
     url: str = ""
+    interpro_entry_acc: str = ""
+    interpro_entry_description: str = ""
+    go_terms: list[str] = field(default_factory=list)
 
 
 @dataclass

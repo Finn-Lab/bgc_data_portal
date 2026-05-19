@@ -296,7 +296,7 @@ def project_partial_nrbs(
     from discovery.services.clustering.reclassify import _align_rows
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
-    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM")
+    sources = tuple(run.domain_sources) or ("PFAM", "NCBIFAM","TIGRFAM")
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
 
     # ── 1. Identify partials ─────────────────────────────────────────────

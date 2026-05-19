@@ -245,6 +245,8 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
             )
             if key not in bgc_keys:
                 continue
+            go_terms_raw = (row.get("go_terms") or "").strip()
+            go_terms = [t for t in go_terms_raw.split("|") if t] if go_terms_raw else []
             data.domains.append(
                 AssetDomain(
                     bgc_key=key,
@@ -257,6 +259,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                     end_position=_to_int(row.get("end_position")),
                     score=_to_optional_float(row.get("score")),
                     url=row.get("url", ""),
+                    interpro_entry_acc=row.get("interpro_entry_acc", ""),
+                    interpro_entry_description=row.get("interpro_entry_description", ""),
+                    go_terms=go_terms,
                 )
             )
             if len(data.domains) > MAX_DOMAIN_ROWS:

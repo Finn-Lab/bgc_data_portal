@@ -50,7 +50,7 @@ from discovery.models import (
     RegionAccessionAlias,
 )
 
-from discovery.services.go_slim import go_slim_for
+from discovery.services.go_slim import go_slim_for_terms
 
 from .region_assignment import RegionAssigner
 from .tsv_copy import copy_tsv_to_table, truncate_tables
@@ -572,7 +572,12 @@ def load_domains(
     bgc_lookup: dict[tuple[str, int, int, str], int],
     cds_lookup: dict[tuple[int, str], int],
 ) -> int:
-    """Load domains.tsv → BgcDomain. Returns row count."""
+    """Load domains.tsv → BgcDomain. Returns row count.
+
+    All ref_db values are ingested unchanged — clustering, similarity, and the
+    pooled domain architecture views apply their own PFAM/NCBIFAM filter
+    downstream (see discovery.services.clustering and discovery.services.architecture).
+    """
     path = data_dir / "domains.tsv"
     if not path.exists():
         logger.info("domains.tsv not found, skipping")
@@ -608,7 +613,7 @@ def load_domains(
                     end_position=int(row.get("end_position", 0)),
                     score=float(row["score"]) if row.get("score") else None,
                     url=row.get("url", ""),
-                    go_slim=go_slim_for(domain_acc),
+                    go_slim=go_slim_for_terms(go_terms),
                     interpro_entry_acc=row.get("interpro_entry_acc", ""),
                     interpro_entry_description=row.get("interpro_entry_description", ""),
                     go_terms=go_terms,

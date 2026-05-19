@@ -278,10 +278,25 @@ export interface PaginatedAssemblyAggregationResponse {
 export interface PfamAnnotation {
   accession: string;
   description: string;
-  go_slim: string;
+  // Deduplicated slim term names derived from the signature's GO terms.
+  // Per-signature view; collapsed to one row per InterPro entry in
+  // `RegionCds.interpro`.
+  go_slim: string[];
   envelope_start: number;
   envelope_end: number;
   e_value: string | null;
+  url: string;
+}
+
+export interface InterproAnnotation {
+  // InterPro entry accession (e.g. IPR000123) when the signature maps to one,
+  // otherwise the signature accession (PFxxxxx, SMxxxxx, …).
+  accession: string;
+  description: string;
+  go_slim: string[];
+  envelope_start: number; // min start across collapsed signatures
+  envelope_end: number; // max end across collapsed signatures
+  e_value: string | null; // best (smallest) e-value across signatures
   url: string;
 }
 
@@ -296,6 +311,10 @@ export interface RegionCds {
   cluster_representative_url: string | null;
   sequence: string;
   pfam: PfamAnnotation[];
+  // Non-redundant InterPro-entry annotations for the Protein Information card.
+  // Same source data as `pfam` but collapsed by InterPro entry (fallback to
+  // signature accession when no entry is mapped).
+  interpro: InterproAnnotation[];
   // Deepest CHAMOIS ChemOnt class assigned to this CDS (null when below the
   // probability / weight thresholds).
   chemont_id: string | null;

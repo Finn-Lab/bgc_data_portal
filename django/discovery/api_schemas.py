@@ -694,12 +694,37 @@ class ShortlistExportRequest(Schema):
 
 
 class PfamAnnotationOut(Schema):
+    """Per-signature domain hit. One row per BgcDomain. ``go_slim`` is the
+    deduplicated list of slim names derived from the signature's GO terms.
+
+    Deprecated by ``InterproAnnotationOut`` (collapsed by IPS entry) — kept
+    for one release while the frontend migrates.
+    """
+
     accession: str
     description: str = ""
-    go_slim: str = ""
+    go_slim: list[str] = []
     envelope_start: int = 0
     envelope_end: int = 0
     e_value: Optional[str] = None
+    url: str = ""
+
+
+class InterproAnnotationOut(Schema):
+    """Non-redundant CDS annotation row, deduplicated by InterPro entry.
+
+    When the signature maps to an InterPro entry (``interpro_entry_acc`` set
+    on the BgcDomain row), all signatures sharing that entry collapse into
+    one row carrying the entry accession and description. Signatures with no
+    entry mapping fall back to the signature accession.
+    """
+
+    accession: str
+    description: str = ""
+    go_slim: list[str] = []
+    envelope_start: int = 0  # min start across collapsed signatures
+    envelope_end: int = 0  # max end across collapsed signatures
+    e_value: Optional[str] = None  # best (smallest) e-value across signatures
     url: str = ""
 
 
@@ -714,6 +739,10 @@ class RegionCdsOut(Schema):
     cluster_representative_url: Optional[str] = None
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
+    # Non-redundant InterPro-entry annotations for the protein info card.
+    # Same source data as ``pfam`` but collapsed by interpro_entry_acc
+    # (falling back to signature accession when no entry is mapped).
+    interpro: list[InterproAnnotationOut] = []
     # Deepest ChemOnt class predicted by CHAMOIS for this CDS (null when no
     # confident classification — see DashboardCdsChemOnt).
     chemont_id: Optional[str] = None

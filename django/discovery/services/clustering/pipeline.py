@@ -29,7 +29,7 @@ from typing import Sequence
 log = logging.getLogger(__name__)
 
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM")
+DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM","TIGRFAM")
 DEFAULT_SCORE_WEIGHTS: tuple[float, float] = (0.5, 0.5)
 DEFAULT_RESOLUTIONS: tuple[float, ...] = (0.03, 0.08, 0.15, 0.25)
 KNN_K_FLOOR = 5

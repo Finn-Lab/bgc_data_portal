@@ -1,9 +1,10 @@
-"""Ingestion populates ``BgcDomain.go_slim`` inline.
+"""Ingestion populates ``BgcDomain.go_slim`` inline from ``go_terms``.
 
-Pins the behaviour added so operators no longer need to remember to run
-``manage.py load_pfam_go_slim`` after each fresh load. A row whose Pfam
-accession exists in the bundled ``pfam2goSlim.json`` must come out of
-``load_domains`` with a non-empty ``go_slim``.
+Pins the post-Pfam-era behaviour: the loader does not look up slim names
+from the old pfam2goSlim.json. Instead it folds the per-signature
+``go_terms`` column emitted by InterProScan through
+:func:`discovery.services.go_slim.go_slim_for_terms` and stores the
+resulting deduplicated list on ``BgcDomain.go_slim``.
 """
 
 from __future__ import annotations
@@ -23,8 +24,14 @@ from discovery.models import (
     DashboardContig,
     DashboardDetector,
 )
+from discovery.services import go_slim as go_slim_mod
 from discovery.services.ingestion.loader import load_domains
-from discovery.services.go_slim import go_slim_for
+
+
+SLIM_MAP: dict[str, list[str]] = {
+    "GO:0003824": ["Catalytic activity"],
+    "GO:0016740": ["Transferase activity"],
+}
 
 
 def _seed_parent_rows():
@@ -61,8 +68,23 @@ def _seed_parent_rows():
     return contig, bgc
 
 
+@pytest.fixture(autouse=True)
+def _stub_slim_map(monkeypatch):
+    """Replace the on-disk slim-map loader with a deterministic dict.
+
+    Avoids touching the bundled JSON (which is a placeholder) and decouples
+    the test from goatools / OBO availability.
+    """
+    go_slim_mod._go_term_to_slims.cache_clear()
+    monkeypatch.setattr(
+        go_slim_mod, "_go_term_to_slims", lambda: SLIM_MAP, raising=True
+    )
+    yield
+    go_slim_mod._go_term_to_slims.cache_clear()
+
+
 @pytest.mark.django_db
-def test_load_domains_populates_go_slim(tmp_path: Path):
+def test_load_domains_populates_go_slim_from_go_terms(tmp_path: Path):
     contig, bgc = _seed_parent_rows()
 
     detector_name = "antiSMASH v7.1"
@@ -71,8 +93,7 @@ def test_load_domains_populates_go_slim(tmp_path: Path):
     }
     cds_lookup: dict = {}
 
-    data_dir = tmp_path
-    tsv_path = data_dir / "domains.tsv"
+    tsv_path = tmp_path / "domains.tsv"
     with open(tsv_path, "w", newline="") as f:
         writer = csv.DictWriter(
             f,
@@ -91,10 +112,12 @@ def test_load_domains_populates_go_slim(tmp_path: Path):
                 "end_position",
                 "score",
                 "url",
+                "interpro_entry_acc",
+                "interpro_entry_description",
+                "go_terms",
             ],
         )
         writer.writeheader()
-        # PF00001 is in the bundled mapping with a molecular_function slim.
         writer.writerow({
             "contig_sha256": contig.sequence_sha256,
             "bgc_start": bgc.start_position,
@@ -109,11 +132,52 @@ def test_load_domains_populates_go_slim(tmp_path: Path):
             "end_position": "100",
             "score": "1.5",
             "url": "",
+            "interpro_entry_acc": "IPR000001",
+            "interpro_entry_description": "GPCR entry",
+            "go_terms": "GO:0003824|GO:0016740",
         })
 
-    rows_loaded = load_domains(data_dir, bgc_lookup, cds_lookup)
+    rows_loaded = load_domains(tmp_path, bgc_lookup, cds_lookup)
     assert rows_loaded == 1
 
     row = BgcDomain.objects.get(bgc=bgc, domain_acc="PF00001")
-    assert row.go_slim != ""
-    assert row.go_slim == go_slim_for("PF00001")
+    assert row.go_terms == ["GO:0003824", "GO:0016740"]
+    assert row.go_slim == ["Catalytic activity", "Transferase activity"]
+    assert row.interpro_entry_acc == "IPR000001"
+    assert row.interpro_entry_description == "GPCR entry"
+
+
+@pytest.mark.django_db
+def test_load_domains_handles_empty_go_terms(tmp_path: Path):
+    contig, bgc = _seed_parent_rows()
+    detector_name = "antiSMASH v7.1"
+    bgc_lookup = {
+        (contig.sequence_sha256, bgc.start_position, bgc.end_position, detector_name): bgc.id
+    }
+
+    tsv_path = tmp_path / "domains.tsv"
+    with open(tsv_path, "w", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            delimiter="\t",
+            fieldnames=[
+                "contig_sha256", "bgc_start", "bgc_end", "detector_name",
+                "protein_id_str", "domain_acc", "ref_db", "go_terms",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow({
+            "contig_sha256": contig.sequence_sha256,
+            "bgc_start": bgc.start_position,
+            "bgc_end": bgc.end_position,
+            "detector_name": detector_name,
+            "protein_id_str": "",
+            "domain_acc": "SM00355",
+            "ref_db": "SMART",
+            "go_terms": "",
+        })
+
+    load_domains(tmp_path, bgc_lookup, {})
+    row = BgcDomain.objects.get(bgc=bgc, domain_acc="SM00355")
+    assert row.go_terms == []
+    assert row.go_slim == []

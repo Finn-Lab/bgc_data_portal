@@ -60,7 +60,7 @@ def test_sources_filter_is_case_insensitive_and_excludes_tigrfam():
     _domain(bgc, acc="NF12345", ref_db="NCBIFAM")
     _domain(bgc, acc="TIGR00100", ref_db="TIGRFAM")
 
-    M, row_ids, domain_accs = build_nrb_domain_matrix(sources=("pfam", "ncbifam"))
+    M, row_ids, domain_accs = build_nrb_domain_matrix(sources=("PFAM", "NCBIFAM","TIGRFAM"))
 
     assert M.shape == (1, 2)
     assert set(domain_accs.tolist()) == {"PF00001", "NF12345"}

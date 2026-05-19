@@ -21,7 +21,7 @@ from django.db.models import Q
 log = logging.getLogger(__name__)
 
 
-DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM")
+DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM","TIGRFAM")
 
 
 class Command(BaseCommand):
