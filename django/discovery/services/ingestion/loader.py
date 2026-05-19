@@ -17,8 +17,8 @@ Expected directory layout::
       domains.tsv           (optional)
       embeddings_bgc.tsv    (optional)
       embeddings_protein.tsv (optional)
-      natural_products.tsv       (optional)
-      np_chemont_classes.tsv     (optional)
+      natural_products.tsv       (optional, curated compound rows)
+      cds_chemont.tsv            (optional, per-CDS ChemOnt predictions)
 """
 
 from __future__ import annotations
@@ -41,12 +41,12 @@ from discovery.models import (
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardCdsChemOnt,
     DashboardContig,
     DashboardDetector,
     DashboardDomain,
     DashboardNaturalProduct,
     DashboardRegion,
-    NaturalProductChemOntClass,
     RegionAccessionAlias,
 )
 
@@ -64,9 +64,9 @@ SEQUENCE_INSERT_BATCH_SIZE = 500  # smaller SQL batches for large binary sequenc
 ALL_DISCOVERY_TABLES = [
     "discovery_region_accession_alias",
     "discovery_bgc_domain",
+    "discovery_cds_chemont",
     "discovery_cds_sequence",
     "discovery_cds",
-    "discovery_np_chemont_class",
     "discovery_natural_product",
     "discovery_precomputed_stats",
     "discovery_bgc",
@@ -698,26 +698,24 @@ def load_natural_products(
     return total
 
 
-def load_np_chemont_classes(
+def load_cds_chemont(
     data_dir: Path,
     bgc_lookup: dict[tuple[str, int, int, str], int],
+    cds_lookup: dict[tuple[int, str], int],
 ) -> int:
-    """Load np_chemont_classes.tsv → NaturalProductChemOntClass.
+    """Load cds_chemont.tsv → DashboardCdsChemOnt.
 
-    Each row maps a natural product (identified by BGC key + name) to a
-    ChemOnt ontology term with a probability score.
+    Each row identifies a single CDS via
+    ``(contig_sha256, bgc_start, bgc_end, detector_name, protein_id_str)``
+    and carries the deepest ChemOnt class chosen by CHAMOIS plus its
+    BGC-level probability and gene-specific weight.
     """
-    path = data_dir / "np_chemont_classes.tsv"
+    path = data_dir / "cds_chemont.tsv"
     if not path.exists():
-        logger.info("np_chemont_classes.tsv not found, skipping")
+        logger.info("cds_chemont.tsv not found, skipping")
         return 0
 
-    # Build NP lookup: (bgc_id, np_name) → np_id
-    np_lookup: dict[tuple[int, str], int] = {}
-    for np_obj in DashboardNaturalProduct.objects.values_list("id", "bgc_id", "name"):
-        np_lookup[(np_obj[1], np_obj[2])] = np_obj[0]
-
-    batch: list[NaturalProductChemOntClass] = []
+    batch: list[DashboardCdsChemOnt] = []
     total = 0
     skipped = 0
 
@@ -729,45 +727,53 @@ def load_np_chemont_classes(
                 skipped += 1
                 continue
 
-            np_name = row.get("natural_product_name", "")
-            np_id = np_lookup.get((bgc_id, np_name))
-            if np_id is None:
+            protein_id_str = row.get("protein_id_str", "")
+            cds_id = cds_lookup.get((bgc_id, protein_id_str))
+            if cds_id is None:
                 skipped += 1
                 continue
 
-            probability = float(row.get("probability", "1.0"))
+            try:
+                probability = float(row.get("probability", "0.0"))
+            except ValueError:
+                probability = 0.0
+            try:
+                weight = float(row.get("weight", "0.0"))
+            except ValueError:
+                weight = 0.0
 
             batch.append(
-                NaturalProductChemOntClass(
-                    natural_product_id=np_id,
+                DashboardCdsChemOnt(
+                    cds_id=cds_id,
                     chemont_id=row["chemont_id"],
                     chemont_name=row["chemont_name"],
                     probability=probability,
+                    weight=weight,
                 )
             )
 
             if len(batch) >= BATCH_SIZE:
-                NaturalProductChemOntClass.objects.bulk_create(
+                DashboardCdsChemOnt.objects.bulk_create(
                     batch,
                     update_conflicts=True,
-                    unique_fields=["natural_product", "chemont_id"],
-                    update_fields=["chemont_name", "probability"],
+                    unique_fields=["cds", "chemont_id"],
+                    update_fields=["chemont_name", "probability", "weight"],
                 )
                 total += len(batch)
                 batch.clear()
 
     if batch:
-        NaturalProductChemOntClass.objects.bulk_create(
+        DashboardCdsChemOnt.objects.bulk_create(
             batch,
             update_conflicts=True,
-            unique_fields=["natural_product", "chemont_id"],
-            update_fields=["chemont_name", "probability"],
+            unique_fields=["cds", "chemont_id"],
+            update_fields=["chemont_name", "probability", "weight"],
         )
         total += len(batch)
 
     if skipped:
-        logger.warning("Skipped %d ChemOnt class rows (unresolved NP)", skipped)
-    logger.info("Loaded %d NP ChemOnt classifications", total)
+        logger.warning("Skipped %d CDS ChemOnt rows (unresolved BGC/CDS)", skipped)
+    logger.info("Loaded %d CDS ChemOnt classifications", total)
     return total
 
 
@@ -905,11 +911,11 @@ def run_pipeline(data_dir: str | Path, *, truncate: bool = False, skip_stats: bo
     # ingests embeddings; similarity is computed via composite-Dice over
     # the domain + adjacency matrices in the clustering pipeline.
 
-    # 8. Natural products
+    # 8. Natural products (curated only — CHAMOIS no longer feeds this table)
     load_natural_products(data_dir, bgc_lookup)
 
-    # 8.5. NP ChemOnt classifications
-    load_np_chemont_classes(data_dir, bgc_lookup)
+    # 8.5. Per-CDS ChemOnt classifications from CHAMOIS
+    load_cds_chemont(data_dir, bgc_lookup, cds_lookup)
 
     # 9–10. Post-load computations
     if not skip_stats:

@@ -878,32 +878,41 @@ class DashboardNaturalProduct(models.Model):
         return self.name
 
 
-class NaturalProductChemOntClass(models.Model):
-    """ChemOnt ontology classification for a natural product.
+class DashboardCdsChemOnt(models.Model):
+    """Deepest ChemOnt class predicted by CHAMOIS for a single CDS.
 
-    Each natural product can have multiple ChemOnt nodes, each with a
-    probability score assigned by the ETL pipeline.
+    One row per CDS that received a confident-enough classification (BGC-level
+    probability of the argmax class > 0.5, iteratively descended to the deepest
+    ChemOnt child whose gene weight > 1.0). CDSs that fail the threshold do not
+    produce a row.
     """
 
     id = models.BigAutoField(primary_key=True)
-    natural_product = models.ForeignKey(
-        DashboardNaturalProduct,
+    cds = models.ForeignKey(
+        DashboardCds,
         on_delete=models.CASCADE,
-        related_name="chemont_classes",
+        related_name="chemont",
     )
     chemont_id = models.CharField(
         max_length=30,
         help_text="ChemOnt ontology term ID, e.g. CHEMONTID:0000147",
     )
     chemont_name = models.CharField(max_length=255)
-    probability = models.FloatField(default=1.0)
+    probability = models.FloatField(
+        default=0.0,
+        help_text="BGC-level probability of the argmax class for this CDS.",
+    )
+    weight = models.FloatField(
+        default=0.0,
+        help_text="Gene-specific weight of the deepest selected class.",
+    )
 
     class Meta:
-        db_table = "discovery_np_chemont_class"
-        unique_together = [("natural_product", "chemont_id")]
+        db_table = "discovery_cds_chemont"
+        unique_together = [("cds", "chemont_id")]
         indexes = [
-            models.Index(fields=["chemont_id"], name="idx_npchemont_cid"),
-            models.Index(fields=["natural_product"], name="idx_npchemont_np"),
+            models.Index(fields=["chemont_id"], name="idx_cdschemont_cid"),
+            models.Index(fields=["cds"], name="idx_cdschemont_cds"),
         ]
 
     def __str__(self):

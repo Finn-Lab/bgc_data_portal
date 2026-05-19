@@ -29,10 +29,10 @@ from discovery.models import (
     DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
+    DashboardCdsChemOnt,
     DashboardDomain,
     DashboardGCF,
     DashboardNaturalProduct,
-    NaturalProductChemOntClass,
     PrecomputedStats,
 )
 
@@ -229,20 +229,25 @@ def _compute_chemont_ic() -> None:
 
     Stores the result in PrecomputedStats(key="chemont_ic") so the
     chemical similarity search task can use it without recomputing.
+
+    Counts are taken over distinct BGCs (the unit on which CHAMOIS predicts
+    a class), so IC reflects how broadly each ChemOnt term is observed across
+    the BGC corpus.
     """
     from common_core.chemont.ontology import get_ontology
     from common_core.chemont.similarity import compute_ic_values
 
-    total_nps = DashboardNaturalProduct.objects.count()
-    if total_nps == 0:
-        logger.info("No natural products — skipping ChemOnt IC computation")
+    total_bgcs = (
+        DashboardCdsChemOnt.objects.values("cds__bgc").distinct().count()
+    )
+    if total_bgcs == 0:
+        logger.info("No CDS ChemOnt annotations — skipping IC computation")
         return
 
-    # Direct annotation counts: how many distinct NPs have each ChemOnt term.
     rows = (
-        NaturalProductChemOntClass.objects
+        DashboardCdsChemOnt.objects
         .values("chemont_id")
-        .annotate(cnt=Count("natural_product", distinct=True))
+        .annotate(cnt=Count("cds__bgc", distinct=True))
     )
     term_counts = {r["chemont_id"]: r["cnt"] for r in rows}
 
@@ -259,12 +264,12 @@ def _compute_chemont_ic() -> None:
         )
         return
 
-    ic_values = compute_ic_values(term_counts, total_nps, ont)
+    ic_values = compute_ic_values(term_counts, total_bgcs, ont)
 
     PrecomputedStats.objects.update_or_create(
         key="chemont_ic",
         defaults={"data": ic_values},
     )
     logger.info(
-        "ChemOnt IC computed for %d terms (%d NPs)", len(ic_values), total_nps
+        "ChemOnt IC computed for %d terms (%d BGCs)", len(ic_values), total_bgcs
     )

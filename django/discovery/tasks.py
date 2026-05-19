@@ -66,7 +66,7 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
     from common_core.chemont.ontology import get_ontology
     from common_core.chemont.similarity import best_match_average, normalize_similarity
 
-    from discovery.models import NaturalProductChemOntClass, PrecomputedStats
+    from discovery.models import DashboardCdsChemOnt, PrecomputedStats
 
     ont = get_ontology()
 
@@ -84,14 +84,14 @@ def chemical_similarity_search(self, smiles: str, similarity_threshold: float) -
         return {}
     ic_values: dict[str, float] = ic_row.data
 
-    # Step 3: Load all NP ChemOnt annotations grouped by BGC.
-    np_chemont = (
-        NaturalProductChemOntClass.objects
-        .filter(natural_product__bgc__isnull=False)
-        .values_list("natural_product__bgc_id", "chemont_id")
+    # Step 3: Load all per-CDS ChemOnt annotations grouped by BGC.
+    cds_chemont = (
+        DashboardCdsChemOnt.objects
+        .filter(cds__bgc__isnull=False)
+        .values_list("cds__bgc_id", "chemont_id")
     )
     bgc_terms: dict[int, set[str]] = defaultdict(set)
-    for bgc_id, cid in np_chemont:
+    for bgc_id, cid in cds_chemont:
         bgc_terms[bgc_id].add(cid)
 
     # Step 4: Compute similarity per BGC.

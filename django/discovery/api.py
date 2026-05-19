@@ -36,13 +36,13 @@ from discovery.models import (
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardCdsChemOnt,
     DashboardDetector,
     DashboardDomain,
     DashboardGCF,
     DashboardAssembly,
     DashboardNaturalProduct,
     DiscoveryStats,
-    NaturalProductChemOntClass,
     NonRedundantBGC,
     PrecomputedStats,
 )
@@ -126,27 +126,36 @@ discovery_router = Router(tags=["Discovery Platform"])
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _build_chemont_annotation_tree(chemont_qs) -> list[ChemOntAnnotationNode]:
-    """Organise an NP's flat ChemOnt annotations into a hierarchy.
+def _build_chemont_tree_from_cds(cds_chemont_rows) -> list[ChemOntAnnotationNode]:
+    """Aggregate per-CDS ChemOnt rows into a hierarchical tree.
 
-    Since the ETL stores full lineage paths (every ancestor along the path
-    is an annotation row), the annotations for a single NP already encode
-    the tree structure.  We infer parent-child relationships by probability
-    ordering: higher-probability nodes are more general ancestors of
-    lower-probability nodes.
+    *cds_chemont_rows* is an iterable of ``DashboardCdsChemOnt``-like objects
+    (each carrying a single deepest ChemOnt class per CDS). Identical classes
+    across CDSs are unified — ``probability`` is the max across rows and
+    ``n_cds`` is the count.
 
-    When the ChemOnt OBO ontology is available, uses real ``parent_ids``
-    for accurate hierarchy.  Otherwise falls back to a probability-based
-    heuristic that works because the ETL produces monotonically decreasing
-    probabilities along each lineage path.
+    The ontology (if loaded) is used to fill in intermediate ancestors that
+    connect annotated leaves; those ancestors are emitted with
+    ``probability=None`` and ``n_cds`` equal to the sum of annotated descendants
+    in this aggregation.
     """
-    annotations = list(chemont_qs)
-    if not annotations:
+    # Aggregate per chemont_id
+    agg: dict[str, list] = {}  # cid -> [name, max_prob, n_cds]
+    for r in cds_chemont_rows:
+        cur = agg.get(r.chemont_id)
+        if cur is None:
+            agg[r.chemont_id] = [r.chemont_name, r.probability, 1]
+        else:
+            cur[1] = max(cur[1], r.probability)
+            cur[2] += 1
+
+    if not agg:
         return []
 
-    prob_map: dict[str, float] = {a.chemont_id: a.probability for a in annotations}
-    name_map: dict[str, str] = {a.chemont_id: a.chemont_name for a in annotations}
-    annotated_ids = set(prob_map.keys())
+    annotated_ids = set(agg.keys())
+    name_map: dict[str, str] = {cid: v[0] for cid, v in agg.items()}
+    prob_map: dict[str, float] = {cid: v[1] for cid, v in agg.items()}
+    n_cds_map: dict[str, int] = {cid: v[2] for cid, v in agg.items()}
 
     # Try loading the ontology for accurate hierarchy.
     ont = None
@@ -161,8 +170,8 @@ def _build_chemont_annotation_tree(chemont_qs) -> list[ChemOntAnnotationNode]:
     depth_map: dict[str, int] = {}
 
     if ont is not None:
-        # Ontology available: use real parent_ids.
-        # Include unannotated ancestors that connect annotated terms.
+        # Ontology available: walk to real ancestors and keep those that have
+        # an annotated descendant.
         all_ids: set[str] = set(annotated_ids)
         for cid in annotated_ids:
             for anc in ont.get_ancestors(cid):
@@ -200,34 +209,27 @@ def _build_chemont_annotation_tree(chemont_qs) -> list[ChemOntAnnotationNode]:
             if not has_relevant_parent:
                 roots.append(tid)
     else:
-        # No ontology: infer hierarchy from probability ordering.
-        # The ETL stores annotations with decreasing probabilities along
-        # each lineage (general=high, specific=low).  Sort by probability
-        # descending — each node's parent is the annotated node with the
-        # smallest probability that is still higher than its own.
-        sorted_anns = sorted(annotations, key=lambda a: a.probability, reverse=True)
-        for i, ann in enumerate(sorted_anns):
-            parent_found = False
-            for j in range(i - 1, -1, -1):
-                candidate = sorted_anns[j]
-                if candidate.probability > ann.probability:
-                    children_of.setdefault(candidate.chemont_id, []).append(ann.chemont_id)
-                    parent_found = True
-                    break
-            if not parent_found:
-                roots.append(ann.chemont_id)
-
-        for depth_idx, ann in enumerate(sorted_anns):
-            depth_map[ann.chemont_id] = depth_idx
+        # No ontology — leaves only, no hierarchy.
+        for cid in annotated_ids:
+            roots.append(cid)
+        depth_map = {cid: 0 for cid in annotated_ids}
 
     def _to_node(tid: str) -> ChemOntAnnotationNode:
-        kids = sorted(children_of.get(tid, []), key=lambda c: name_map.get(c, c))
+        kid_ids = sorted(children_of.get(tid, []), key=lambda c: name_map.get(c, c))
+        kid_nodes = [_to_node(c) for c in kid_ids]
+        # n_cds: annotated terms keep their own count; intermediate ancestors
+        # accumulate from descendants.
+        if tid in n_cds_map:
+            n_cds = n_cds_map[tid]
+        else:
+            n_cds = sum(k.n_cds for k in kid_nodes)
         return ChemOntAnnotationNode(
             chemont_id=tid,
             name=name_map.get(tid, tid),
             depth=depth_map.get(tid, 0),
-            probability=prob_map.get(tid),  # None for intermediate (unannotated) ancestors
-            children=[_to_node(c) for c in kids],
+            probability=prob_map.get(tid),  # None for intermediate ancestors
+            n_cds=n_cds,
+            children=kid_nodes,
         )
 
     return sorted(
@@ -679,13 +681,9 @@ def bgc_detail(request, bgc_id: int):
             url=assembly.url or "",
         )
 
-    # Natural products
+    # Curated natural products (CHAMOIS no longer feeds this table).
     np_items = []
-    np_qs = DashboardNaturalProduct.objects.filter(bgc=bgc).prefetch_related(
-        "chemont_classes"
-    )
-    for np_obj in np_qs:
-        chemont_tree = _build_chemont_annotation_tree(np_obj.chemont_classes.all())
+    for np_obj in DashboardNaturalProduct.objects.filter(bgc=bgc):
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -694,9 +692,14 @@ def bgc_detail(request, bgc_id: int):
                 smiles_svg="",
                 structure_thumbnail=np_obj.structure_svg_base64,
                 np_class_path=np_obj.np_class_path,
-                chemont_classes=chemont_tree,
             )
         )
+
+    # ChemOnt tree aggregated across all CDSs of this BGC.
+    chemont_rows = DashboardCdsChemOnt.objects.filter(cds__bgc=bgc).only(
+        "chemont_id", "chemont_name", "probability"
+    )
+    chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
 
     detector_out = None
     if bgc.detector:
@@ -721,6 +724,7 @@ def bgc_detail(request, bgc_id: int):
         domain_architecture=domain_arch,
         parent_assembly=parent,
         natural_products=np_items,
+        chemont_tree=chemont_tree,
         detector=detector_out,
         region_accession=region_acc,
     )
@@ -744,7 +748,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
             start_position__lte=window_end,
             end_position__gte=window_start,
         )
-        .prefetch_related("domains", "seq")
+        .prefetch_related("domains", "seq", "chemont")
         .order_by("start_position")
     )
 
@@ -792,6 +796,11 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
             )
 
         rep = cds.cluster_representative
+
+        # At most one chemont row per CDS (UniqueConstraint on (cds, chemont_id)
+        # plus the converter emits a single deepest class per CDS).
+        chemont_row = next(iter(cds.chemont.all()), None)
+
         cds_list.append(
             RegionCdsOut(
                 protein_id=cds.protein_id_str,
@@ -808,6 +817,10 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
                 ),
                 sequence=cds.seq.get_sequence() if hasattr(cds, "seq") else "",
                 pfam=pfam_rows,
+                chemont_id=chemont_row.chemont_id if chemont_row else None,
+                chemont_name=chemont_row.chemont_name if chemont_row else None,
+                chemont_probability=chemont_row.probability if chemont_row else None,
+                chemont_weight=chemont_row.weight if chemont_row else None,
             )
         )
 
@@ -1255,9 +1268,8 @@ def _apply_nrb_filters(
 
     Joins through ``source_bgcs → assembly`` are used for
     ``source_names``, ``assembly_type``, ``assembly_ids`` and
-    ``bgc_accession``; through ``source_bgcs → natural_product →
-    chemont_classes`` for ``chemont_ids``. All such filters apply
-    ``.distinct()``.
+    ``bgc_accession``; through ``source_bgcs → cds_list → chemont`` for
+    ``chemont_ids``. All such filters apply ``.distinct()``.
     """
     if nrb_ids is not None:
         qs = qs.filter(id__in=nrb_ids)
@@ -1325,7 +1337,7 @@ def _apply_nrb_filters(
         ids = [c.strip() for c in chemont_ids.split(",") if c.strip()]
         if ids:
             qs = qs.filter(
-                source_bgcs__natural_products__chemont_classes__chemont_id__in=ids
+                source_bgcs__cds_list__chemont__chemont_id__in=ids
             ).distinct()
     if bgc_accession:
         # Reuse the assembly-side MGYB-aware semantics: structured accession
@@ -1890,15 +1902,10 @@ def nrb_detail(request, nrb_id: int):
         for r in nrb_architecture([m.id for m in members])
     ]
 
-    # Natural products: union over members (each NP attaches to one BGC).
+    # Natural products: union over members (each curated NP attaches to one BGC).
+    member_ids = [m.id for m in members]
     np_items: list[NaturalProductSummary] = []
-    np_qs = (
-        DashboardNaturalProduct.objects
-        .filter(bgc_id__in=[m.id for m in members])
-        .prefetch_related("chemont_classes")
-    )
-    for np_obj in np_qs:
-        chemont_tree = _build_chemont_annotation_tree(np_obj.chemont_classes.all())
+    for np_obj in DashboardNaturalProduct.objects.filter(bgc_id__in=member_ids):
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -1907,9 +1914,14 @@ def nrb_detail(request, nrb_id: int):
                 smiles_svg="",
                 structure_thumbnail=np_obj.structure_svg_base64,
                 np_class_path=np_obj.np_class_path,
-                chemont_classes=chemont_tree,
             )
         )
+
+    # ChemOnt tree aggregated across all CDSs of all member BGCs of the NRB.
+    chemont_rows = DashboardCdsChemOnt.objects.filter(
+        cds__bgc_id__in=member_ids
+    ).only("chemont_id", "chemont_name", "probability")
+    chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
 
     member_items = [
         NrbMemberBgc(
@@ -1945,6 +1957,7 @@ def nrb_detail(request, nrb_id: int):
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
+        chemont_tree=chemont_tree,
     )
 
 
@@ -2893,7 +2906,7 @@ def chemical_query(
         cid_list = [c.strip() for c in chemont_ids.split(",") if c.strip()]
         if cid_list:
             qs = qs.filter(
-                natural_products__chemont_classes__chemont_id__in=cid_list
+                cds_list__chemont__chemont_id__in=cid_list
             ).distinct()
 
     results = []
@@ -3266,15 +3279,16 @@ def np_classes(request):
 def chemont_classes(request):
     """Return a hierarchical tree of ChemOnt classes with BGC counts.
 
-    Uses the ChemOnt OBO ontology when available, otherwise falls back to
-    building the tree from co-occurrence in the database (since the ingestion
-    pipeline stores full lineage paths, every ancestor is present as a row).
+    Uses the ChemOnt OBO ontology when available; otherwise the tree is flat
+    (since each CDS only carries its deepest class, hierarchy can only be
+    reconstructed via the ontology).
     """
-    # Direct annotation counts grouped by chemont_id.
+    # Direct annotation counts: BGCs that have at least one CDS classified to
+    # each chemont_id.
     rows = list(
-        NaturalProductChemOntClass.objects
+        DashboardCdsChemOnt.objects
         .values("chemont_id", "chemont_name")
-        .annotate(cnt=Count("natural_product__bgc", distinct=True))
+        .annotate(cnt=Count("cds__bgc", distinct=True))
     )
 
     if not rows:
@@ -3328,44 +3342,10 @@ def chemont_classes(request):
             if not has_relevant_parent:
                 root_ids.append(tid)
     else:
-        # No ontology: infer hierarchy from the annotated data itself.
-        # NPs are annotated with full lineage paths, so for each NP the
-        # annotated ChemOnt IDs form a chain.  We find parent-child pairs
-        # by looking at which IDs always co-occur and have a subset
-        # relationship on the NPs that reference them.
-        #
-        # Heuristic: for each pair (A, B) where A's NP set is a superset
-        # of B's NP set AND A has more NPs, A is an ancestor of B.
-        # We pick the *closest* ancestor (smallest superset) as the parent.
-        id_to_nps: dict[str, set[int]] = {}
-        for row in NaturalProductChemOntClass.objects.values_list(
-            "chemont_id", "natural_product_id"
-        ):
-            id_to_nps.setdefault(row[0], set()).add(row[1])
-
-        all_ids = list(annotated_ids)
-        # For each term, find its parent = the term with the smallest
-        # strict superset of NPs.
-        parent_of: dict[str, str | None] = {}
-        for cid in all_ids:
-            my_nps = id_to_nps.get(cid, set())
-            best_parent = None
-            best_size = float("inf")
-            for other in all_ids:
-                if other == cid:
-                    continue
-                other_nps = id_to_nps.get(other, set())
-                if my_nps < other_nps and len(other_nps) < best_size:
-                    best_parent = other
-                    best_size = len(other_nps)
-            parent_of[cid] = best_parent
-
-        for cid in all_ids:
-            pid = parent_of[cid]
-            if pid is not None:
-                children_map.setdefault(pid, []).append(cid)
-            else:
-                root_ids.append(cid)
+        # No ontology: each CDS carries only its deepest class, so we can't
+        # reconstruct hierarchy. Return a flat list of leaves.
+        for cid in annotated_ids:
+            root_ids.append(cid)
 
     # Propagate counts upward.
     def _count(tid: str) -> int:

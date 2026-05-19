@@ -326,6 +326,20 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                     {dominantSlim && (
                       <p className="text-muted-foreground">{dominantSlim}</p>
                     )}
+                    {cds.chemont_id && (
+                      <p
+                        className="mt-1 border-t pt-1 text-foreground"
+                        title={cds.chemont_id}
+                      >
+                        <span className="font-medium">ChemOnt:</span>{" "}
+                        {cds.chemont_name}
+                        {cds.chemont_probability != null && (
+                          <span className="ml-1 text-muted-foreground">
+                            ({(cds.chemont_probability * 100).toFixed(0)}%)
+                          </span>
+                        )}
+                      </p>
+                    )}
                     {cds.pfam.length > 0 && (
                       <div className="mt-1 border-t pt-1 space-y-0.5">
                         {[...new Map(cds.pfam.map((pf) => [pf.accession, pf])).values()].map((pf) => (

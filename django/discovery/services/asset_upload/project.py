@@ -54,10 +54,10 @@ from .matrices import (
 from .schemas import (
     AssetBgc,
     AssetCds,
+    AssetCdsChemOnt,
     AssetData,
     AssetDomain,
     AssetNaturalProduct,
-    AssetNpChemOntClass,
 )
 
 log = logging.getLogger(__name__)
@@ -86,7 +86,7 @@ class VirtualNrb:
     cds: list[AssetCds] = field(default_factory=list)
     domains: list[AssetDomain] = field(default_factory=list)
     natural_products: list[AssetNaturalProduct] = field(default_factory=list)
-    np_chemont: list[AssetNpChemOntClass] = field(default_factory=list)
+    cds_chemont: list[AssetCdsChemOnt] = field(default_factory=list)
 
     # Derived during projection
     umap_x: float | None = None
@@ -127,11 +127,11 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
     cds_by_bgc = data.cds_by_bgc()
     domains_by_bgc = data.domains_by_bgc()
     nps_by_bgc = data.nps_by_bgc()
-    np_chemont_by_bgc_name: dict[
-        tuple[tuple[str, int, int, str], str], list[AssetNpChemOntClass]
-    ] = defaultdict(list)
-    for cls in data.np_chemont:
-        np_chemont_by_bgc_name[(cls.bgc_key, cls.np_name)].append(cls)
+    cds_chemont_by_bgc_protein: dict[
+        tuple[tuple[str, int, int, str], str], AssetCdsChemOnt
+    ] = {}
+    for cls in data.cds_chemont:
+        cds_chemont_by_bgc_protein[(cls.bgc_key, cls.protein_id_str)] = cls
 
     virtual: list[VirtualNrb] = []
     next_neg_id = -1
@@ -168,15 +168,16 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
             np_rows: list[AssetNaturalProduct] = []
-            np_classes: list[AssetNpChemOntClass] = []
+            cds_chemont_rows: list[AssetCdsChemOnt] = []
             for b in members:
-                cds_rows.extend(cds_by_bgc.get(b.key, []))
+                bcds = cds_by_bgc.get(b.key, [])
+                cds_rows.extend(bcds)
                 dom_rows.extend(domains_by_bgc.get(b.key, []))
                 np_rows.extend(nps_by_bgc.get(b.key, []))
-                for np_row in nps_by_bgc.get(b.key, []):
-                    np_classes.extend(
-                        np_chemont_by_bgc_name.get((b.key, np_row.name), [])
-                    )
+                for c in bcds:
+                    hit = cds_chemont_by_bgc_protein.get((b.key, c.protein_id_str))
+                    if hit is not None:
+                        cds_chemont_rows.append(hit)
 
             is_partial = all(m.is_partial for m in members) and not any(
                 m.is_validated for m in members
@@ -199,7 +200,7 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
                 cds=cds_rows,
                 domains=dom_rows,
                 natural_products=np_rows,
-                np_chemont=np_classes,
+                cds_chemont=cds_chemont_rows,
             )
             virtual.append(vnrb)
             next_neg_id -= 1
@@ -467,17 +468,6 @@ def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
     }
     nps: list[dict[str, Any]] = []
     for np_obj in vnrb.natural_products:
-        classes = [
-            {
-                "chemont_id": c.chemont_id,
-                "chemont_name": c.chemont_name,
-                "probability": c.probability,
-                "depth": 0,
-                "children": [],
-            }
-            for c in vnrb.np_chemont
-            if c.bgc_key == np_obj.bgc_key and c.np_name == np_obj.name
-        ]
         nps.append(
             {
                 "id": 0,
@@ -486,9 +476,28 @@ def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
                 "smiles_svg": "",
                 "structure_thumbnail": np_obj.structure_svg_base64,
                 "np_class_path": np_obj.np_class_path,
-                "chemont_classes": classes,
             }
         )
+
+    # Aggregate per-CDS chemont rows into a flat tree (no ontology lookup in
+    # the asset path — keep it light; the frontend renders leaves directly).
+    chemont_aggregate: dict[str, dict[str, Any]] = {}
+    for c in vnrb.cds_chemont:
+        cur = chemont_aggregate.get(c.chemont_id)
+        if cur is None:
+            chemont_aggregate[c.chemont_id] = {
+                "chemont_id": c.chemont_id,
+                "name": c.chemont_name,
+                "depth": 0,
+                "probability": c.probability,
+                "n_cds": 1,
+                "children": [],
+            }
+        else:
+            cur["probability"] = max(cur["probability"] or 0.0, c.probability)
+            cur["n_cds"] += 1
+    chemont_tree = list(chemont_aggregate.values())
+
     return {
         "id": vnrb.neg_id,
         "label": vnrb.label,
@@ -513,6 +522,7 @@ def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
         "member_bgcs": member_items,
         "domain_architecture": _ordered_architecture(vnrb, sources),
         "natural_products": nps,
+        "chemont_tree": chemont_tree,
     }
 
 
@@ -530,6 +540,9 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
     domains_by_cds_pid: dict[tuple[tuple[str, int, int, str], str], list[AssetDomain]] = defaultdict(list)
     for d in vnrb.domains:
         domains_by_cds_pid[(d.bgc_key, d.cds_protein_id)].append(d)
+    chemont_by_cds: dict[tuple[tuple[str, int, int, str], str], AssetCdsChemOnt] = {
+        (c.bgc_key, c.protein_id_str): c for c in vnrb.cds_chemont
+    }
 
     for cds in vnrb.cds:
         sequence = ""
@@ -581,6 +594,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
                 }
             )
 
+        chemont_hit = chemont_by_cds.get((cds.bgc_key, cds.protein_id_str))
         cds_list.append(
             {
                 "protein_id": cds.protein_id_str,
@@ -593,6 +607,12 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
                 "cluster_representative_url": None,
                 "sequence": sequence,
                 "pfam": pfam,
+                "chemont_id": chemont_hit.chemont_id if chemont_hit else None,
+                "chemont_name": chemont_hit.chemont_name if chemont_hit else None,
+                "chemont_probability": (
+                    chemont_hit.probability if chemont_hit else None
+                ),
+                "chemont_weight": chemont_hit.weight if chemont_hit else None,
             }
         )
 

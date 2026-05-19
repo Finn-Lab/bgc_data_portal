@@ -81,6 +81,35 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
           <span className="text-muted-foreground">End</span>
           <div className="font-medium font-mono">{cds.end}</div>
         </div>
+        {cds.chemont_id && (
+          <>
+            <div className="col-span-2">
+              <span className="text-muted-foreground">ChemOnt Class</span>
+              <div className="font-medium" title={cds.chemont_id}>
+                {cds.chemont_name}{" "}
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  ({cds.chemont_id})
+                </span>
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">ChemOnt Probability</span>
+              <div className="font-medium">
+                {cds.chemont_probability != null
+                  ? `${(cds.chemont_probability * 100).toFixed(0)}%`
+                  : "—"}
+              </div>
+            </div>
+            <div>
+              <span className="text-muted-foreground">ChemOnt Weight</span>
+              <div className="font-medium">
+                {cds.chemont_weight != null
+                  ? cds.chemont_weight.toFixed(2)
+                  : "—"}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Pfam annotations table */}

@@ -28,13 +28,13 @@ from discovery.models import (
     DashboardBgc,
     DashboardBgcClass,
     DashboardCds,
+    DashboardCdsChemOnt,
     DashboardContig,
     DashboardDetector,
     DashboardDomain,
     DashboardGCF,
     DashboardNaturalProduct,
     DashboardRegion,
-    NaturalProductChemOntClass,
     PrecomputedStats,
     RegionAccessionAlias,
 )
@@ -290,8 +290,7 @@ class Command(BaseCommand):
             # Delete in FK-safe order
             for model in [
                 RegionAccessionAlias,
-                CdsSequence, BgcDomain, DashboardCds,
-                NaturalProductChemOntClass,
+                CdsSequence, BgcDomain, DashboardCdsChemOnt, DashboardCds,
                 DashboardNaturalProduct,
                 DashboardBgc,
                 DashboardRegion,
@@ -627,29 +626,43 @@ class Command(BaseCommand):
         DashboardNaturalProduct.objects.bulk_create(nps)
         self.stdout.write(f"  {len(nps)} DashboardNaturalProduct rows.")
 
-        # ── 7b. NaturalProductChemOntClass ────────────────────────────
-        # For each NP, pick 1–2 ontology lineages and annotate every node
-        # along each path so the hierarchy builder produces realistic trees.
-        self.stdout.write("Creating ChemOnt classifications...")
+        # ── 7b. Per-CDS ChemOnt classifications (CHAMOIS deepest-class) ─
+        # For each NP's parent BGC, pick a few of its CDSs and assign each
+        # the deepest term from one randomly chosen ontology lineage. This
+        # mirrors what the new CHAMOIS per-CDS pipeline emits.
+        self.stdout.write("Creating per-CDS ChemOnt classifications...")
+        bgc_ids_with_np = {np_obj.bgc_id for np_obj in nps}
+        cds_by_bgc: dict[int, list[DashboardCds]] = {}
+        for cds in DashboardCds.objects.filter(bgc_id__in=bgc_ids_with_np):
+            cds_by_bgc.setdefault(cds.bgc_id, []).append(cds)
+
         chemont_rows = []
         for np_obj in nps:
-            bgc_class = np_obj.bgc.classification_path.split(".")[0] if np_obj.bgc.classification_path else ""
+            cds_pool = cds_by_bgc.get(np_obj.bgc_id, [])
+            if not cds_pool:
+                continue
+            bgc_class = (
+                np_obj.bgc.classification_path.split(".")[0]
+                if np_obj.bgc.classification_path
+                else ""
+            )
             lineages = _CHEMONT_LINEAGES.get(bgc_class, _CHEMONT_LINEAGES["Polyketide"])
-            n_lineages = random.randint(1, min(2, len(lineages)))
-            seen_ids: set[str] = set()
-            for lineage in random.sample(lineages, n_lineages):
-                for chemont_id, chemont_name, base_prob in lineage:
-                    if chemont_id in seen_ids:
-                        continue  # shared ancestor across lineages
-                    seen_ids.add(chemont_id)
-                    chemont_rows.append(NaturalProductChemOntClass(
-                        natural_product=np_obj,
-                        chemont_id=chemont_id,
-                        chemont_name=chemont_name,
-                        probability=round(max(0.1, min(1.0, base_prob + random.uniform(-0.08, 0.04))), 3),
-                    ))
-        NaturalProductChemOntClass.objects.bulk_create(chemont_rows, ignore_conflicts=True)
-        self.stdout.write(f"  {len(chemont_rows)} NaturalProductChemOntClass rows.")
+            n_cds_to_label = min(len(cds_pool), random.randint(1, 4))
+            for cds in random.sample(cds_pool, n_cds_to_label):
+                lineage = random.choice(lineages)
+                chemont_id, chemont_name, base_prob = lineage[-1]
+                chemont_rows.append(DashboardCdsChemOnt(
+                    cds=cds,
+                    chemont_id=chemont_id,
+                    chemont_name=chemont_name,
+                    probability=round(
+                        max(0.5, min(1.0, base_prob + random.uniform(-0.08, 0.04))),
+                        3,
+                    ),
+                    weight=round(random.uniform(1.0, 3.0), 3),
+                ))
+        DashboardCdsChemOnt.objects.bulk_create(chemont_rows, ignore_conflicts=True)
+        self.stdout.write(f"  {len(chemont_rows)} DashboardCdsChemOnt rows.")
 
         # ── 8. Validated (MIBiG) BGCs ─────────────────────────────────
         self.stdout.write("Creating validated (MIBiG) BGCs...")
@@ -870,7 +883,7 @@ class Command(BaseCommand):
             f"  BgcDomain:                {len(all_domains)}\n"
             f"  DashboardGCF:             {gcf_count}\n"
             f"  DashboardNaturalProduct:  {len(nps)}\n"
-            f"  NaturalProductChemOntClass: {len(chemont_rows)}\n"
+            f"  DashboardCdsChemOnt:      {len(chemont_rows)}\n"
             f"  DashboardBgcClass:        {len(bgc_class_objs)}\n"
             f"  DashboardDomain:          {len(domain_objs)}\n"
             f"  PrecomputedStats:         2"

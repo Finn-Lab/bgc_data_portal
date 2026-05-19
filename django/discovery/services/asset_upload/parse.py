@@ -29,8 +29,8 @@ from .schemas import (
     AssetData,
     AssetDetector,
     AssetDomain,
+    AssetCdsChemOnt,
     AssetNaturalProduct,
-    AssetNpChemOntClass,
 )
 from .validate import AssetValidationError, ValidatedTarball
 
@@ -286,9 +286,9 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
                 )
             )
 
-    # ── NP ChemOnt classes (optional) ───────────────────────────────────
-    if "np_chemont_classes.tsv" in members:
-        for row in _reader(members["np_chemont_classes.tsv"]):
+    # ── Per-CDS ChemOnt classifications (optional) ──────────────────────
+    if "cds_chemont.tsv" in members:
+        for row in _reader(members["cds_chemont.tsv"]):
             key = (
                 row["contig_sha256"],
                 _to_int(row["bgc_start"]),
@@ -297,13 +297,14 @@ def parse_asset_tar(validated: ValidatedTarball) -> AssetData:
             )
             if key not in bgc_keys:
                 continue
-            data.np_chemont.append(
-                AssetNpChemOntClass(
+            data.cds_chemont.append(
+                AssetCdsChemOnt(
                     bgc_key=key,
-                    np_name=row.get("natural_product_name", ""),
+                    protein_id_str=row.get("protein_id_str", ""),
                     chemont_id=row.get("chemont_id", ""),
                     chemont_name=row.get("chemont_name", ""),
-                    probability=_to_float(row.get("probability"), default=1.0),
+                    probability=_to_float(row.get("probability"), default=0.0),
+                    weight=_to_float(row.get("weight"), default=0.0),
                 )
             )
 

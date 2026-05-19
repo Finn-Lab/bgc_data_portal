@@ -15,9 +15,9 @@ from discovery.models import (
     BgcDomain,
     DashboardBgc,
     DashboardAssembly,
+    DashboardCdsChemOnt,
     DashboardNaturalProduct,
     DashboardRegion,
-    NaturalProductChemOntClass,
     PrecomputedStats,
 )
 
@@ -291,11 +291,9 @@ def _build_np_class_sunburst(bgc_qs) -> list[dict]:
 def _build_chemont_sunburst(bgc_qs) -> list[dict]:
     """Build a flat sunburst list for ChemOnt chemical class hierarchy."""
     rows = (
-        NaturalProductChemOntClass.objects.filter(
-            natural_product__bgc__in=bgc_qs
-        )
+        DashboardCdsChemOnt.objects.filter(cds__bgc__in=bgc_qs)
         .values("chemont_id", "chemont_name")
-        .annotate(cnt=Count("natural_product", distinct=True))
+        .annotate(cnt=Count("cds__bgc", distinct=True))
     )
 
     if not rows:

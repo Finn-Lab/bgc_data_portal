@@ -119,12 +119,15 @@ class AssetNaturalProduct:
 
 
 @dataclass
-class AssetNpChemOntClass:
+class AssetCdsChemOnt:
+    """Per-CDS ChemOnt classification (deepest class as emitted by CHAMOIS)."""
+
     bgc_key: tuple[str, int, int, str]
-    np_name: str
+    protein_id_str: str
     chemont_id: str
     chemont_name: str = ""
-    probability: float = 1.0
+    probability: float = 0.0
+    weight: float = 0.0
 
 
 @dataclass
@@ -139,7 +142,7 @@ class AssetData:
     contig_sequences: dict[str, str] = field(default_factory=dict)  # sha256 → zlib-b64
     domains: list[AssetDomain] = field(default_factory=list)
     natural_products: list[AssetNaturalProduct] = field(default_factory=list)
-    np_chemont: list[AssetNpChemOntClass] = field(default_factory=list)
+    cds_chemont: list[AssetCdsChemOnt] = field(default_factory=list)
 
     def assembly_lookup(self) -> dict[str, AssetAssembly]:
         return {a.assembly_accession: a for a in self.assemblies}
@@ -193,7 +196,7 @@ OPTIONAL_FILES: tuple[str, ...] = (
     "contig_sequences.tsv",
     "domains.tsv",
     "natural_products.tsv",
-    "np_chemont_classes.tsv",
+    "cds_chemont.tsv",
 )
 ALLOWED_FILES: frozenset[str] = frozenset(REQUIRED_FILES + OPTIONAL_FILES)
 
@@ -241,12 +244,13 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "detector_name",
         "name",
     ),
-    "np_chemont_classes.tsv": (
+    "cds_chemont.tsv": (
         "contig_sha256",
         "bgc_start",
         "bgc_end",
         "detector_name",
-        "natural_product_name",
+        "protein_id_str",
         "chemont_id",
+        "chemont_name",
     ),
 }

@@ -128,28 +128,33 @@ class ParentAssemblySummary(Schema):
 
 
 class ChemOntAnnotationNode(Schema):
-    """A node in a ChemOnt classification tree for a natural product.
+    """A node in an aggregated ChemOnt classification tree.
 
-    Each node is a directly-annotated ChemOnt term with its probability.
-    ``children`` holds more specific sub-classifications that were also
-    annotated on the same natural product.
+    Built from per-CDS CHAMOIS predictions: each CDS contributes its deepest
+    ChemOnt class; identical classes are unified across CDSs (max probability,
+    sum of CDS counts). Intermediate ancestors get a row whenever they sit on
+    the lineage between annotated leaves; ``probability`` is ``None`` for those
+    and ``n_cds`` is the sum of annotated descendants.
     """
 
     chemont_id: str
     name: str
     depth: int = 0
     probability: float | None = None
+    n_cds: int = 0
     children: list["ChemOntAnnotationNode"] = []
 
 
 class NaturalProductSummary(Schema):
+    """Curated per-BGC natural product (SMILES, structure). No longer carries
+    CHAMOIS-derived ChemOnt classes — those live at the BGC / NRB level."""
+
     id: int
     name: str
     smiles: str
     smiles_svg: str = ""
     structure_thumbnail: str = ""
     np_class_path: str = ""
-    chemont_classes: list[ChemOntAnnotationNode] = []
 
 
 class BgcDetail(Schema):
@@ -164,6 +169,7 @@ class BgcDetail(Schema):
     domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
     natural_products: list[NaturalProductSummary] = []
+    chemont_tree: list[ChemOntAnnotationNode] = []
     detector: Optional[DetectorOut] = None
     region_accession: Optional[str] = None
 
@@ -263,6 +269,7 @@ class NrbDetail(Schema):
     member_bgcs: list[NrbMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
+    chemont_tree: list[ChemOntAnnotationNode] = []
 
 
 class NrbScatterPoint(Schema):
@@ -707,6 +714,12 @@ class RegionCdsOut(Schema):
     cluster_representative_url: Optional[str] = None
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
+    # Deepest ChemOnt class predicted by CHAMOIS for this CDS (null when no
+    # confident classification — see DashboardCdsChemOnt).
+    chemont_id: Optional[str] = None
+    chemont_name: Optional[str] = None
+    chemont_probability: Optional[float] = None
+    chemont_weight: Optional[float] = None
 
 
 class RegionDomainOut(Schema):

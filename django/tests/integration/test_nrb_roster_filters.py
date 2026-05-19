@@ -22,10 +22,11 @@ from discovery.models import (
     DashboardAssembly,
     DashboardBgc,
     DashboardBgcClass,
+    DashboardCds,
+    DashboardCdsChemOnt,
     DashboardContig,
     DashboardDetector,
     DashboardNaturalProduct,
-    NaturalProductChemOntClass,
     NonRedundantBGC,
 )
 
@@ -251,18 +252,22 @@ class TestNrbRosterFilters:
         assert ids == {nrb_dataset["nrbs"]["chain"].id}
 
     def test_chemont_ids(self, api_client, nrb_dataset):
-        # Wire up a ChemOnt class on the MIBiG NRB's source BGC.
+        # Wire up a per-CDS ChemOnt class on the MIBiG NRB's source BGC.
         bgc = DashboardBgc.objects.get(non_redundant_bgc=nrb_dataset["nrbs"]["mibig"])
-        np_ = DashboardNaturalProduct.objects.create(
-            name="erythromycin",
-            smiles="CC(=O)O",
-            np_class_path="Polyketide.Macrolide",
+        cds = DashboardCds.objects.create(
             bgc=bgc,
+            protein_id_str="cds_erythromycin_1",
+            start_position=0,
+            end_position=300,
+            strand=1,
+            protein_length=100,
         )
-        NaturalProductChemOntClass.objects.create(
-            natural_product=np_,
+        DashboardCdsChemOnt.objects.create(
+            cds=cds,
             chemont_id="CHEMONTID:0000048",
             chemont_name="Macrolides",
+            probability=0.92,
+            weight=2.1,
         )
         ids = _roster_ids(api_client, chemont_ids="CHEMONTID:0000048")
         assert ids == {nrb_dataset["nrbs"]["mibig"].id}

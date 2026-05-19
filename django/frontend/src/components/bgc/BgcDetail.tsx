@@ -169,7 +169,10 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
       )}
 
       {/* Chemical compounds */}
-      {bgc.natural_products && bgc.natural_products.length > 0 && (
+      {(
+        (bgc.natural_products && bgc.natural_products.length > 0) ||
+        (bgc.chemont_tree && bgc.chemont_tree.length > 0)
+      ) && (
         <>
           <div>
             <h5 className="vf-section-header__heading" style={{ fontSize: "0.875rem", marginBottom: "0.25rem" }}>
@@ -180,28 +183,11 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                 <div key={np.id} className="flex items-start gap-3 rounded-md border p-2">
                   <div className="text-xs">
                     <div className="font-medium">{np.name}</div>
-                    {np.chemont_classes && np.chemont_classes.length > 0 ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {np.chemont_classes.flatMap(collectLeaves).map((leaf) => (
-                          <span
-                            key={leaf.chemont_id}
-                            title={leaf.chemont_id}
-                            className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
-                          >
-                            {leaf.name}
-                            {leaf.probability != null && (
-                              <span className="ml-1 font-normal text-muted-foreground">
-                                {(leaf.probability * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    ) : np.np_class_path ? (
+                    {np.np_class_path && (
                       <div className="mt-1 text-[10px] text-muted-foreground">
                         {np.np_class_path.replace(/\./g, " > ")}
                       </div>
-                    ) : null}
+                    )}
                     {np.smiles && (
                       <div className="mt-1 flex items-center gap-1 font-mono text-[10px] text-muted-foreground">
                         <span className="max-w-[200px] truncate" title={np.smiles}>{np.smiles}</span>
@@ -218,6 +204,30 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
                   </div>
                 </div>
               ))}
+
+              {bgc.chemont_tree && bgc.chemont_tree.length > 0 && (
+                <div className="rounded-md border p-2">
+                  <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+                    CHAMOIS ChemOnt classes (aggregated across CDSs)
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {bgc.chemont_tree.flatMap(collectLeaves).map((leaf) => (
+                      <span
+                        key={leaf.chemont_id}
+                        title={leaf.chemont_id}
+                        className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
+                      >
+                        {leaf.name}
+                        {leaf.n_cds > 0 && (
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            {leaf.n_cds} CDS
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           <Separator />

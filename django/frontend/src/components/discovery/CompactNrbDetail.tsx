@@ -149,6 +149,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
           naturalProducts={nrb.natural_products}
+          chemontTree={nrb.chemont_tree}
           parentAssembly={nrb.parent_assembly}
           novelty={nrb.novelty_score}
           domainNovelty={nrb.domain_novelty}
@@ -221,6 +222,7 @@ function RegionStrip({
 
 interface KpiStripProps {
   naturalProducts: NaturalProductSummary[];
+  chemontTree: ChemOntAnnotationNode[];
   parentAssembly: ParentAssemblySummary | null;
   novelty: number | null;
   domainNovelty: number | null;
@@ -232,11 +234,16 @@ const CHIP_CLICKABLE = "cursor-pointer transition-colors hover:bg-muted/60";
 
 function KpiStrip({
   naturalProducts,
+  chemontTree,
   parentAssembly,
   novelty,
   domainNovelty,
 }: KpiStripProps) {
-  const compoundsCount = naturalProducts.length;
+  // Compounds chip count = distinct deepest ChemOnt classes seen across the
+  // NRB's CDSs, plus any curated NP names (deduped). Treat curated names
+  // (e.g. MIBiG compounds) and CHAMOIS classes as a single conceptual count.
+  const leaves = chemontTree.flatMap(collectLeaves);
+  const compoundsCount = naturalProducts.length + leaves.length;
   const firstSmiles = naturalProducts.find((np) => np.smiles)?.smiles;
   const parentAcc = parentAssembly?.accession ?? "—";
 
@@ -246,6 +253,7 @@ function KpiStrip({
         <CompoundsChip
           count={compoundsCount}
           naturalProducts={naturalProducts}
+          chemontTree={chemontTree}
           molviewSmiles={firstSmiles}
         />
 
@@ -289,10 +297,12 @@ function KpiStrip({
 function CompoundsChip({
   count,
   naturalProducts,
+  chemontTree,
   molviewSmiles,
 }: {
   count: number;
   naturalProducts: NaturalProductSummary[];
+  chemontTree: ChemOntAnnotationNode[];
   molviewSmiles: string | undefined;
 }) {
   const chipBody = (
@@ -328,7 +338,10 @@ function CompoundsChip({
         side="bottom"
         className="max-w-sm border bg-popover text-popover-foreground shadow-md"
       >
-        <CompoundsTooltipBody naturalProducts={naturalProducts} />
+        <CompoundsTooltipBody
+          naturalProducts={naturalProducts}
+          chemontTree={chemontTree}
+        />
       </TooltipContent>
     </Tooltip>
   );
@@ -336,44 +349,80 @@ function CompoundsChip({
 
 function CompoundsTooltipBody({
   naturalProducts,
+  chemontTree,
 }: {
   naturalProducts: NaturalProductSummary[];
+  chemontTree: ChemOntAnnotationNode[];
 }) {
   return (
-    <div className="space-y-2 text-xs">
-      {naturalProducts.map((np) => {
-        const leaves = np.chemont_classes.flatMap(collectLeaves);
-        return (
-          <div
-            key={np.id}
-            className="space-y-1 border-b border-border/40 pb-2 last:border-0 last:pb-0"
-          >
-            <div className="font-medium">{np.name || "(unnamed)"}</div>
-            {leaves.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {leaves.map((leaf) => (
-                  <span
-                    key={leaf.chemont_id}
-                    title={leaf.chemont_id}
-                    className="rounded-sm bg-muted px-1 py-px text-[10px] font-medium"
-                  >
-                    {leaf.name}
-                    {leaf.probability != null && (
-                      <span className="ml-1 font-normal text-muted-foreground">
-                        {(leaf.probability * 100).toFixed(0)}%
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            ) : np.np_class_path ? (
-              <div className="text-[10px] text-muted-foreground">
-                {np.np_class_path.replace(/\./g, " > ")}
-              </div>
-            ) : null}
+    <div className="space-y-3 text-xs">
+      {naturalProducts.length > 0 && (
+        <div className="space-y-2">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            Curated compounds
           </div>
-        );
-      })}
+          {naturalProducts.map((np) => (
+            <div
+              key={np.id}
+              className="space-y-1 border-b border-border/40 pb-2 last:border-0 last:pb-0"
+            >
+              <div className="font-medium">{np.name || "(unnamed)"}</div>
+              {np.np_class_path && (
+                <div className="text-[10px] text-muted-foreground">
+                  {np.np_class_path.replace(/\./g, " > ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {chemontTree.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] font-semibold uppercase text-muted-foreground">
+            CHAMOIS ChemOnt classes (aggregated across CDSs)
+          </div>
+          {chemontTree.map((root) => (
+            <ChemontGroup key={root.chemont_id} node={root} indent={0} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChemontGroup({
+  node,
+  indent,
+}: {
+  node: ChemOntAnnotationNode;
+  indent: number;
+}) {
+  const isLeaf = node.children.length === 0;
+  return (
+    <div style={{ paddingLeft: `${indent * 8}px` }} className="space-y-0.5">
+      <div
+        title={node.chemont_id}
+        className={cn(
+          "flex flex-wrap items-center gap-1",
+          isLeaf ? "font-medium" : "text-muted-foreground",
+        )}
+      >
+        <span>{node.name}</span>
+        {node.n_cds > 0 && (
+          <span className="rounded-sm bg-muted px-1 text-[10px] font-normal">
+            {node.n_cds} CDS
+          </span>
+        )}
+        {node.probability != null && (
+          <span className="text-[10px] font-normal text-muted-foreground">
+            {(node.probability * 100).toFixed(0)}%
+          </span>
+        )}
+      </div>
+      {node.children.map((child) => (
+        <ChemontGroup key={child.chemont_id} node={child} indent={indent + 1} />
+      ))}
     </div>
   );
 }

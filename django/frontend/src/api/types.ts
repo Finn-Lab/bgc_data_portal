@@ -99,9 +99,12 @@ export interface ChemOntAnnotationNode {
   name: string;
   depth: number;
   probability: number | null; // null for intermediate (unannotated) ancestors
+  n_cds: number;              // CDSs contributing — propagated up from descendants
   children: ChemOntAnnotationNode[];
 }
 
+// Curated per-BGC compound (SMILES, structure). No longer carries CHAMOIS-derived
+// ChemOnt classes — those are aggregated at BGC / NRB level in `chemont_tree`.
 export interface NaturalProductSummary {
   id: number;
   name: string;
@@ -109,7 +112,6 @@ export interface NaturalProductSummary {
   smiles_svg: string;
   structure_thumbnail: string;
   np_class_path: string;
-  chemont_classes: ChemOntAnnotationNode[];
 }
 
 export interface BgcDetail {
@@ -124,6 +126,7 @@ export interface BgcDetail {
   domain_architecture: DomainArchitectureItem[];
   parent_assembly: ParentAssemblySummary | null;
   natural_products: NaturalProductSummary[];
+  chemont_tree: ChemOntAnnotationNode[];
 }
 
 export interface BgcScatterPoint {
@@ -293,6 +296,12 @@ export interface RegionCds {
   cluster_representative_url: string | null;
   sequence: string;
   pfam: PfamAnnotation[];
+  // Deepest CHAMOIS ChemOnt class assigned to this CDS (null when below the
+  // probability / weight thresholds).
+  chemont_id: string | null;
+  chemont_name: string | null;
+  chemont_probability: number | null;
+  chemont_weight: number | null;
 }
 
 export interface RegionDomain {
@@ -606,6 +615,7 @@ export interface NrbDetail {
   member_bgcs: NrbMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
+  chemont_tree: ChemOntAnnotationNode[];
 }
 
 export interface NrbScatterPoint {
