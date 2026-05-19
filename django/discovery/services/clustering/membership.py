@@ -35,6 +35,21 @@ def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
     return tuple(sorted({s.upper() for s in sources}))
 
 
+def _bigint_array_in(ids: Sequence[int]):
+    """Return an expression usable as the RHS of an ``__in`` lookup that sends
+    the id list as a single ``bigint[]`` bind parameter.
+
+    Why: PostgreSQL's wire protocol caps bind parameters at 65 535 (uint16).
+    The ORM's default ``__in=[...]`` expansion sends one param per id, so any
+    NRB / BGC id list larger than that raises ``OperationalError("number of
+    parameters must be between 0 and 65535")``. Wrapping in ``ANY(%s::bigint[])``
+    keeps the whole list as one param.
+    """
+    from django.db.models.expressions import RawSQL
+
+    return RawSQL("SELECT unnest(%s::bigint[])", [list(ids)])
+
+
 def build_nrb_domain_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
@@ -91,7 +106,9 @@ def build_nrb_domain_matrix(
         )
     )
     if nrb_ids_subset is not None:
-        qs = qs.filter(bgc__non_redundant_bgc_id__in=list(nrb_ids_subset))
+        qs = qs.filter(
+            bgc__non_redundant_bgc_id__in=_bigint_array_in(nrb_ids_subset)
+        )
     nrb_qs = qs.values_list(
         "bgc__non_redundant_bgc_id",
         "domain_acc",
@@ -116,7 +133,7 @@ def build_nrb_domain_matrix(
             .annotate(ref_db_upper=Upper("ref_db"))
             .filter(
                 ref_db_upper__in=upper_sources,
-                bgc_id__in=list(extra_bgc_ids),
+                bgc_id__in=_bigint_array_in(extra_bgc_ids),
             )
             .values_list("bgc_id", "domain_acc", "cds__start_position")
         )

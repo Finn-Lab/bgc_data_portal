@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
+    _bigint_array_in,
     _normalize_sources,
 )
 
@@ -81,7 +82,9 @@ def build_nrb_adjacency_pair_matrix(
         )
     )
     if nrb_ids_subset is not None:
-        qs = qs.filter(bgc__non_redundant_bgc_id__in=list(nrb_ids_subset))
+        qs = qs.filter(
+            bgc__non_redundant_bgc_id__in=_bigint_array_in(nrb_ids_subset)
+        )
 
     rows_qs = qs.values_list(
         "bgc__non_redundant_bgc_id",
@@ -106,7 +109,7 @@ def build_nrb_adjacency_pair_matrix(
             .filter(
                 ref_db_upper__in=upper_sources,
                 cds__isnull=False,
-                bgc_id__in=list(extra_bgc_ids),
+                bgc_id__in=_bigint_array_in(extra_bgc_ids),
             )
             .values_list("bgc_id", "cds__start_position", "start_position", "domain_acc")
         )

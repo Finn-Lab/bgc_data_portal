@@ -38,7 +38,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 SCORING_CACHE_SUBDIR = "scoring_cache"
-SIM_FILE = "sim.npz"
 DOMAINS_FILE = "M_domains.npz"
 PAIRS_FILE = "M_pairs.npz"
 NRB_IDS_FILE = "nrb_ids.npy"
@@ -50,15 +49,19 @@ LEAF_PATHS_FILE = "leaf_paths.json"
 def persist_scoring_cache(
     *,
     artifacts_dir: Path,
-    sim: "sp.csr_matrix",
-    M_domains: "sp.csr_matrix",
-    M_pairs: "sp.csr_matrix",
+    M_domains: sp.csr_matrix,
+    M_pairs: sp.csr_matrix,
     nrb_ids: np.ndarray,
     domain_accs: np.ndarray,
     pair_vocab: np.ndarray,
     leaf_paths: list[str],
 ) -> Path:
-    """Write the matrices needed to rerun NRB scoring without rebuilding them.
+    """Write the small per-NRB signature matrices needed by on-demand similarity.
+
+    The full N×N composite-Dice matrix is no longer persisted — both
+    Find Similar and ARCH compute composite-Dice on demand against
+    ``M_domains`` / ``M_pairs`` via
+    :mod:`discovery.services.clustering.similarity_on_demand`.
 
     Returns the cache directory path.
     """
@@ -66,25 +69,35 @@ def persist_scoring_cache(
 
     cache_dir = Path(artifacts_dir) / SCORING_CACHE_SUBDIR
     cache_dir.mkdir(parents=True, exist_ok=True)
-    sp.save_npz(cache_dir / SIM_FILE, sim)
     sp.save_npz(cache_dir / DOMAINS_FILE, M_domains)
     sp.save_npz(cache_dir / PAIRS_FILE, M_pairs)
     np.save(cache_dir / NRB_IDS_FILE, np.asarray(nrb_ids))
     np.save(cache_dir / DOMAIN_ACCS_FILE, np.asarray(domain_accs, dtype=object))
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
+    # Purge any sim.npz left over from a previous schema — keeps the PVC tidy.
+    legacy_sim = cache_dir / "sim.npz"
+    if legacy_sim.exists():
+        try:
+            legacy_sim.unlink()
+        except OSError:  # pragma: no cover
+            log.warning("Could not delete legacy sim.npz at %s", legacy_sim)
     log.info("Wrote NRB scoring cache to %s", cache_dir)
     return cache_dir
 
 
 def load_scoring_cache(artifacts_dir: Path) -> dict:
-    """Return ``sim``, ``M_domains``, ``M_pairs``, ``nrb_ids``, ``domain_accs``,
-    ``pair_vocab``, ``leaf_paths``."""
+    """Return ``M_domains``, ``M_pairs``, ``nrb_ids``, ``domain_accs``,
+    ``pair_vocab``, ``leaf_paths``.
+
+    ``sim`` is no longer materialised — callers should use
+    :mod:`discovery.services.clustering.similarity_on_demand` for similarity
+    queries.
+    """
     import scipy.sparse as sp
 
     cache_dir = Path(artifacts_dir) / SCORING_CACHE_SUBDIR
     return {
-        "sim": sp.load_npz(cache_dir / SIM_FILE),
         "M_domains": sp.load_npz(cache_dir / DOMAINS_FILE),
         "M_pairs": sp.load_npz(cache_dir / PAIRS_FILE),
         "nrb_ids": np.load(cache_dir / NRB_IDS_FILE, allow_pickle=True),
@@ -95,7 +108,7 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
 
 
 def compute_novelty_array(
-    sim: "sp.csr_matrix",
+    sim: sp.csr_matrix,
     validated_cols: list[int],
 ) -> np.ndarray:
     """Return novelty per row: ``1 − max(sim_to_validated)``.
@@ -114,7 +127,7 @@ def compute_novelty_array(
 
 
 def compute_domain_novelty_array(
-    M_domains: "sp.csr_matrix",
+    M_domains: sp.csr_matrix,
     leaf_paths: list[str],
 ) -> np.ndarray:
     """Return per-row fraction of domains unique within the row's leaf GCF.
@@ -152,11 +165,11 @@ def compute_domain_novelty_array(
 
 def score_primary_nrbs(
     *,
-    sim: "sp.csr_matrix",
-    M_domains: "sp.csr_matrix",
+    sim: sp.csr_matrix,
+    M_domains: sp.csr_matrix,
     nrb_ids: np.ndarray,
     leaf_paths: list[str],
-    run: "ClusteringRun",
+    run: ClusteringRun,
 ) -> dict:
     """Write ``novelty_score`` and ``domain_novelty`` on the primary NRBs of ``run``.
 
@@ -266,7 +279,6 @@ def project_partial_nrbs(
     and counted as ``skipped``.
     """
     import scipy.sparse as sp
-
     from django.utils import timezone
 
     from discovery.models import (

@@ -111,6 +111,19 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from django.conf import settings
+
+        if getattr(settings, "CLUSTERING_HPC_MODE", False):
+            from django.core.management.base import CommandError
+
+            raise CommandError(
+                "CLUSTERING_HPC_MODE is True — in-portal clustering is disabled. "
+                "Export inputs with `manage.py export_clustering_inputs`, run "
+                "`bgc-cluster` on HPC, then import results with "
+                "`manage.py import_clustering_results`. To run in-portal anyway "
+                "(dev only), unset the CLUSTERING_HPC_MODE env var."
+            )
+
         kwargs = {
             "domain_sources": [s.upper() for s in options["domain_sources"]],
             "score_weights": options["score_weights"],

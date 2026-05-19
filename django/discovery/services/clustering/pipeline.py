@@ -313,7 +313,6 @@ def run_clustering_pipeline(
                 try:
                     persist_scoring_cache(
                         artifacts_dir=Path(artifacts_dir),
-                        sim=sim,
                         M_domains=M_domains,
                         M_pairs=M_pairs,
                         nrb_ids=nrb_ids,

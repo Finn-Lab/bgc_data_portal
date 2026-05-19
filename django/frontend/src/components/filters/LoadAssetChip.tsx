@@ -32,7 +32,11 @@ import { toast } from "sonner";
  */
 
 const POLL_INTERVAL_MS = 1500;
-const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+// 1h matches CELERY_RESULT_EXPIRES — past that the projection task's
+// result is evicted from the result backend so longer polling would
+// spin in vain.
+const POLL_HARD_CAP_MS = 60 * 60 * 1000;
+const POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
 
 type ChipState =
   | { kind: "idle" }
@@ -46,6 +50,8 @@ export function LoadAssetChip() {
   const inputRef = useRef<HTMLInputElement>(null);
   const pollTimer = useRef<number | undefined>(undefined);
   const pollStartRef = useRef<number>(0);
+  const slowNoticeShownRef = useRef<boolean>(false);
+  const slowToastIdRef = useRef<string | number | undefined>(undefined);
 
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   const assetSummary = useDiscoveryStore((s) => s.assetSummary);
@@ -60,12 +66,21 @@ export function LoadAssetChip() {
     }
   }, [assetToken, assetSummary, state.kind]);
 
+  const dismissSlowToast = useCallback(() => {
+    if (slowToastIdRef.current !== undefined) {
+      toast.dismiss(slowToastIdRef.current);
+      slowToastIdRef.current = undefined;
+    }
+  }, []);
+
   const clearPolling = useCallback(() => {
     if (pollTimer.current !== undefined) {
       window.clearTimeout(pollTimer.current);
       pollTimer.current = undefined;
     }
-  }, []);
+    slowNoticeShownRef.current = false;
+    dismissSlowToast();
+  }, [dismissSlowToast]);
 
   useEffect(() => () => clearPolling(), [clearPolling]);
 
@@ -94,15 +109,36 @@ export function LoadAssetChip() {
           toast.error(`Asset projection failed: ${resp.error ?? "unknown"}`);
           return;
         }
-        if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+        const elapsed = Date.now() - pollStartRef.current;
+        if (elapsed > POLL_HARD_CAP_MS) {
           clearPolling();
           setAsset(null, null);
           setState({
             kind: "failed",
-            message: "Projection took longer than 5 minutes",
+            message: "Projection exceeded the 1-hour limit",
           });
           toast.error("Asset projection timed out");
           return;
+        }
+        if (!slowNoticeShownRef.current && elapsed > POLL_SLOW_NOTICE_MS) {
+          slowNoticeShownRef.current = true;
+          slowToastIdRef.current = toast.message(
+            "Still projecting… large assets can take several minutes. Keep this tab open.",
+            {
+              duration: Infinity,
+              action: {
+                label: "Cancel",
+                onClick: () => {
+                  clearPolling();
+                  evictAsset(token).catch(() => {
+                    /* tolerate — TTL will reap it */
+                  });
+                  setAsset(null, null);
+                  setState({ kind: "idle" });
+                },
+              },
+            },
+          );
         }
         setState({
           kind: "polling",

@@ -796,6 +796,49 @@ class DashboardGCF(models.Model):
         return self.family_path
 
 
+class NonRedundantBGCClusteringSnapshot(models.Model):
+    """Frozen per-NRB classification at import time, for rollback.
+
+    The HPC importer (``import_clustering_results``) writes one row per
+    primary or partial NRB before overwriting the live columns on
+    ``NonRedundantBGC``. ``set_active_clustering_run`` reads these to
+    restore a previous run's state without recomputing.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    clustering_run = models.ForeignKey(
+        ClusteringRun,
+        on_delete=models.CASCADE,
+        related_name="nrb_snapshots",
+    )
+    nrb = models.ForeignKey(
+        "NonRedundantBGC",
+        on_delete=models.CASCADE,
+        related_name="clustering_snapshots",
+    )
+    umap_x = models.FloatField(null=True, blank=True)
+    umap_y = models.FloatField(null=True, blank=True)
+    umap_projected = models.BooleanField(default=False)
+    gene_cluster_family = models.CharField(max_length=512, blank=True, default="")
+    novelty_score = models.FloatField(null=True, blank=True)
+    domain_novelty = models.FloatField(null=True, blank=True)
+
+    class Meta:
+        db_table = "discovery_nrb_clustering_snapshot"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["clustering_run", "nrb"],
+                name="uniq_snapshot_run_nrb",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["clustering_run"], name="idx_snapshot_run"),
+        ]
+
+    def __str__(self):
+        return f"snapshot(run={self.clustering_run_id}, nrb={self.nrb_id})"
+
+
 # ── Natural Product ──────────────────────────────────────────────────────────────
 
 

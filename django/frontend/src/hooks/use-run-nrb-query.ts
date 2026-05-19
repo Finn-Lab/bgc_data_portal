@@ -91,6 +91,7 @@ export function useRunNrbQuery() {
     }
 
     setIsRunning(true);
+    const abortController = new AbortController();
     try {
       const idSets: Set<number>[] = [];
       const similarities: Record<number, number> = {};
@@ -148,11 +149,13 @@ export function useRunNrbQuery() {
           min_qcov: sequenceMinQcov,
         });
         const taskId = accepted.task_id;
-        // Poll with backoff until the task is ready. Long protein queries
-        // (~1000 AA against the full phmmer index) regularly take >1 min;
-        // we budget 5 min total before failing the UI flow. Celery itself
-        // has no time-limit so the task keeps running even if we abort.
-        const seqResp = await pollSequenceTask(taskId);
+        // Poll with backoff until the task is ready. Budget matches the
+        // Celery result TTL (CELERY_RESULT_EXPIRES, default 1h): polling
+        // longer is pointless because AsyncResult silently returns
+        // PENDING for evicted task ids. Past the slow-notice threshold
+        // (~2 min) we surface a cancellable "still searching" toast so
+        // the user can let go without keeping the tab open.
+        const seqResp = await pollSequenceTask(taskId, abortController);
         const ids = seqResp.items.map((r) => r.id);
         idSets.push(new Set(ids));
         for (const item of seqResp.items) {
@@ -228,13 +231,17 @@ export function useRunNrbQuery() {
       );
       toast.success(`Query returned ${intersection.length} NRB(s)`);
     } catch (e) {
-      const err = e as Error;
-      setError(err);
-      toast.error(
-        e instanceof ApiError
-          ? `Query failed (${e.status}): ${e.message}`
-          : `Query failed: ${err.message}`,
-      );
+      if (e instanceof DOMException && e.name === "AbortError") {
+        toast.info("Sequence search cancelled");
+      } else {
+        const err = e as Error;
+        setError(err);
+        toast.error(
+          e instanceof ApiError
+            ? `Query failed (${e.status}): ${e.message}`
+            : `Query failed: ${err.message}`,
+        );
+      }
     } finally {
       setIsRunning(false);
     }
@@ -243,30 +250,71 @@ export function useRunNrbQuery() {
   return { run, isRunning, error };
 }
 
-const SEQUENCE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
+// 1h matches CELERY_RESULT_EXPIRES — past that the result is evicted
+// and AsyncResult would return PENDING forever, so capping polling
+// here is the actionable boundary, not a UX guess.
+const SEQUENCE_POLL_HARD_CAP_MS = 60 * 60 * 1000;
+const SEQUENCE_POLL_SLOW_NOTICE_MS = 2 * 60 * 1000;
 const SEQUENCE_POLL_INITIAL_MS = 1000;
 const SEQUENCE_POLL_MAX_MS = 5000;
 
-async function pollSequenceTask(taskId: string) {
+async function pollSequenceTask(
+  taskId: string,
+  abortController: AbortController,
+) {
   // The backend returns 503 while the task is PENDING (so the
   // dashboard stays responsive) and 200 when ready. We back off the
   // poll interval to avoid hammering the API during multi-minute runs
   // but stay responsive for short ones — the first hit lands at 1s.
   const start = Date.now();
   let waitMs = SEQUENCE_POLL_INITIAL_MS;
-  while (Date.now() - start < SEQUENCE_POLL_TIMEOUT_MS) {
+  let slowNoticeShown = false;
+  let slowToastId: string | number | undefined;
+
+  const dismissSlowToast = () => {
+    if (slowToastId !== undefined) {
+      toast.dismiss(slowToastId);
+      slowToastId = undefined;
+    }
+  };
+
+  while (Date.now() - start < SEQUENCE_POLL_HARD_CAP_MS) {
+    if (abortController.signal.aborted) {
+      dismissSlowToast();
+      throw new DOMException("Sequence search cancelled", "AbortError");
+    }
     try {
-      return await fetchNrbSequenceQueryStatus(taskId);
+      const result = await fetchNrbSequenceQueryStatus(taskId);
+      dismissSlowToast();
+      return result;
     } catch (e) {
       if (e instanceof ApiError && e.status === 503) {
+        if (
+          !slowNoticeShown &&
+          Date.now() - start > SEQUENCE_POLL_SLOW_NOTICE_MS
+        ) {
+          slowNoticeShown = true;
+          slowToastId = toast.message(
+            "Still searching… large protein queries can take several minutes. Keep this tab open.",
+            {
+              duration: Infinity,
+              action: {
+                label: "Cancel",
+                onClick: () => abortController.abort(),
+              },
+            },
+          );
+        }
         await new Promise((r) => setTimeout(r, waitMs));
         waitMs = Math.min(SEQUENCE_POLL_MAX_MS, Math.round(waitMs * 1.5));
         continue;
       }
+      dismissSlowToast();
       throw e;
     }
   }
+  dismissSlowToast();
   throw new Error(
-    `Sequence search timed out after ${Math.round(SEQUENCE_POLL_TIMEOUT_MS / 60000)} min — the task may still be running on the server; try again or shorten the query.`,
+    "Sequence search exceeded the 1-hour result lifetime — retry with a shorter sequence or tighter filters.",
   );
 }

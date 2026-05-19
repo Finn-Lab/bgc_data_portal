@@ -154,6 +154,14 @@ CLUSTERING_ARTIFACTS_DIR: Path = Path(
     )
 )
 
+# When True, the in-portal clustering pipeline (run_bgc_clustering) is refused
+# — clustering must run on HPC via the bgc-cluster CLI and be imported back
+# with import_clustering_results. Default off so local compose / dev still
+# works against a small seeded DB.
+CLUSTERING_HPC_MODE: bool = (
+    os.environ.get("CLUSTERING_HPC_MODE", "false").lower() in ("1", "true", "yes")
+)
+
 # On-disk phmmer protein search DB (FASTA + .ssi + VERSION).
 # Lives on the shared ML PVC so every Celery worker can read it.
 PROTEIN_SEARCH_INDEX_DIR: Path = Path(

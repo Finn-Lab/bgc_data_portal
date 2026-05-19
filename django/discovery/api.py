@@ -2001,56 +2001,57 @@ def similar_nrb_query(
 ):
     """Top-K NRBs by composite-Dice similarity to ``body.nrb_id``.
 
-    Uses the cached similarity matrix from the latest ClusteringRun (written
-    by ``run_clustering_pipeline``). Only primary NRBs (those in the run's
-    clusterable subset) can be used as seeds in v1; ad-hoc partial seeds
-    require recomputation and will be enabled in a follow-up phase.
+    Composite-Dice is computed on demand against the per-NRB signature
+    matrices of the active ClusteringRun. The full N×N similarity matrix
+    is no longer materialised; the result is cached in Redis for 24h keyed
+    on the run's sha256 so a new clustering run invalidates the cache by
+    orphaning the previous keys.
     """
-    from discovery.services.clustering.nrb_scoring import load_scoring_cache
-    from django.conf import settings
+    from discovery.services.clustering.similarity_on_demand import (
+        cache_key_find_similar,
+        cache_similarity_query,
+        get_active_scoring_cache,
+        score_against_all,
+        top_k,
+    )
 
-    run = ClusteringRun.objects.order_by("-created_at").first()
-    if run is None:
-        raise HttpError(404, "No ClusteringRun available")
-
-    cache_dir = settings.CLUSTERING_ARTIFACTS_DIR / run.sha256[:12]
     try:
-        cache = load_scoring_cache(cache_dir)
-    except FileNotFoundError:
-        raise HttpError(
-            503,
-            "Similarity cache not present on this run — rerun "
-            "run_bgc_clustering with --apply to persist NRB rows, MIBiG "
-            "artifacts, and the similarity cache (--score-nrbs is on by "
-            "default, but the cache is only written when --apply is set).",
-        )
+        scoring = get_active_scoring_cache()
+    except FileNotFoundError as exc:
+        raise HttpError(503, str(exc))
 
-    sim = cache["sim"]
-    nrb_ids_arr = cache["nrb_ids"]
-    id_to_row = {int(x): i for i, x in enumerate(nrb_ids_arr.tolist())}
-    if body.nrb_id not in id_to_row:
+    row_ix = scoring.row_index_for(body.nrb_id)
+    if row_ix is None:
         raise HttpError(
             400,
             "Seed NRB is not a primary in the latest ClusteringRun — "
             "similar-NRB requires a primary seed in v1.",
         )
 
-    row_ix = id_to_row[body.nrb_id]
-    row = sim.getrow(row_ix)
-    if row.nnz == 0:
+    k = max(1, min(int(body.k), 500))
+
+    def _compute():
+        import numpy as np
+
+        q_dom = scoring.M_domains.getrow(row_ix)
+        q_pair = scoring.M_pairs.getrow(row_ix)
+        scores = score_against_all(q_dom, q_pair, scoring)
+        scores[row_ix] = -np.inf  # exclude self
+        rows, vals = top_k(scores, k)
+        ids = [int(scoring.nrb_ids[r]) for r in rows]
+        return {"ids": ids, "scores": vals}
+
+    cache_key = cache_key_find_similar(sha256=scoring.sha256, nrb_id=body.nrb_id, k=k)
+    cached = cache_similarity_query(cache_key=cache_key, compute=_compute)
+    top_ids: list[int] = list(cached["ids"])
+    top_sims: list[float] = [float(v) for v in cached["scores"]]
+    sim_lookup = dict(zip(top_ids, top_sims))
+
+    if not top_ids:
         return PaginatedNrbRosterResponse(
             items=[],
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
-
-    import numpy as np
-    cols = row.indices
-    vals = row.data
-    k = max(1, min(int(body.k), 500))
-    order = np.argsort(-vals)[:k]
-    top_ids = [int(nrb_ids_arr[cols[i]]) for i in order.tolist()]
-    top_sims = [float(vals[i]) for i in order.tolist()]
-    sim_lookup = dict(zip(top_ids, top_sims))
 
     total_count = len(top_ids)
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
@@ -2098,34 +2099,35 @@ def nrb_architecture_query(
         architecture_search,
         normalize_architecture_input,
     )
-    from discovery.services.clustering.nrb_scoring import load_scoring_cache
-    from django.conf import settings
+    from discovery.services.clustering.similarity_on_demand import (
+        cache_key_architecture,
+        cache_similarity_query,
+        get_active_scoring_cache,
+    )
 
     accs = normalize_architecture_input(body.architecture)
     if not accs:
         raise HttpError(400, "architecture must contain at least one accession")
 
-    run = ClusteringRun.objects.order_by("-created_at").first()
-    if run is None:
-        raise HttpError(404, "No ClusteringRun available")
-
-    cache_dir = settings.CLUSTERING_ARTIFACTS_DIR / run.sha256[:12]
     try:
-        cache = load_scoring_cache(cache_dir)
-    except FileNotFoundError:
-        raise HttpError(
-            503,
-            "Scoring cache not present on this run — rerun "
-            "run_bgc_clustering with --apply to persist NRB rows, MIBiG "
-            "artifacts, and the similarity cache (--score-nrbs is on by "
-            "default, but the cache is only written when --apply is set).",
-        )
+        scoring = get_active_scoring_cache()
+    except FileNotFoundError as exc:
+        raise HttpError(503, str(exc))
 
-    result = architecture_search(
-        accs, weight=body.weight, k=body.k, cache=cache,
+    k = max(1, min(int(body.k), 500))
+
+    def _compute():
+        result = architecture_search(
+            accs, weight=body.weight, k=k, cache=scoring,
+        )
+        return {"ids": result["nrb_ids"], "scores": result["scores"]}
+
+    cache_key = cache_key_architecture(
+        sha256=scoring.sha256, accs_ordered=accs, weight=float(body.weight), k=k,
     )
-    top_ids: list[int] = result["nrb_ids"]
-    top_scores: list[float] = result["scores"]
+    cached = cache_similarity_query(cache_key=cache_key, compute=_compute)
+    top_ids: list[int] = list(cached["ids"])
+    top_scores: list[float] = [float(s) for s in cached["scores"]]
     if not top_ids:
         raise HttpError(
             400,

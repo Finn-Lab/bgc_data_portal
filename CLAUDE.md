@@ -33,7 +33,18 @@ pre-commit run --all-files
 docker compose exec django python manage.py migrate
 docker compose exec django python manage.py collectstatic
 docker compose exec django python manage.py build_non_redundant_bgcs
-docker compose exec django python manage.py run_bgc_clustering --apply   # also scores NRBs + projects partials
+
+# Clustering is an HPC handoff in prod (CLUSTERING_HPC_MODE=True):
+#   1. export signature matrices, ship to HPC, run `bgc-cluster run`
+docker compose exec django python manage.py export_clustering_inputs --run-tag <tag>
+#   2. (HPC) sbatch deployments/cronjobs/slurm/bgc_clustering_cpu.sh in.tgz out.tgz
+#   3. import the result tarball back into the DB
+docker compose exec django python manage.py import_clustering_results /data/clustering_artifacts/imports/<tag>.tgz
+#   rollback: restore per-NRB columns from a previous run's snapshot
+docker compose exec django python manage.py set_active_clustering_run --sha <previous_sha>
+
+# Dev-only (CLUSTERING_HPC_MODE unset): in-portal clustering still works.
+docker compose exec django python manage.py run_bgc_clustering --apply
 docker compose exec django python manage.py reclassify_bgcs --run <pk>
 docker compose exec django python manage.py recompute_all_scores
 docker compose exec django python manage.py update_discovery_stats
