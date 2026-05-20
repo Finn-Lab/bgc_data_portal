@@ -92,7 +92,7 @@ def _read_indexed_sha256s(fasta_path: Path) -> set[str]:
 
 
 def iter_unique_proteins(exclude: Optional[set[str]] = None) -> Iterator[tuple[str, str]]:
-    """Yield ``(sha256, aa_seq)`` for every unique protein in DashboardCds.
+    """Yield ``(sha256, aa_seq)`` for every unique protein in ContigCds.
 
     Joins ``discovery_cds`` with ``discovery_cds_sequence`` (zlib-compressed AA)
     and de-duplicates by ``protein_sha256``. Optional ``exclude`` filters out

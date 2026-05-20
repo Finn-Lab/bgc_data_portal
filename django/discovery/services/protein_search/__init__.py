@@ -8,7 +8,7 @@ swap in a fresh ``DigitalSequenceBlock`` on the next query.
 Public entry points:
 
 * :func:`discovery.services.protein_search.build.rebuild_index` —
-  full FASTA rewrite from ``DashboardCds``.
+  full FASTA rewrite from ``ContigCds``.
 * :func:`discovery.services.protein_search.build.update_index` —
   append-only update for newly ingested proteins.
 * :func:`discovery.services.protein_search.search.phmmer_search` —

@@ -1,24 +1,30 @@
 """Aggregation statistics for the Discovery Platform stats panels.
 
-Uses DashboardAssembly/DashboardBgc and the denormalized BgcDomain table
-instead of cross-schema joins.  For unfiltered views, reads from
-PrecomputedStats to avoid full-table scans.
+iBGC is the unit of every stats panel — ``compute_bgc_stats`` takes an
+``IntegratedBgc`` queryset. Domain / NP / ChemOnt aggregations reach
+their targets through range-overlap joins on the contig (no more
+through-BGC FK chain). For unfiltered views, reads from PrecomputedStats
+to avoid full-table scans.
+
+The legacy ``BgcStatsResponse`` field names (``total_bgcs``,
+``core_domains``, ``bgc_class_distribution``) are kept for API parity —
+the values now reflect iBGC-level counts.
 """
 
 import random
 from collections import defaultdict
 
+from django.db import connection
 from django.db.models import Avg, Count, Q
 
 from discovery.models import (
     AssemblyType,
-    BgcDomain,
-    DashboardBgc,
+    CdsChemOnt,
     DashboardAssembly,
-    DashboardCdsChemOnt,
-    DashboardNaturalProduct,
-    IntegratedBGC,
+    IbgcNaturalProduct,
+    IntegratedBgc,
     PrecomputedStats,
+    SourceBgcPrediction,
 )
 
 
@@ -36,13 +42,9 @@ def _sample_values(values: list[float], limit: int = MAX_BOXPLOT_VALUES) -> list
 
 
 def compute_assembly_stats(assembly_qs) -> dict:
-    """Compute aggregate statistics for a filtered DashboardAssembly queryset.
-
-    Returns a dict ready to be serialised into AssemblyStatsResponse.
-    """
+    """Compute aggregate statistics for a filtered DashboardAssembly queryset."""
     taxonomy_sunburst = _build_taxonomy_sunburst(assembly_qs)
 
-    # Score distributions for boxplots
     score_rows = list(
         assembly_qs.values_list(
             "bgc_diversity_score",
@@ -60,19 +62,16 @@ def compute_assembly_stats(assembly_qs) -> dict:
         {"label": "Density", "values": density_vals},
     ]
 
-    # Type strain counts
     strain_agg = assembly_qs.aggregate(
         type_strain=Count("id", filter=Q(is_type_strain=True)),
         non_type_strain=Count("id", filter=Q(is_type_strain=False)),
     )
 
-    # Average BGC count and L1 class count per assembly
     avg_agg = assembly_qs.aggregate(
         mean_bgc=Avg("bgc_count"),
         mean_l1=Avg("l1_class_count"),
     )
 
-    # Biome and source distributions (one count per assembly).
     biome_distribution = [
         {"name": row["biome_path"] or "(unknown)", "count": row["c"]}
         for row in (
@@ -109,12 +108,7 @@ TAXONOMY_RANK_NAMES = [
 
 
 def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
-    """Build flat sunburst nodes from an iterable of ltree taxonomy paths.
-
-    Each non-empty path contributes one count to every ancestor node it
-    traverses. Returns ``[{id, label, parent, count}, ...]`` with
-    ``parent=""`` for root nodes.
-    """
+    """Build flat sunburst nodes from an iterable of ltree taxonomy paths."""
     nodes: dict[str, dict] = {}
     for path in paths:
         if not path:
@@ -141,10 +135,6 @@ def build_taxonomy_sunburst_from_paths(paths) -> list[dict]:
 
 
 def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
-    """Build a flat list for Plotly sunburst from contig taxonomy_path (ltree).
-
-    Returns [{id, label, parent, count}, ...] where parent="" for root nodes.
-    """
     from discovery.models import DashboardContig
 
     contig_paths = (
@@ -155,22 +145,22 @@ def _build_taxonomy_sunburst(assembly_qs) -> list[dict]:
     return build_taxonomy_sunburst_from_paths(contig_paths)
 
 
-# ── BGC stats ────────────────────────────────────────────────────────────────
+# ── iBGC stats ───────────────────────────────────────────────────────────────
 
 
-def compute_bgc_stats(bgc_qs) -> dict:
-    """Compute aggregate statistics for a filtered DashboardBgc queryset.
+def compute_bgc_stats(ibgc_qs) -> dict:
+    """Compute aggregate statistics for a filtered ``IntegratedBgc`` queryset.
 
-    Returns a dict ready to be serialised into BgcStatsResponse.
+    Returns a dict ready to be serialised into ``BgcStatsResponse``. The
+    response field names retain the legacy ``bgc_`` prefix for API parity;
+    counts and pools reflect iBGCs.
     """
-    total_bgcs = bgc_qs.count()
+    total_ibgcs = ibgc_qs.count()
 
-    # Core domains (present in >80% of BGCs) — single join to BgcDomain
-    core_domains = _compute_core_domains(bgc_qs, total_bgcs)
+    core_domains = _compute_core_domains(ibgc_qs, total_ibgcs)
 
-    # Score distributions for boxplots
     score_rows = list(
-        bgc_qs.values_list("novelty_score", "domain_novelty")
+        ibgc_qs.values_list("novelty_score", "domain_novelty")
     )
     novelty_vals = _sample_values([r[0] for r in score_rows if r[0] is not None])
     domain_novelty_vals = _sample_values([r[1] for r in score_rows if r[1] is not None])
@@ -180,24 +170,29 @@ def compute_bgc_stats(bgc_qs) -> dict:
         {"label": "Domain Novelty", "values": domain_novelty_vals},
     ]
 
-    # Completeness counts
-    completeness_agg = bgc_qs.aggregate(
-        complete=Count("id", filter=Q(is_partial=False)),
-        partial=Count("id", filter=Q(is_partial=True)),
-    )
+    # An iBGC is "complete" iff none of its source predictions are partial.
+    # Compute via an EXISTS subquery on SourceBgcPrediction.
+    ibgc_ids = list(ibgc_qs.values_list("id", flat=True))
+    if ibgc_ids:
+        partial_ids = set(
+            SourceBgcPrediction.objects
+            .filter(integrated_bgc_id__in=ibgc_ids, is_partial=True)
+            .values_list("integrated_bgc_id", flat=True)
+            .distinct()
+        )
+    else:
+        partial_ids = set()
+    partial_count = len(partial_ids)
+    complete_count = total_ibgcs - partial_count
 
-    # NP chemical class sunburst (legacy)
-    np_class_sunburst = _build_np_class_sunburst(bgc_qs)
+    np_class_sunburst = _build_np_class_sunburst(ibgc_qs)
+    chemont_sunburst = _build_chemont_sunburst(ibgc_qs)
 
-    # ChemOnt class sunburst
-    chemont_sunburst = _build_chemont_sunburst(bgc_qs)
-
-    # BGC class distribution (from first segment of classification_path)
     from django.db.models.expressions import RawSQL
 
     bgc_class_dist = list(
-        bgc_qs.exclude(classification_path="")
-        .annotate(class_l1=RawSQL("SPLIT_PART(classification_path, '.', 1)", []))
+        ibgc_qs.exclude(gene_cluster_family="")
+        .annotate(class_l1=RawSQL("SPLIT_PART(gene_cluster_family, '.', 1)", []))
         .values("class_l1")
         .annotate(count=Count("id"))
         .order_by("-count")
@@ -210,61 +205,76 @@ def compute_bgc_stats(bgc_qs) -> dict:
     return {
         "core_domains": core_domains,
         "score_distributions": score_distributions,
-        "complete_count": completeness_agg["complete"],
-        "partial_count": completeness_agg["partial"],
+        "complete_count": complete_count,
+        "partial_count": partial_count,
         "np_class_sunburst": np_class_sunburst,
         "chemont_sunburst": chemont_sunburst,
         "bgc_class_distribution": bgc_class_distribution,
-        "total_bgcs": total_bgcs,
+        "total_bgcs": total_ibgcs,
     }
 
 
-def _compute_core_domains(bgc_qs, total_bgcs: int) -> list[dict]:
-    """Find domains present in >80% of the filtered BGCs.
+def _compute_core_domains(ibgc_qs, total_ibgcs: int) -> list[dict]:
+    """Find domains present in >80% of the filtered iBGCs.
 
-    Uses the denormalized BgcDomain table — a single join instead of the
-    previous 5-table chain (Domain→ProteinDomain→Protein→CDS→Contig→BGC).
+    Joins ``discovery_domain_hit`` → ``discovery_cds`` → ``discovery_ibgc``
+    via range overlap. A domain is counted once per iBGC even if it appears
+    on multiple CDS within that iBGC.
     """
-    if total_bgcs == 0:
+    if total_ibgcs == 0:
         return []
 
-    threshold = max(1, int(total_bgcs * 0.8))
+    ibgc_ids = list(ibgc_qs.values_list("id", flat=True))
+    if not ibgc_ids:
+        return []
 
-    domain_counts = (
-        BgcDomain.objects.filter(bgc__in=bgc_qs)
-        .values("domain_acc", "domain_name")
-        .annotate(bgc_count=Count("bgc", distinct=True))
-        .filter(bgc_count__gte=threshold)
-        .order_by("-bgc_count")
-    )
+    threshold = max(1, int(total_ibgcs * 0.8))
+
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT d.domain_acc,
+                   MAX(d.domain_name) AS domain_name,
+                   COUNT(DISTINCT i.id) AS ibgc_count
+            FROM discovery_domain_hit d
+            JOIN discovery_cds c ON c.id = d.cds_id
+            JOIN discovery_ibgc i
+              ON i.contig_id = c.contig_id
+             AND i.bgc_range && c.cds_range
+            WHERE i.id = ANY(%s::bigint[])
+            GROUP BY d.domain_acc
+            HAVING COUNT(DISTINCT i.id) >= %s
+            ORDER BY ibgc_count DESC, d.domain_acc ASC
+            """,
+            [ibgc_ids, threshold],
+        )
+        rows = cur.fetchall()
 
     return [
         {
-            "acc": row["domain_acc"],
-            "name": row["domain_name"],
-            "bgc_count": row["bgc_count"],
-            "fraction": round(row["bgc_count"] / total_bgcs, 4),
+            "acc": acc,
+            "name": name or "",
+            "bgc_count": ibgc_count,
+            "fraction": round(ibgc_count / total_ibgcs, 4),
         }
-        for row in domain_counts
+        for acc, name, ibgc_count in rows
     ]
 
 
-def _build_np_class_sunburst(bgc_qs) -> list[dict]:
-    """Build a flat sunburst list for NP chemical class hierarchy."""
+def _build_np_class_sunburst(ibgc_qs) -> list[dict]:
+    """Flat sunburst list for NP chemical class hierarchy across iBGCs."""
     paths = (
-        DashboardNaturalProduct.objects.filter(bgc__in=bgc_qs)
+        IbgcNaturalProduct.objects.filter(ibgc__in=ibgc_qs)
         .exclude(np_class_path="")
         .values_list("np_class_path", flat=True)
     )
 
     nodes: dict[str, dict] = {}
-
     for path in paths:
         parts = path.split(".")
         l1 = parts[0] if len(parts) > 0 else ""
         l2 = parts[1] if len(parts) > 1 else ""
         l3 = parts[2] if len(parts) > 2 else ""
-
         if not l1:
             continue
 
@@ -288,13 +298,33 @@ def _build_np_class_sunburst(bgc_qs) -> list[dict]:
     return list(nodes.values())
 
 
-def _build_chemont_sunburst(bgc_qs) -> list[dict]:
-    """Build a flat sunburst list for ChemOnt chemical class hierarchy."""
-    rows = (
-        DashboardCdsChemOnt.objects.filter(cds__bgc__in=bgc_qs)
-        .values("chemont_id", "chemont_name")
-        .annotate(cnt=Count("cds__bgc", distinct=True))
-    )
+def _build_chemont_sunburst(ibgc_qs) -> list[dict]:
+    """Flat sunburst list for ChemOnt chemical class hierarchy across iBGCs.
+
+    Joins ``discovery_cds_chemont`` → ``discovery_cds`` → ``discovery_ibgc``
+    via range overlap. Each (iBGC, chemont_id) pair contributes one count.
+    """
+    ibgc_ids = list(ibgc_qs.values_list("id", flat=True))
+    if not ibgc_ids:
+        return []
+
+    with connection.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ch.chemont_id,
+                   MAX(ch.chemont_name) AS chemont_name,
+                   COUNT(DISTINCT i.id) AS cnt
+            FROM discovery_cds_chemont ch
+            JOIN discovery_cds c ON c.id = ch.cds_id
+            JOIN discovery_ibgc i
+              ON i.contig_id = c.contig_id
+             AND i.bgc_range && c.cds_range
+            WHERE i.id = ANY(%s::bigint[])
+            GROUP BY ch.chemont_id
+            """,
+            [ibgc_ids],
+        )
+        rows = cur.fetchall()
 
     if not rows:
         return []
@@ -305,15 +335,12 @@ def _build_chemont_sunburst(bgc_qs) -> list[dict]:
         ont = get_ontology()
     except (FileNotFoundError, ImportError):
         return [
-            {"id": r["chemont_id"], "label": r["chemont_name"], "parent": "", "count": r["cnt"]}
-            for r in rows
+            {"id": cid, "label": cname, "parent": "", "count": cnt}
+            for cid, cname, cnt in rows
         ]
 
-    direct_counts: dict[str, int] = {}
-    name_map: dict[str, str] = {}
-    for r in rows:
-        direct_counts[r["chemont_id"]] = r["cnt"]
-        name_map[r["chemont_id"]] = r["chemont_name"]
+    direct_counts: dict[str, int] = {cid: cnt for cid, _cname, cnt in rows}
+    name_map: dict[str, str] = {cid: cname or "" for cid, cname, _cnt in rows}
 
     relevant_ids: set[str] = set(direct_counts.keys())
     for cid in list(direct_counts.keys()):
@@ -345,7 +372,17 @@ def _build_chemont_sunburst(bgc_qs) -> list[dict]:
 
 
 def generate_discovery_stats() -> dict:
-    """High-level Discovery Platform counts shown in the Run Query card."""
+    """High-level Discovery Platform counts shown in the Run Query card.
+
+    ``validated_bgcs`` counts iBGCs whose source predictions include at
+    least one validated row (ground-truth iBGCs).
+    """
+    validated_ibgc_ids = (
+        SourceBgcPrediction.objects
+        .filter(is_validated=True, integrated_bgc__isnull=False)
+        .values_list("integrated_bgc_id", flat=True)
+        .distinct()
+    )
     return {
         "genomes": DashboardAssembly.objects.filter(
             assembly_type=AssemblyType.GENOME
@@ -353,7 +390,7 @@ def generate_discovery_stats() -> dict:
         "metagenomes": DashboardAssembly.objects.filter(
             assembly_type=AssemblyType.METAGENOME
         ).count(),
-        "validated_bgcs": DashboardBgc.objects.filter(is_validated=True).count(),
-        "ibgcs": IntegratedBGC.objects.count(),
-        "total_bgc_predictions": DashboardBgc.objects.count(),
+        "validated_bgcs": IntegratedBgc.objects.filter(id__in=validated_ibgc_ids).count(),
+        "ibgcs": IntegratedBgc.objects.count(),
+        "total_bgc_predictions": SourceBgcPrediction.objects.count(),
     }

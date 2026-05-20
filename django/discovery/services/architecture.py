@@ -1,22 +1,22 @@
-"""Pooled positional domain architecture for BGCs and iBGCs.
+"""Pooled positional domain architecture for source BGCs and iBGCs.
 
 Single source of truth for the *ordered* domain sequence used by:
 
 * ``ibgc_detail`` / ``bgc_detail`` (``domain_architecture`` field)
-* the new ``GET /ibgcs/{id}/architecture/`` endpoint (clipboard payload)
-* future consumers that need the same ordering rule the clustering
-  pipeline saw (see :mod:`discovery.services.clustering.adjacency`).
+* ``GET /ibgcs/{id}/architecture/`` (clipboard payload)
+* the clustering pipeline (see
+  :mod:`discovery.services.clustering.adjacency`)
 
-Ordering rule: ``(cds.start_position, BgcDomain.start_position, domain_acc)``
-across all source BGCs of the iBGC, with duplicate ``(cds_start, dom_start,
-acc)`` tuples collapsed — each remaining entry corresponds to one distinct
-domain hit on a CDS. ``ref_db`` is filtered to PFAM/NCBIFAM by default
+Ordering rule: ``(cds.cds_range.lower, ContigDomain.start_position, domain_acc)``
+across all CDS whose ``cds_range`` overlaps the iBGC's / source-BGC's
+``bgc_range`` on the same contig. Duplicate ``(cds_start, dom_start, acc)``
+tuples are collapsed. ``ref_db`` is filtered to PFAM/NCBIFAM by default
 (``DEFAULT_DOMAIN_SOURCES``) so the surfaced architecture matches the
 vocabulary the composite-Dice scoring cache uses.
 
 This module also hosts :func:`collapse_to_interpro_rows`, which folds
-per-signature ``BgcDomain`` rows into one row per InterPro entry for the
-Protein Information card. That collapse runs *unfiltered* across all
+per-signature ``ContigDomain`` rows into one row per InterPro entry for
+the Protein Information card. That collapse runs *unfiltered* across all
 ref_dbs — the clustering filter only applies to the pooled architecture
 views above.
 """
@@ -25,9 +25,11 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterable, Sequence
 
+from django.db.models import F
 from django.db.models.functions import Upper
+from psycopg2.extras import NumericRange
 
-from discovery.models import BgcDomain
+from discovery.models import ContigDomain, IntegratedBgc, SourceBgcPrediction
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
     _normalize_sources,
@@ -44,7 +46,7 @@ def collapse_to_interpro_rows(
 ) -> list[dict[str, Any]]:
     """Group per-signature domain rows by InterPro entry for the Protein Info card.
 
-    Accepts any object with the BgcDomain attribute surface
+    Accepts any object with the ContigDomain attribute surface
     (``interpro_entry_acc``, ``interpro_entry_description``, ``domain_acc``,
     ``domain_name``, ``domain_description``, ``start_position``,
     ``end_position``, ``score``, ``url``). ``slim_for`` lets callers that
@@ -61,9 +63,6 @@ def collapse_to_interpro_rows(
         (with a deterministic fallback to the signature description /
         URL when the entry has neither set).
       * Output rows are sorted by ``envelope_start`` for stable rendering.
-
-    Returns a list of dicts with the same keys the API serializer needs to
-    build :class:`InterproAnnotationOut`. Empty input → ``[]``.
     """
     groups: dict[str, dict[str, Any]] = {}
     for d in domains:
@@ -130,29 +129,34 @@ def collapse_to_interpro_rows(
     return rows
 
 
+# ── Ordered architecture (range-overlap query) ───────────────────────────────
+
+
 def _ordered_entries(
-    bgc_ids: Iterable[int],
+    contig_id: int,
+    bgc_range: NumericRange,
     sources: Sequence[str],
 ) -> list[dict]:
-    """Return ordered, deduplicated domain hits across ``bgc_ids``.
+    """Return ordered, deduplicated domain hits within ``bgc_range`` on ``contig_id``.
 
-    Each item carries ``domain_acc``, ``domain_name``, ``ref_db``, ``url`` —
-    enough to render the existing ``DomainArchitectureItem`` schema. When
-    a row has a non-blank ``interpro_entry_acc``, its accession/name/url
-    are projected to the InterPro entry; otherwise the raw signature
-    values are returned. This is the **positional, per-hit** sequence used
-    by the UI architecture surface — it intentionally does NOT collapse
-    contiguous repeats (that rule is local to M_pairs construction).
+    The pool is every ``ContigDomain`` whose parent CDS's ``cds_range``
+    overlaps ``bgc_range``. ``ref_db`` is filtered to ``sources`` (PFAM /
+    NCBIFAM by default). When a row has a non-blank ``interpro_entry_acc``,
+    its accession / name / URL are projected to the InterPro entry;
+    otherwise the raw signature values are returned. This is the
+    **positional, per-hit** sequence — contiguous repeats are NOT collapsed
+    (that rule is local to M_pairs construction).
     """
     upper_sources = _normalize_sources(sources)
     rows = (
-        BgcDomain.objects
+        ContigDomain.objects
         .annotate(ref_db_upper=Upper("ref_db"))
         .filter(
-            bgc_id__in=list(bgc_ids),
+            contig_id=contig_id,
+            cds__cds_range__overlap=bgc_range,
             ref_db_upper__in=upper_sources,
-            cds__isnull=False,
         )
+        .annotate(cds_lower=F("cds__cds_range"))  # row carries cds_range; we read lower from it
         .values(
             "domain_acc",
             "domain_name",
@@ -161,14 +165,15 @@ def _ordered_entries(
             "url",
             "interpro_entry_acc",
             "interpro_entry_description",
-            "cds__start_position",
+            "cds__cds_range",
             "start_position",
         )
     )
     seen: set[tuple[int, int, str]] = set()
     ordered: list[tuple[int, int, dict]] = []
     for r in rows:
-        cds_start = int(r["cds__start_position"] or 0)
+        cds_range = r.get("cds__cds_range")
+        cds_start = int(cds_range.lower) if cds_range is not None and cds_range.lower is not None else 0
         dom_start = int(r["start_position"] or 0)
         acc = r["domain_acc"]
         if not acc:
@@ -199,21 +204,35 @@ def _ordered_entries(
 
 
 def bgc_architecture(
-    bgc_id: int,
+    source_bgc_id: int,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
 ) -> list[dict]:
-    """Ordered architecture for a single DashboardBgc."""
-    return _ordered_entries([bgc_id], sources)
+    """Ordered architecture for a single ``SourceBgcPrediction``.
+
+    Domains are pooled across CDS overlapping the prediction's
+    ``bgc_range`` on its contig.
+    """
+    sbgc = SourceBgcPrediction.objects.only("contig_id", "bgc_range").filter(
+        id=source_bgc_id,
+    ).first()
+    if sbgc is None or sbgc.bgc_range is None:
+        return []
+    return _ordered_entries(sbgc.contig_id, sbgc.bgc_range, sources)
 
 
 def ibgc_architecture(
-    member_bgc_ids: Sequence[int],
+    ibgc_id: int,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
 ) -> list[dict]:
-    """Ordered architecture pooled across all member BGCs of an iBGC.
+    """Ordered architecture pooled across all CDS overlapping the iBGC's range.
 
     Matches the rule used by
     :func:`discovery.services.clustering.adjacency.build_ibgc_adjacency_pair_matrix`
     so the rendered sequence is the one the clustering pipeline scored.
     """
-    return _ordered_entries(member_bgc_ids, sources)
+    ibgc = IntegratedBgc.objects.only("contig_id", "bgc_range").filter(
+        id=ibgc_id,
+    ).first()
+    if ibgc is None or ibgc.bgc_range is None:
+        return []
+    return _ordered_entries(ibgc.contig_id, ibgc.bgc_range, sources)

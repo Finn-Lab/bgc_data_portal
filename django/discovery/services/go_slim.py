@@ -1,18 +1,18 @@
 """GO-term → GO-slim mapping, shared between ingestion and asset projection.
 
-Replaces the old Pfam-keyed lookup (``pfam2goSlim.json``). Now every
-``BgcDomain`` row — regardless of ``ref_db`` — carries the GO terms that
-InterProScan attached to the underlying signature (``BgcDomain.go_terms``).
-This module folds that list down to a deduplicated set of GO-slim term
-*names* (capitalised) suitable for direct display and palette lookup.
+Every ``ContigDomain`` row — regardless of ``ref_db`` — carries the GO
+terms that InterProScan attached to the underlying signature
+(``ContigDomain.go_terms``). This module folds that list down to a
+deduplicated set of GO-slim term *names* (capitalised) suitable for
+direct display and palette lookup.
 
 The mapping itself is precomputed offline by
 ``scripts/refresh_go_slim_map.py`` (a standalone Python script — the only
 place ``goatools`` is imported) and committed to the repo as
 ``services/data/go_slim_map.json``. Runtime stays dependency-free.
 
-Callers should populate ``BgcDomain.go_slim`` (or its asset-side equivalent)
-inline at write time using :func:`go_slim_for_terms`.
+Callers should populate ``ContigDomain.go_slim`` (or its asset-side
+equivalent) inline at write time using :func:`go_slim_for_terms`.
 """
 
 from __future__ import annotations
@@ -88,6 +88,6 @@ def go_slim_for(domain_acc: str) -> list[str]:  # pragma: no cover - back-compat
 
     Kept so any in-flight branch that still calls this name still imports.
     Always returns ``[]``; callers should switch to
-    :func:`go_slim_for_terms` and pass ``BgcDomain.go_terms``.
+    :func:`go_slim_for_terms` and pass ``ContigDomain.go_terms``.
     """
     return []

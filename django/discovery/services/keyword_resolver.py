@@ -14,7 +14,10 @@ from django.conf import settings
 
 
 # Compiled patterns for accession detection
-_BGC_ACCESSION_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
+# New format: MGYB-XXXXXX (cBGC) or MGYB-XXXXXX-YY (iBGC). Crockford base32.
+_BGC_ACCESSION_RE = re.compile(r"^MGYB-[0-9A-HJKMNP-TV-Z]{6}(-[0-9A-HJKMNP-TV-Z]{2})?$", re.IGNORECASE)
+# Legacy format: MGYBNNNNNNNN (pre-refactor cBGC; resolved via AccessionAlias).
+_BGC_LEGACY_RE = re.compile(r"^MGYB\d+$", re.IGNORECASE)
 _ASSEMBLY_ACCESSION_RE = re.compile(r"^(ERZ|GCA_|GCF_)\w+$", re.IGNORECASE)
 _DOMAIN_ACCESSION_RE = re.compile(r"^(PF\d{5}|TIGR\d{5})$", re.IGNORECASE)
 
@@ -60,12 +63,21 @@ def resolve_keyword(keyword: str) -> dict:
 
 
 def _try_bgc_accession(keyword: str) -> Optional[dict]:
-    if not _BGC_ACCESSION_RE.match(keyword):
-        return None
-    from discovery.models import DashboardBgc
+    # Matches MGYB-XXXXXX (cBGC), MGYB-XXXXXX-YY (iBGC), and legacy MGYBNNNNNNNN.
+    # Resolution goes through the accession registry + alias table.
+    from discovery.models import AccessionAlias, AccessionRegistry
 
-    if DashboardBgc.objects.filter(bgc_accession__iexact=keyword).exists():
-        return _build_result("search", keyword.upper(), "bgc_accession")
+    if _BGC_ACCESSION_RE.match(keyword) or _BGC_LEGACY_RE.match(keyword):
+        canonical = keyword.upper()
+        if AccessionRegistry.objects.filter(accession=canonical).exists():
+            return _build_result("search", canonical, "accession")
+        alias = (
+            AccessionAlias.objects.filter(alias_accession=canonical)
+            .values_list("registry_id", flat=True)
+            .first()
+        )
+        if alias:
+            return _build_result("search", alias, "accession_alias")
     return None
 
 
@@ -203,9 +215,9 @@ def _try_organism_name(keyword: str) -> Optional[dict]:
 
 
 def _try_natural_product(keyword: str) -> Optional[dict]:
-    from discovery.models import DashboardNaturalProduct
+    from discovery.models import IbgcNaturalProduct
 
-    if DashboardNaturalProduct.objects.filter(name__icontains=keyword).exists():
+    if IbgcNaturalProduct.objects.filter(name__icontains=keyword).exists():
         return _build_result("search", keyword, "natural_product")
     return None
 
