@@ -44,6 +44,9 @@ spec:
             - manage.py
             - runserver
             - 0.0.0.0:8000
+          env:
+            - name: CLUSTERING_ARTIFACTS_DIR
+              value: /data/clustering_artifacts
           envFrom:
             - secretRef:
                 name: bgc-data-portal-secret
@@ -62,7 +65,7 @@ spec:
             - name: packages
               mountPath: /data/packages
             - name: clustering-artifacts
-              mountPath: /app/data/clustering_artifacts
+              mountPath: /data/clustering_artifacts
       volumes:
         # emptyDir avoids PVC multi-writer complexity for local dev.
         # Data does not survive pod restarts — acceptable in local dev.

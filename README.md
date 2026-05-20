@@ -5,6 +5,22 @@ MGnify BGCs is a web portal for exploring predicted biosynthetic gene clusters (
 The portal is developed by EMBL-EBI’s MGnify team as part of the EUREMAP project. See the About page content in `django/docs/about.qmd` for background, scope, and references.
 
 
+## Quickstart
+### VENV
+```bash
+
+python3.12 -m venv .venv --prompt portal
+source .venv/bin/activate
+# --prefer-binary keeps Intel-macOS installs working: numba/llvmlite
+# dropped x86_64 mac wheels at 0.63, so pip picks the last wheeled
+# version (0.62.x) instead of trying to compile from source.
+python -m pip install --prefer-binary -e '.[dev]' # '.[dev,dev-gpu]' if in cluster
+
+# Activate in posterios sesions
+# source services/mgnify-bgcs-etl/scripts/activate
+```
+
+
 ## Features
 
 - Explore BGCs and associated contigs/assemblies and metadata in a unified interface
@@ -67,6 +83,7 @@ Main services (local via Docker Compose):
 
 
 ## Quick start (Docker Compose)
+
 
 1) Create a `.env` file at the repo root with the required environment variables. Minimal example for local use:
 

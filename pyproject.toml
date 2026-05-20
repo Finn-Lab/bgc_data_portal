@@ -15,6 +15,7 @@ requires-python = ">=3.12"
 
 [project.optional-dependencies]
 dev = [
+    "mgnify-bgcs-common-core[hpc-cpu] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git",
     "Django==5.0.4",
     "pytest>=7",
     "pytest-django>=4.5",
@@ -27,6 +28,13 @@ dev = [
     # goatools is only needed to regenerate discovery/services/data/go_slim_map.json
     # via `manage.py refresh_go_slim_map`; runtime reads the prebuilt JSON.
     "goatools>=1.4",
+]
+# Opt-in for HPC nodes with CUDA 12. Installs on top of `dev`:
+#   pip install -e '.[dev,dev-gpu]'
+# RAPIDS wheels are Linux x86_64 + CUDA 12 only; conda/mamba is the safer
+# install path on most HPC sites — see common-core's README.
+dev-gpu = [
+    "mgnify-bgcs-common-core[hpc-gpu] @ git+https://github.com/Finn-Lab/mgnify-bgcs-common-core.git",
 ]
 
 [tool.ruff]

@@ -64,3 +64,5 @@ django/static/dashboard/
 tsconfig.tsbuildinfo
 *.tsbuildinfo
 CLAUDE.md
+bgc_data_portal.egg-info/PKG-INFO
+bgc_data_portal.egg-info/requires.txt

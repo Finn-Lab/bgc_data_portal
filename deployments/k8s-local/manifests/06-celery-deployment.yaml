@@ -35,6 +35,8 @@ spec:
           env:
             - name: PROTEIN_SEARCH_INDEX_DIR
               value: /data/protein_search
+            - name: CLUSTERING_ARTIFACTS_DIR
+              value: /data/clustering_artifacts
           envFrom:
             - secretRef:
                 name: bgc-data-portal-secret
@@ -46,7 +48,7 @@ spec:
             - name: protein-search-index
               mountPath: /data/protein_search
             - name: clustering-artifacts
-              mountPath: /app/data/clustering_artifacts
+              mountPath: /data/clustering_artifacts
       volumes:
         - name: packages
           emptyDir: {}
