@@ -79,27 +79,28 @@ class DetectorOut(Schema):
     tool_name_code: str
 
 
-class RegionOut(Schema):
+class CbgcOut(Schema):
     id: int
-    accession: str
+    accession: str  # MGYB-XXXXXX
     start_position: int
     end_position: int
 
 
-# ── BGC schemas ───────────────────────────────────────────────────────────────
+# ── Source BGC prediction (per-tool drill-down) ────────────────────────────
 
 
 class BgcRosterItem(Schema):
+    """Source BGC prediction row (per-tool drill-down). Deprecated — iBGC is the primary unit."""
+
     id: int
-    accession: str
-    classification_path: str = ""
+    accession: str  # prediction_accession, e.g. MGYB-ABC123.ANT.01
     size_kb: float = 0.0
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
     is_partial: bool = False
+    is_validated: bool = False
     assembly_accession: Optional[str] = None
     detector: Optional[DetectorOut] = None
-    region_accession: Optional[str] = None
+    cbgc_accession: Optional[str] = None
+    integrated_bgc_id: Optional[int] = None
 
 
 class PaginatedBgcRosterResponse(Schema):
@@ -146,8 +147,7 @@ class ChemOntAnnotationNode(Schema):
 
 
 class NaturalProductSummary(Schema):
-    """Curated per-BGC natural product (SMILES, structure). No longer carries
-    CHAMOIS-derived ChemOnt classes — those live at the BGC / iBGC level."""
+    """Curated per-iBGC natural product (SMILES, structure)."""
 
     id: int
     name: str
@@ -158,20 +158,17 @@ class NaturalProductSummary(Schema):
 
 
 class BgcDetail(Schema):
+    """Per-tool prediction detail (deprecated; iBGC is the primary unit)."""
+
     id: int
-    accession: str
-    classification_path: str = ""
+    accession: str  # prediction_accession
     size_kb: float = 0.0
-    novelty_score: float = 0.0
-    domain_novelty: float = 0.0
     is_partial: bool = False
     is_validated: bool = False
-    domain_architecture: list[DomainArchitectureItem] = []
     parent_assembly: Optional[ParentAssemblySummary] = None
-    natural_products: list[NaturalProductSummary] = []
-    chemont_tree: list[ChemOntAnnotationNode] = []
     detector: Optional[DetectorOut] = None
-    region_accession: Optional[str] = None
+    cbgc_accession: Optional[str] = None
+    integrated_bgc_id: Optional[int] = None
 
 
 class BgcScatterPoint(Schema):
@@ -199,13 +196,15 @@ class ValidatedReferencePoint(Schema):
 class IbgcRosterItem(Schema):
     """Row in the iBGC-level results table.
 
-    iBGCs are the primary unit in the v2 Discovery dashboard. Each iBGC
-    consolidates one or more source ``DashboardBgc`` rows; the table here
-    flattens metadata that the UI needs in the roster view.
+    iBGCs are the primary unit. Each iBGC consolidates one or more
+    ``SourceBgcPrediction`` rows; the table here flattens metadata the
+    UI needs in the roster view.
     """
 
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY (stable)
     label: str  # human-facing identifier (e.g. "iBGC-12345")
+    cbgc_accession: Optional[str] = None
     classification_path: str = ""  # leaf GCF path (gene_cluster_family)
     size_kb: float = 0.0  # (end - start) / 1000
     n_source_bgcs: int = 0
@@ -250,10 +249,10 @@ class IbgcIdsResponse(Schema):
 
 
 class IbgcMemberBgc(Schema):
-    """Source DashboardBgc contributing to an iBGC (drill-down list)."""
+    """Source BGC prediction contributing to an iBGC (drill-down list)."""
 
     id: int
-    accession: str
+    accession: str  # prediction_accession
     detector_name: Optional[str] = None
     is_partial: bool = False
     is_validated: bool = False
@@ -262,6 +261,8 @@ class IbgcMemberBgc(Schema):
 
 class IbgcDetail(Schema):
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY (stable)
+    cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
     size_kb: float = 0.0
@@ -278,7 +279,7 @@ class IbgcDetail(Schema):
     umap_x: Optional[float] = None
     umap_y: Optional[float] = None
     parent_assembly: Optional[ParentAssemblySummary] = None
-    representative_bgc_id: Optional[int] = None  # for region/CDS rendering
+    region_endpoint_url: Optional[str] = None  # /api/discovery/ibgcs/{id}/region/
     member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
@@ -435,6 +436,8 @@ class LengthBucket(Schema):
 
 class ReportIbgcRow(Schema):
     id: int
+    accession: str = ""  # MGYB-XXXXXX-YY
+    cbgc_accession: Optional[str] = None
     label: str
     classification_path: str = ""
     size_kb: float = 0.0
@@ -753,15 +756,16 @@ class RegionCdsOut(Schema):
     sequence: str = ""
     pfam: list[PfamAnnotationOut] = []
     # Non-redundant InterPro-entry annotations for the protein info card.
-    # Same source data as ``pfam`` but collapsed by interpro_entry_acc
-    # (falling back to signature accession when no entry is mapped).
     interpro: list[InterproAnnotationOut] = []
-    # Deepest ChemOnt class predicted by CHAMOIS for this CDS (null when no
-    # confident classification — see DashboardCdsChemOnt).
+    # Deepest ChemOnt class predicted by CHAMOIS for this CDS.
     chemont_id: Optional[str] = None
     chemont_name: Optional[str] = None
     chemont_probability: Optional[float] = None
     chemont_weight: Optional[float] = None
+    # Tools whose source-BGC prediction range covers this CDS, within the
+    # owning iBGC. Range-overlap derived at request time; not stored.
+    # Empty for the per-prediction BGC region endpoint.
+    claimed_by_tools: list[str] = []
 
 
 class RegionDomainOut(Schema):
@@ -785,12 +789,55 @@ class RegionClusterOut(Schema):
 
 
 class BgcRegionOut(Schema):
+    """Region payload for a single source-BGC prediction (drill-down)."""
+
     region_length: int
     window_start: int
     window_end: int
     cds_list: list[RegionCdsOut] = []
     domain_list: list[RegionDomainOut] = []
     cluster_list: list[RegionClusterOut] = []
+
+
+class IbgcRegionOut(Schema):
+    """Merged region payload for an iBGC — all CDS overlapping bgc_range.
+
+    Bug fix for the legacy "primary BGC" view: ``cds_list`` is the union of
+    every ``ContigCds`` that overlaps the iBGC's genomic span, regardless
+    of which source tool listed it. ``claimed_by_tools`` on each CDS is the
+    range-overlap attribution against the iBGC's ``SourceBgcPrediction``s.
+    """
+
+    ibgc_id: int
+    ibgc_accession: str
+    cbgc_accession: str
+    region_length: int  # iBGC bgc_range size, in bp
+    window_start: int
+    window_end: int
+    contig_accession: Optional[str] = None
+    cds_list: list[RegionCdsOut] = []
+    domain_list: list[RegionDomainOut] = []
+    # Each source prediction's range, for per-tool tinting in the region plot.
+    cluster_list: list[RegionClusterOut] = []
+
+
+# ── Accession resolve ─────────────────────────────────────────────────────────
+
+
+class AccessionResolveOut(Schema):
+    """Content-negotiated resolution for an MGYB-* accession.
+
+    The default response is HTTP 301 to ``current_url``. Clients sending
+    ``Accept: application/json`` get this struct instead — useful for
+    programmatic lookups without following the redirect.
+    """
+
+    accession: str
+    kind: str  # "cbgc" | "ibgc"
+    current_id: Optional[int] = None
+    current_url: Optional[str] = None
+    tombstoned: bool = False
+    alias_of: Optional[str] = None  # set when the request was for an alias accession
 
 
 # Assessment schemas removed in v2 — the Evaluate Asset feature was
