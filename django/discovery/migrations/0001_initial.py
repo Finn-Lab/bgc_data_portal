@@ -36,6 +36,12 @@ class Migration(migrations.Migration):
             reverse_sql="DROP EXTENSION IF EXISTS btree_gist;",
         ),
 
+        # ── Accession-minting sequence (consumed by services.accession_registry) ─
+        migrations.RunSQL(
+            sql="CREATE SEQUENCE IF NOT EXISTS discovery_cbgc_accession_seq AS bigint;",
+            reverse_sql="DROP SEQUENCE IF EXISTS discovery_cbgc_accession_seq;",
+        ),
+
         # ── Lookups & catalog tables (no FKs) ───────────────────────────────
         migrations.CreateModel(
             name="AssemblySource",
