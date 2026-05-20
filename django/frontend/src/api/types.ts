@@ -674,6 +674,12 @@ export interface IbgcCountResponse {
   will_sample: boolean;
 }
 
+export interface IbgcIdsResponse {
+  ids: number[];
+  total_count: number;
+  truncated: boolean;
+}
+
 export type IbgcScatterAxis =
   | "size_kb"
   | "n_cds"

@@ -693,6 +693,22 @@ class ClusteringRun(models.Model):
         default=list,
         help_text="Domain ref_db sources used (upper-case), e.g. ['PFAM','NCBIFAM']",
     )
+    DOMAIN_VOCAB_RAW = "RAW"
+    DOMAIN_VOCAB_IPR_PROJECTED = "IPR_PROJECTED"
+    DOMAIN_VOCAB_CHOICES = (
+        (DOMAIN_VOCAB_RAW, "Raw signature accessions"),
+        (DOMAIN_VOCAB_IPR_PROJECTED, "IPR entry when available, else signature"),
+    )
+    domain_vocab = models.CharField(
+        max_length=20,
+        choices=DOMAIN_VOCAB_CHOICES,
+        default=DOMAIN_VOCAB_IPR_PROJECTED,
+        help_text=(
+            "Label space used for M_domains columns and M_pairs vocab. "
+            "'IPR_PROJECTED' = InterPro entry acc when set on a signature, "
+            "else the raw signature acc. 'RAW' = legacy pre-projection runs."
+        ),
+    )
     score_weights = models.JSONField(
         default=list,
         help_text="(w_domain, w_adjacency) used for the composite Dice score, e.g. [0.5, 0.5]",

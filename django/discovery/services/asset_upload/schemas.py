@@ -236,6 +236,13 @@ REQUIRED_COLUMNS: dict[str, tuple[str, ...]] = {
         "sequence_base64",
     ),
     "contig_sequences.tsv": ("contig_sha256", "sequence_base64"),
+    # Optional companion columns (not enforced, but expected by the projection
+    # pipeline): ``ref_db``, ``domain_name``, ``domain_description``,
+    # ``start_position``, ``end_position``, ``score``, ``url``,
+    # ``interpro_entry_acc``, ``interpro_entry_description`` and ``go_terms``.
+    # ``go_terms`` is a ``|``-separated list of GO ids (e.g. ``GO:0016491|GO:0008152``)
+    # — it powers the GO-slim colouring on the region plot. If omitted, the
+    # asset's domains render without colour.
     "domains.tsv": (
         "contig_sha256",
         "bgc_start",

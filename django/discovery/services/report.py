@@ -29,7 +29,7 @@ from discovery.models import (
 log = logging.getLogger(__name__)
 
 REPORT_TTL_SECONDS = 86_400  # 24h Redis TTL
-MAX_SHORTLIST = 100
+MAX_SHORTLIST = 1000
 
 # Tier thresholds for the Domain Composition stacked-bar.
 CORE_FRACTION = 0.8

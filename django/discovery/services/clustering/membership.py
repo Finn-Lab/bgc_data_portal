@@ -1,14 +1,18 @@
-"""Build the iBGC × domain-accession membership matrix.
+"""Build the iBGC × domain-label membership matrix.
 
 Each row is a :class:`discovery.models.IntegratedBGC`; each column is a
-unique domain accession (e.g. ``PF00001``). The matrix is binary: a 1 means
-the iBGC carries that domain at least once across any of its source
-DashboardBgc rows. Domains are first filtered by ``ref_db`` source
-(case-insensitive at the API boundary — ``ref_db`` is stored upper-case),
-then deduplicated by ``(ibgc_id, domain_acc, cds.start_position)`` so the
-same accession appearing on multiple CDS positions counts once *per
-position* but the binary projection collapses to a single column entry per
-iBGC.
+unique **domain label**. The matrix is binary: a 1 means the iBGC carries
+that label at least once across any of its source DashboardBgc rows.
+
+**IPR-when-available projection** — each ``BgcDomain`` row's label is its
+``interpro_entry_acc`` when non-blank (e.g. ``IPR000123``), else the raw
+signature ``domain_acc`` (e.g. ``PF00001``). The input is still gated by
+``ref_db`` ∈ ``{PFAM, NCBIFAM, TIGRFAM}`` (case-insensitive); IPR is purely
+a projection of those rows. See :func:`project_to_ipr`.
+
+Dedup runs on the projected label: ``(ibgc_id, label, cds.start_position)``
+counts each label once per CDS position, and the binary projection then
+collapses to a single column entry per iBGC.
 
 Heavy imports (numpy, scipy.sparse) are deferred inside the function body
 so this module can be imported on the web container without ML deps.
@@ -29,6 +33,21 @@ log = logging.getLogger(__name__)
 CHUNK = 200_000
 
 DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM","TIGRFAM")
+
+
+def project_to_ipr(domain_acc: str, interpro_entry_acc: str | None) -> str:
+    """Return the IPR entry accession when set, else the raw signature acc.
+
+    Single source of truth for the IPR-when-available projection used by
+    every matrix builder and architecture surface. ``interpro_entry_acc``
+    is stripped to tolerate stored whitespace; a blank entry falls back to
+    the signature ``domain_acc``.
+    """
+    if interpro_entry_acc:
+        stripped = interpro_entry_acc.strip()
+        if stripped:
+            return stripped
+    return domain_acc
 
 
 def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
@@ -112,16 +131,18 @@ def build_ibgc_domain_matrix(
     ibgc_qs = qs.values_list(
         "bgc__integrated_bgc_id",
         "domain_acc",
+        "interpro_entry_acc",
         "cds__start_position",
     )
 
-    # Set keyed on row identity, accession, and on-protein anchor for dedup.
+    # Set keyed on row identity, projected label, and on-protein anchor for dedup.
     pair_set: set[tuple[int, str, int]] = set()
     n = 0
-    for row_id, acc, cds_start in ibgc_qs.iterator(chunk_size=CHUNK):
+    for row_id, acc, ipr_acc, cds_start in ibgc_qs.iterator(chunk_size=CHUNK):
         if not acc:
             continue
-        pair_set.add((int(row_id), acc, int(cds_start or 0)))
+        label = project_to_ipr(acc, ipr_acc)
+        pair_set.add((int(row_id), label, int(cds_start or 0)))
         n += 1
         if n % 1_000_000 == 0:
             log.info("build_ibgc_domain_matrix: streamed %d ibgc-domain rows", n)
@@ -135,12 +156,15 @@ def build_ibgc_domain_matrix(
                 ref_db_upper__in=upper_sources,
                 bgc_id__in=_bigint_array_in(extra_bgc_ids),
             )
-            .values_list("bgc_id", "domain_acc", "cds__start_position")
+            .values_list(
+                "bgc_id", "domain_acc", "interpro_entry_acc", "cds__start_position",
+            )
         )
-        for bgc_id, acc, cds_start in extra_qs.iterator(chunk_size=CHUNK):
+        for bgc_id, acc, ipr_acc, cds_start in extra_qs.iterator(chunk_size=CHUNK):
             if not acc:
                 continue
-            pair_set.add((-int(bgc_id), acc, int(cds_start or 0)))
+            label = project_to_ipr(acc, ipr_acc)
+            pair_set.add((-int(bgc_id), label, int(cds_start or 0)))
 
     if not pair_set:
         empty = sp.csr_matrix((0, 0), dtype=np.uint8)

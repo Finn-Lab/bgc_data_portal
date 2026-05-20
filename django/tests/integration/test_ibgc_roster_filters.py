@@ -251,6 +251,29 @@ class TestIbgcRosterFilters:
         )
         assert ids == {ibgc_dataset["ibgcs"]["chain"].id}
 
+    def test_min_length_kb(self, api_client, ibgc_dataset):
+        # Lengths: mibig 19kb, antismash 14kb, chain 15kb. Min=16 → only mibig.
+        ids = _roster_ids(api_client, min_length_kb=16)
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
+
+    def test_max_length_kb(self, api_client, ibgc_dataset):
+        # Max=14.5 keeps only the antismash iBGC (14kb).
+        ids = _roster_ids(api_client, max_length_kb=14.5)
+        assert ids == {ibgc_dataset["ibgcs"]["antismash"].id}
+
+    def test_length_range_both_bounds(self, api_client, ibgc_dataset):
+        # 14.5–17 keeps only the chain iBGC (15kb).
+        ids = _roster_ids(api_client, min_length_kb=14.5, max_length_kb=17)
+        assert ids == {ibgc_dataset["ibgcs"]["chain"].id}
+
+    def test_length_range_unbounded_returns_all(self, api_client, ibgc_dataset):
+        # No length params = no length restriction.
+        ids = _roster_ids(api_client)
+        assert ids == {
+            ibgc_dataset["ibgcs"][k].id
+            for k in ("mibig", "antismash", "chain")
+        }
+
     def test_chemont_ids(self, api_client, ibgc_dataset):
         # Wire up a per-CDS ChemOnt class on the MIBiG iBGC's source BGC.
         bgc = DashboardBgc.objects.get(integrated_bgc=ibgc_dataset["ibgcs"]["mibig"])
@@ -295,3 +318,53 @@ class TestIbgcScatterFilters:
         data = json.loads(resp.content)
         ids = {p["id"] for p in data}
         assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
+
+
+@pytest.mark.django_db
+class TestIbgcIdsEndpoint:
+    """``/ibgcs/ids/`` returns the iBGC id set for "Add all to shortlist".
+
+    Pins the same filter surface as ``/ibgcs/roster/`` and the cap +
+    ``truncated`` flag so the frontend can size buffers up front.
+    """
+
+    def _ids(self, api_client, **params):
+        qs = "&".join(f"{k}={v}" for k, v in params.items())
+        url = (
+            f"/api/dashboard/ibgcs/ids/?{qs}"
+            if qs
+            else "/api/dashboard/ibgcs/ids/"
+        )
+        resp = api_client.get(url)
+        assert resp.status_code == 200, resp.content
+        return json.loads(resp.content)
+
+    def test_baseline_returns_all(self, api_client, ibgc_dataset):
+        data = self._ids(api_client)
+        assert set(data["ids"]) == {
+            ibgc_dataset["ibgcs"][k].id
+            for k in ("mibig", "antismash", "chain")
+        }
+        assert data["total_count"] == 3
+        assert data["truncated"] is False
+
+    def test_length_filter_narrows_ids(self, api_client, ibgc_dataset):
+        data = self._ids(api_client, min_length_kb=16)
+        assert data["ids"] == [ibgc_dataset["ibgcs"]["mibig"].id]
+        assert data["total_count"] == 1
+
+    def test_detector_tools_filter(self, api_client, ibgc_dataset):
+        data = self._ids(api_client, detector_tools="antiSMASH")
+        assert set(data["ids"]) == {
+            ibgc_dataset["ibgcs"]["antismash"].id,
+            ibgc_dataset["ibgcs"]["chain"].id,
+        }
+
+    def test_sort_by_size_kb_desc(self, api_client, ibgc_dataset):
+        # 19kb > 15kb > 14kb → mibig, chain, antismash.
+        data = self._ids(api_client, sort_by="size_kb", order="desc")
+        assert data["ids"] == [
+            ibgc_dataset["ibgcs"]["mibig"].id,
+            ibgc_dataset["ibgcs"]["chain"].id,
+            ibgc_dataset["ibgcs"]["antismash"].id,
+        ]

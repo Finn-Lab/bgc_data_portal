@@ -141,3 +141,37 @@ def test_empty_input_returns_empty_payload():
     out = architecture_search([], weight=0.5, k=10, cache=cache)
     assert out["ibgc_ids"] == []
     assert out["unmatched"] == []
+
+
+def test_sig_to_ipr_resolves_pasted_signature_acc():
+    """A user pasting raw Pfam accs against an IPR-projected vocab still
+    matches via the sig_to_ipr lookup.
+    """
+    cache = _build_cache(
+        rows_domains=[{"IPR000001", "IPR000002"}],
+        rows_pairs=[{("IPR000001", "IPR000002")}],
+        ibgc_ids=[42],
+    )
+    cache["sig_to_ipr"] = {"PF00001": "IPR000001", "PF00002": "IPR000002"}
+
+    out = architecture_search(
+        ["PF00001", "PF00002"], weight=1.0, k=5, cache=cache,
+    )
+    # Both signatures resolve to IPR labels in the vocab → perfect match.
+    assert out["unmatched"] == []
+    assert out["n_query_domains"] == 2
+    assert out["scores"][0] == 1.0
+
+
+def test_unresolved_signature_acc_lands_in_unmatched():
+    """A pasted acc with no IPR mapping and not in the vocab is reported."""
+    cache = _build_cache(
+        rows_domains=[{"IPR000001"}], rows_pairs=[set()], ibgc_ids=[1],
+    )
+    cache["sig_to_ipr"] = {"PF00001": "IPR000001"}
+
+    out = architecture_search(
+        ["PF00001", "PF99999"], weight=1.0, k=5, cache=cache,
+    )
+    assert "PF99999" in out["unmatched"]
+    assert out["n_query_domains"] == 1  # only the resolved one

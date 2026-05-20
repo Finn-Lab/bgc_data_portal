@@ -137,7 +137,12 @@ def _ordered_entries(
     """Return ordered, deduplicated domain hits across ``bgc_ids``.
 
     Each item carries ``domain_acc``, ``domain_name``, ``ref_db``, ``url`` —
-    enough to render the existing ``DomainArchitectureItem`` schema.
+    enough to render the existing ``DomainArchitectureItem`` schema. When
+    a row has a non-blank ``interpro_entry_acc``, its accession/name/url
+    are projected to the InterPro entry; otherwise the raw signature
+    values are returned. This is the **positional, per-hit** sequence used
+    by the UI architecture surface — it intentionally does NOT collapse
+    contiguous repeats (that rule is local to M_pairs construction).
     """
     upper_sources = _normalize_sources(sources)
     rows = (
@@ -151,8 +156,11 @@ def _ordered_entries(
         .values(
             "domain_acc",
             "domain_name",
+            "domain_description",
             "ref_db",
             "url",
+            "interpro_entry_acc",
+            "interpro_entry_description",
             "cds__start_position",
             "start_position",
         )
@@ -165,11 +173,27 @@ def _ordered_entries(
         acc = r["domain_acc"]
         if not acc:
             continue
-        key = (cds_start, dom_start, acc)
+        ipr_acc = (r.get("interpro_entry_acc") or "").strip()
+        if ipr_acc:
+            ipr_desc = r.get("interpro_entry_description") or ""
+            projected = {
+                "domain_acc": ipr_acc,
+                "domain_name": ipr_desc or r.get("domain_name", "") or "",
+                "ref_db": "InterPro",
+                "url": _interpro_url(ipr_acc),
+            }
+        else:
+            projected = {
+                "domain_acc": acc,
+                "domain_name": r.get("domain_name", "") or "",
+                "ref_db": r.get("ref_db", "") or "",
+                "url": r.get("url", "") or "",
+            }
+        key = (cds_start, dom_start, projected["domain_acc"])
         if key in seen:
             continue
         seen.add(key)
-        ordered.append((cds_start, dom_start, r))
+        ordered.append((cds_start, dom_start, projected))
     ordered.sort(key=lambda t: (t[0], t[1], t[2]["domain_acc"]))
     return [t[2] for t in ordered]
 

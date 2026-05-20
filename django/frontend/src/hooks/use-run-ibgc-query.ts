@@ -69,6 +69,8 @@ export function useRunIbgcQuery() {
       assemblyAccession: f.assemblyAccession,
       assemblyIds: f.assemblyIds,
       organism: f.search,
+      minLengthKb: f.minLengthKb,
+      maxLengthKb: f.maxLengthKb,
     });
 
     // Active "domain" surface depends on which mode the user picked.

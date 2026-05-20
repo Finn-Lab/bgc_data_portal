@@ -131,7 +131,16 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
     )
     features.append(bgc_feat)
 
-    # ── CDS features ─────────────────────────────────────────────────────────
+    # ── CDS features (with per-domain misc_feature children) ────────────────
+    # Group domains by their owning CDS so each CDS feature is immediately
+    # followed by all its domain hits. No dedup — every domain row from
+    # bgc.bgc_domains is emitted, including IPR mappings when set.
+    domains_by_cds: dict[int, list] = {}
+    for dom in bgc.bgc_domains.all():
+        if dom.cds_id is None:
+            continue
+        domains_by_cds.setdefault(dom.cds_id, []).append(dom)
+
     for cds in bgc.cds_list.all():
         cds_start = _crop(cds.start_position, window_start, window_end)
         cds_end = _crop(cds.end_position, window_start, window_end)
@@ -158,8 +167,65 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
         )
         features.append(cds_feat)
 
+        for dom in domains_by_cds.get(cds.id, []):
+            dom_rel_start, dom_rel_end = _domain_dna_window(
+                dom, cds, window_start, window_end,
+            )
+            if dom_rel_end <= dom_rel_start:
+                continue
+            dom_qualifiers = {
+                "signature_acc": [dom.domain_acc or ""],
+                "ref_db": [dom.ref_db or ""],
+                "name": [dom.domain_name or ""],
+                "aa_start": [str(dom.start_position or 0)],
+                "aa_end": [str(dom.end_position or 0)],
+                "cds": [cds.protein_id_str],
+            }
+            if dom.interpro_entry_acc:
+                dom_qualifiers["interpro_entry_acc"] = [dom.interpro_entry_acc]
+                if dom.interpro_entry_description:
+                    dom_qualifiers["interpro_entry_description"] = [
+                        dom.interpro_entry_description
+                    ]
+            if dom.domain_description:
+                dom_qualifiers["description"] = [dom.domain_description]
+            if dom.score is not None:
+                dom_qualifiers["score"] = [str(dom.score)]
+            features.append(
+                SeqFeature(
+                    FeatureLocation(
+                        dom_rel_start, dom_rel_end, strand=cds.strand,
+                    ),
+                    type="misc_feature",
+                    qualifiers=dom_qualifiers,
+                )
+            )
+
     record.features = features
     return record
+
+
+def _domain_dna_window(domain, cds, window_start: int, window_end: int) -> tuple[int, int]:
+    """Project a domain's protein-aa span onto the relative DNA coords.
+
+    ``BgcDomain.start_position``/``end_position`` are 1-based inclusive
+    amino-acid coordinates on the CDS's protein. We map them to the
+    record-relative DNA window so the resulting ``FeatureLocation`` lies
+    inside the parent CDS. Reverse-strand CDSes mirror the projection from
+    the CDS end. Coordinates are clamped to the flanking window so we
+    never emit features outside the record sequence.
+    """
+    aa_start = max(1, int(domain.start_position or 1))
+    aa_end = max(aa_start, int(domain.end_position or aa_start))
+    if (cds.strand or 1) >= 0:
+        d_start_abs = cds.start_position + (aa_start - 1) * 3
+        d_end_abs = cds.start_position + aa_end * 3
+    else:
+        d_end_abs = cds.end_position - (aa_start - 1) * 3
+        d_start_abs = cds.end_position - aa_end * 3
+    rel_start = _crop(d_start_abs, window_start, window_end) - window_start
+    rel_end = _crop(d_end_abs, window_start, window_end) - window_start
+    return rel_start, rel_end
 
 
 def _build_placeholder_record(bgc: DashboardBgc) -> SeqRecord:
@@ -186,7 +252,7 @@ def _fetch_bgcs_for_gbk(filter_kwargs: dict):
             "region",
             "integrated_bgc",
         )
-        .prefetch_related("cds_list", "cds_list__seq")
+        .prefetch_related("cds_list", "cds_list__seq", "bgc_domains")
         .order_by("integrated_bgc_id", "id")
     )
 

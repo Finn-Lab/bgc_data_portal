@@ -1,19 +1,24 @@
 """Build the iBGC × adjacent-domain-pair binary matrix.
 
 For each :class:`discovery.models.IntegratedBGC` (or extra
-:class:`discovery.models.DashboardBgc` for reclassification), domains are:
+:class:`discovery.models.DashboardBgc` for reclassification), the per-row
+build steps run in this exact order:
 
-1. **Filtered first** by ``ref_db`` against the supplied ``sources`` set
-   (case-insensitive at the API boundary; stored value is upper-case).
-   Domains from non-selected sources never appear in the adjacency sequence.
-2. **Filtered second** to drop ``cds IS NULL`` rows (no genomic anchor → can't
-   sit in a meaningful adjacency).
-3. **Sorted** by ``(cds.start_position, BgcDomain.start_position)`` — joined
+1. **Filter input rows** by ``ref_db`` against the supplied ``sources`` set
+   (case-insensitive; stored value is mixed-case). Domains from non-selected
+   sources never appear in the sequence. Drop ``cds IS NULL`` rows — they
+   have no genomic anchor.
+2. **Sort** by ``(cds.start_position, BgcDomain.start_position)`` — joined
    across all source DashboardBgcs that fed the iBGC. Duplicate
-   ``(cds_start, domain_acc)`` rows collapse to a single position.
-4. **Pair-extracted** via a sliding window of size 2 over the ordered
-   domain_acc list. Each pair is canonicalized as a sorted tuple so the same
-   unordered pair appears under exactly one column.
+   ``(cds_start, dom_start, domain_acc)`` rows collapse to a single position.
+3. **Project** each entry's accession to ``interpro_entry_acc`` when set,
+   else fall back to the raw signature ``domain_acc`` (see
+   :func:`discovery.services.clustering.membership.project_to_ipr`).
+4. **Collapse contiguous repeats** in the projected sequence: e.g.
+   ``[A, A, B, A]`` → ``[A, B, A]``. Non-adjacent repeats are preserved.
+5. **Pair-extract** via a sliding window of size 2 over the collapsed list.
+   Each pair is canonicalised as a sorted tuple so the same unordered pair
+   appears under exactly one column.
 
 Heavy imports (numpy, scipy.sparse) are deferred inside the function body.
 """
@@ -32,6 +37,7 @@ from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES,
     _bigint_array_in,
     _normalize_sources,
+    project_to_ipr,
 )
 
 log = logging.getLogger(__name__)
@@ -91,13 +97,15 @@ def build_ibgc_adjacency_pair_matrix(
         "cds__start_position",
         "start_position",
         "domain_acc",
+        "interpro_entry_acc",
     )
 
     n = 0
-    for row_id, cds_start, dom_start, acc in rows_qs.iterator(chunk_size=CHUNK):
+    for row_id, cds_start, dom_start, acc, ipr_acc in rows_qs.iterator(chunk_size=CHUNK):
         if not acc:
             continue
-        seq_rows[int(row_id)].append((int(cds_start or 0), int(dom_start or 0), acc))
+        label = project_to_ipr(acc, ipr_acc)
+        seq_rows[int(row_id)].append((int(cds_start or 0), int(dom_start or 0), label))
         n += 1
         if n % 1_000_000 == 0:
             log.info("build_ibgc_adjacency_pair_matrix: streamed %d rows", n)
@@ -111,12 +119,18 @@ def build_ibgc_adjacency_pair_matrix(
                 cds__isnull=False,
                 bgc_id__in=_bigint_array_in(extra_bgc_ids),
             )
-            .values_list("bgc_id", "cds__start_position", "start_position", "domain_acc")
+            .values_list(
+                "bgc_id", "cds__start_position", "start_position",
+                "domain_acc", "interpro_entry_acc",
+            )
         )
-        for bgc_id, cds_start, dom_start, acc in extra_qs.iterator(chunk_size=CHUNK):
+        for bgc_id, cds_start, dom_start, acc, ipr_acc in extra_qs.iterator(chunk_size=CHUNK):
             if not acc:
                 continue
-            seq_rows[-int(bgc_id)].append((int(cds_start or 0), int(dom_start or 0), acc))
+            label = project_to_ipr(acc, ipr_acc)
+            seq_rows[-int(bgc_id)].append(
+                (int(cds_start or 0), int(dom_start or 0), label)
+            )
 
     # Build per-row pair sets and accumulate global vocab.
     row_pairs: dict[int, set[tuple[str, str]]] = {}
@@ -130,8 +144,17 @@ def build_ibgc_adjacency_pair_matrix(
 
     for row_id, entries in seq_rows.items():
         # Order by (cds_start, dom_start) — joined across source BGCs of an iBGC.
+        # Dedup identical (cds_start, dom_start, label) tuples first.
         ordered = sorted(set(entries))
-        accs = [acc for _, _, acc in ordered]
+        # Collapse *contiguous* repeats of the same projected label so an
+        # IPR entry that fans out across several signature hits at adjacent
+        # protein positions doesn't generate self-pairs. Non-adjacent
+        # repeats are preserved — e.g. [A, A, B, A] → [A, B, A].
+        accs: list[str] = []
+        for _, _, label in ordered:
+            if accs and accs[-1] == label:
+                continue
+            accs.append(label)
         if len(accs) < 2:
             row_pairs[row_id] = set()
             continue

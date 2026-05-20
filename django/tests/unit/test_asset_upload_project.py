@@ -183,6 +183,24 @@ def test_asset_domain_matrix_filters_by_source():
     assert M.nnz == 0
 
 
+def test_asset_domain_matrix_projects_to_ipr_when_available():
+    """Asset domains with ``interpro_entry_acc`` set match the IPR-projected
+    column space (mirrors the persistent membership builder).
+    """
+    data = _seed_data()
+    # Stamp an IPR mapping onto the first chain domain.
+    data.domains[0].interpro_entry_acc = "IPR000001"
+    virtual = build_virtual_ibgcs(data)
+    dom_accs = ["IPR000001", "PF00002"]  # IPR vocab + the unmapped fallback
+    M = build_asset_domain_matrix(virtual, sources=("PFAM",), domain_accs=dom_accs)
+    chain_idx = next(
+        i for i, v in enumerate(virtual) if "GECCO" in v.source_tools
+    )
+    chain_row = M.getrow(chain_idx).toarray().reshape(-1)
+    assert chain_row[0] == 1  # PF00001 → IPR000001 column lit
+    assert chain_row[1] == 1  # PF00002 stayed under raw acc
+
+
 def test_asset_adjacency_pair_matrix_emits_canonical_pairs():
     virtual = build_virtual_ibgcs(_seed_data())
     pair_vocab = [("PF00001", "PF00002"), ("PF00002", "PF00003")]
@@ -299,3 +317,141 @@ def test_project_asset_no_clustering_run(monkeypatch):
     roster = asset_cache.read_ibgc_list("tok-no-run")
     assert all(r["umap_projected"] is False for r in roster)
     assert all(r["novelty_score"] is None for r in roster)
+
+
+# ── GO-slim contract end-to-end ─────────────────────────────────────────────
+
+
+def _seed_data_with_go_terms() -> AssetData:
+    """Reuse the standard seed but attach ``go_terms`` to two domains.
+
+    PF00001 / PF00002 land on the GECCO+SanntiS chain; PF00003 lives on the
+    antiSMASH iBGC. We pin a deterministic slim mapping below so the test is
+    independent of whichever ``go_slim_map.json`` is bundled at run time.
+    """
+    data = _seed_data()
+    # Replace the three existing AssetDomain rows so we can attach go_terms.
+    data.domains.clear()
+    data.domains.extend(
+        [
+            AssetDomain(
+                bgc_key=("c1", 0, 500, "GECCO v1"),
+                cds_protein_id="P1",
+                domain_acc="PF00001",
+                ref_db="Pfam",
+                start_position=0,
+                end_position=100,
+                go_terms=["GO:0016491"],  # → "Oxidoreductase activity"
+            ),
+            AssetDomain(
+                bgc_key=("c1", 0, 500, "GECCO v1"),
+                cds_protein_id="P2",
+                domain_acc="PF00002",
+                ref_db="Pfam",
+                start_position=0,
+                end_position=100,
+                go_terms=["GO:0008152"],  # → "Metabolic process"
+            ),
+            AssetDomain(
+                bgc_key=("c1", 2000, 2500, "antiSMASH:1"),
+                cds_protein_id="P4",
+                domain_acc="PF00003",
+                ref_db="Pfam",
+                start_position=0,
+                end_position=100,
+                go_terms=[],  # no terms ⇒ go_slim must be []
+            ),
+        ]
+    )
+    return data
+
+
+def _no_clustering_run(monkeypatch):
+    """Skip the projection step so we exercise the payload-build paths in
+    isolation. The architecture + domain_hits assembly does not need a run."""
+    from discovery.services.asset_upload import project as proj_mod
+
+    monkeypatch.setattr(proj_mod, "_latest_clustering_run", lambda: None)
+
+
+def test_ibgc_detail_architecture_carries_go_slim(monkeypatch):
+    """``_ibgc_detail.domain_architecture[*].go_slim`` must be populated from
+    the underlying ``AssetDomain.go_terms`` via the bundled slim map.
+    Guards against a future refactor breaking the asset projection's slim
+    payload silently (only the region payload had explicit coverage)."""
+    from discovery.services import go_slim as go_slim_mod
+    from discovery.services.asset_upload import cache as asset_cache
+    from discovery.services.asset_upload import project as proj_mod
+
+    slim_map = {
+        "GO:0016491": ["Oxidoreductase activity"],
+        "GO:0008152": ["Metabolic process"],
+    }
+    go_slim_mod._go_term_to_slims.cache_clear()
+    monkeypatch.setattr(
+        go_slim_mod, "_go_term_to_slims", lambda: slim_map, raising=True
+    )
+    try:
+        _no_clustering_run(monkeypatch)
+        proj_mod.project_asset(
+            "tok-arch", _seed_data_with_go_terms(), task_id="t-arch"
+        )
+
+        roster = asset_cache.read_ibgc_list("tok-arch")
+        chain = next(r for r in roster if "SanntiS" in r["source_tools"])
+        antismash = next(
+            r for r in roster
+            if "antiSMASH" in r["source_tools"] and "GECCO" not in r["source_tools"]
+        )
+
+        chain_arch = asset_cache.read_ibgc_detail("tok-arch", chain["id"])[
+            "domain_architecture"
+        ]
+        accs = {d["domain_acc"]: d["go_slim"] for d in chain_arch}
+        assert accs["PF00001"] == ["Oxidoreductase activity"]
+        assert accs["PF00002"] == ["Metabolic process"]
+
+        anti_arch = asset_cache.read_ibgc_detail("tok-arch", antismash["id"])[
+            "domain_architecture"
+        ]
+        assert {d["domain_acc"]: d["go_slim"] for d in anti_arch} == {"PF00003": []}
+    finally:
+        go_slim_mod._go_term_to_slims.cache_clear()
+
+
+def test_domain_hits_payload_carries_go_slim(monkeypatch):
+    """The Shortlist Report builder reads ``asset:{token}:domain_hits`` and
+    relies on its ``go_slim`` field. Pin the contract end-to-end."""
+    from discovery.services import go_slim as go_slim_mod
+    from discovery.services.asset_upload import cache as asset_cache
+    from discovery.services.asset_upload import project as proj_mod
+
+    slim_map = {
+        "GO:0016491": ["Oxidoreductase activity"],
+        "GO:0008152": ["Metabolic process"],
+    }
+    go_slim_mod._go_term_to_slims.cache_clear()
+    monkeypatch.setattr(
+        go_slim_mod, "_go_term_to_slims", lambda: slim_map, raising=True
+    )
+    try:
+        _no_clustering_run(monkeypatch)
+        proj_mod.project_asset(
+            "tok-hits", _seed_data_with_go_terms(), task_id="t-hits"
+        )
+
+        hits = asset_cache.read_domain_hits("tok-hits")
+        assert hits is not None
+        by_acc = {h["domain_acc"]: h for h in hits}
+        assert by_acc["PF00001"]["go_slim"] == ["Oxidoreductase activity"]
+        assert by_acc["PF00002"]["go_slim"] == ["Metabolic process"]
+        assert by_acc["PF00003"]["go_slim"] == []
+        # Per-iBGC dedup: the chain iBGC should not double-list a domain
+        # (project.py uses ``seen_accs`` per virtual iBGC).
+        chain_id = next(
+            h["ibgc_id"] for h in hits if h["domain_acc"] == "PF00001"
+        )
+        chain_accs = [h["domain_acc"] for h in hits if h["ibgc_id"] == chain_id]
+        assert len(chain_accs) == len(set(chain_accs))
+    finally:
+        go_slim_mod._go_term_to_slims.cache_clear()

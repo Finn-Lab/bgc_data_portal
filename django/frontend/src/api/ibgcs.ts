@@ -2,6 +2,7 @@ import { apiGet, apiGetWithHeaders, apiPost } from "./client";
 import type {
   IbgcCountResponse,
   IbgcDetail,
+  IbgcIdsResponse,
   IbgcScatterAxis,
   IbgcScatterPoint,
   IbgcUmapPoint,
@@ -61,6 +62,23 @@ export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
 export function fetchIbgcCount(params: IbgcFilterParams & { ibgc_ids?: string } = {}) {
   return apiGet<IbgcCountResponse>(
     "/ibgcs/count/",
+    params as Record<string, string | number | boolean | undefined>,
+  );
+}
+
+export interface IbgcIdsParams extends IbgcFilterParams {
+  sort_by?: IbgcRosterParams["sort_by"];
+  order?: "asc" | "desc";
+  ibgc_ids?: string;
+  asset_token?: string;
+}
+
+/** Bulk iBGC ids matching the active filter surface — capped at 1000
+ *  server-side. Powers the roster's "Add all to shortlist" button so we
+ *  don't have to walk roster pages just to gather ids. */
+export function fetchIbgcIds(params: IbgcIdsParams = {}) {
+  return apiGet<IbgcIdsResponse>(
+    "/ibgcs/ids/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }

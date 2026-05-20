@@ -3,7 +3,7 @@ import {
   useDiscoveryStore,
 } from "@/stores/discovery-store";
 import { useFilterStore } from "@/stores/filter-store";
-import { useShortlistStore } from "@/stores/shortlist-store";
+import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -91,6 +91,8 @@ export function useIbgcActions(
       assemblyAccession: f.assemblyAccession,
       assemblyIds: f.assemblyIds,
       organism: f.search,
+      minLengthKb: f.minLengthKb,
+      maxLengthKb: f.maxLengthKb,
     });
     const toastId = toast.loading(`Finding iBGCs similar to ${ibgcLabel}…`);
     try {
@@ -163,7 +165,7 @@ export function useIbgcActions(
   const onAddToShortlist = () => {
     const ok = addBgc({ id: ibgcId, label: ibgcLabel });
     if (ok) toast.success(`Added ${ibgcLabel} to shortlist`);
-    else toast.warning("Shortlist is at the 100 cap");
+    else toast.warning(`Shortlist is at the ${MAX_SHORTLIST} cap`);
   };
 
   const onClearAndAdd = () => {

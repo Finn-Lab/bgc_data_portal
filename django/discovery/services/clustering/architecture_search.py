@@ -52,21 +52,41 @@ def _build_query_vectors(
     accs_ordered: Sequence[str],
     domain_accs: "np.ndarray",
     pair_vocab: "np.ndarray",
+    sig_to_ipr: dict[str, str] | None = None,
 ) -> tuple["sp.csr_matrix", "sp.csr_matrix", list[str]]:
-    """Return (q_dom 1×D, q_pair 1×P, unmatched_accs)."""
+    """Return (q_dom 1×D, q_pair 1×P, unmatched_accs).
+
+    ``sig_to_ipr`` lets the caller resolve raw signature accessions
+    (PFxxxxx, NFxxxxx, TIGRxxxxx) onto the IPR-projected vocabulary that
+    the active scoring cache uses. Resolution is applied **before**
+    matching, so a pasted Pfam acc whose entry exists in the vocab still
+    contributes to both the set and the adjacency sequence.
+    """
     import numpy as np
     import scipy.sparse as sp
 
     dom_idx = {str(a).upper(): i for i, a in enumerate(domain_accs.tolist())}
     pair_idx = {tuple(p): i for i, p in enumerate(pair_vocab.tolist())}
+    sig_lookup = {k.upper(): v.upper() for k, v in (sig_to_ipr or {}).items()}
+
+    def _resolve(tok: str) -> str:
+        """Project a token to IPR via sig_to_ipr when the raw form misses."""
+        if tok in dom_idx:
+            return tok
+        mapped = sig_lookup.get(tok)
+        if mapped and mapped in dom_idx:
+            return mapped
+        return tok
+
+    accs_resolved = [_resolve(a) for a in accs_ordered]
 
     matched: list[int] = []
     unmatched: list[str] = []
     seen_cols: set[int] = set()
-    for acc in accs_ordered:
+    for acc, original in zip(accs_resolved, accs_ordered):
         col = dom_idx.get(acc)
         if col is None:
-            unmatched.append(acc)
+            unmatched.append(original)
             continue
         if col in seen_cols:
             continue
@@ -87,11 +107,15 @@ def _build_query_vectors(
     else:
         q_dom = sp.csr_matrix((1, n_dom), dtype=np.uint8)
 
-    # Adjacent pairs over the ordered sequence after dropping unknown
-    # accessions. Mirrors the adjacency builder, which filters by ref_db
-    # *before* sorting — non-vocab tokens never appear in the sequence
-    # and therefore do not interrupt the adjacency chain.
-    in_vocab = [acc for acc in accs_ordered if acc in dom_idx]
+    # Adjacent pairs over the (resolved) ordered sequence after dropping
+    # unknown accessions. Mirrors the adjacency builder: filter first, then
+    # collapse contiguous repeats, then sliding-window-2.
+    in_vocab_raw = [acc for acc in accs_resolved if acc in dom_idx]
+    in_vocab: list[str] = []
+    for acc in in_vocab_raw:
+        if in_vocab and in_vocab[-1] == acc:
+            continue
+        in_vocab.append(acc)
     pair_cols: set[int] = set()
     for i in range(len(in_vocab) - 1):
         pair = tuple(sorted((in_vocab[i], in_vocab[i + 1])))
@@ -168,9 +192,13 @@ def architecture_search(
     ibgc_ids = cache["ibgc_ids"]
     domain_accs = cache["domain_accs"]
     pair_vocab = cache["pair_vocab"]
+    try:
+        sig_to_ipr = cache["sig_to_ipr"]
+    except KeyError:
+        sig_to_ipr = {}
 
     q_dom, q_pair, unmatched = _build_query_vectors(
-        accs_ordered, domain_accs, pair_vocab,
+        accs_ordered, domain_accs, pair_vocab, sig_to_ipr=sig_to_ipr,
     )
 
     n_q_dom = int(q_dom.nnz)

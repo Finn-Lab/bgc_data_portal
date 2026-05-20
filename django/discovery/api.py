@@ -84,6 +84,7 @@ from discovery.api_schemas import (
     NpClassLevel,
     IbgcCountResponse,
     IbgcDetail,
+    IbgcIdsResponse,
     IbgcMemberBgc,
     IbgcRosterItem,
     IbgcScatterPoint,
@@ -1062,6 +1063,20 @@ def _get_asset_roster_rows(asset_token: Optional[str]) -> list[dict]:
     return list(asset_cache.read_ibgc_list(asset_token) or [])
 
 
+def _asset_only_mode(
+    asset_token: Optional[str], parsed_ids: Optional[list[int]]
+) -> bool:
+    """Return True when the iBGC endpoints should skip the DB queryset.
+
+    An uploaded asset narrows the dashboard to its own iBGCs by default;
+    DB rows only re-enter the response when the caller supplies an explicit
+    ``ibgc_ids`` allow-list (i.e. a Run Query result from one of the
+    sequence/domain/chemical/similar-iBGC search endpoints). Pure chip /
+    slider filters alone are not enough.
+    """
+    return bool(asset_token) and not parsed_ids
+
+
 def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
     return IbgcRosterItem(
         id=int(row["id"]),
@@ -1447,34 +1462,36 @@ def ibgc_count(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_ibgc_filters(
-        IntegratedBGC.objects.all(),
-        ibgc_ids=parsed_ids,
-        include_partials=include_partials,
-        validated_only=validated_only,
-        min_length_kb=min_length_kb,
-        max_length_kb=max_length_kb,
-        min_novelty=min_novelty,
-        max_novelty=max_novelty,
-        min_domain_novelty=min_domain_novelty,
-        max_domain_novelty=max_domain_novelty,
-        detector_tools=detector_tools,
-        source_tools=source_tools,
-        source_names=source_names,
-        assembly_type=assembly_type,
-        leaf_path_prefix=leaf_path_prefix,
-        bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-        assembly_ids=assembly_ids,
-        organism=organism,
-        biome_lineage=biome_lineage,
-        taxonomy_path=taxonomy_path,
-    )
-    total = qs.count()
     asset_rows = _get_asset_roster_rows(asset_token)
-    total += len(asset_rows)
+    if _asset_only_mode(asset_token, parsed_ids):
+        total = len(asset_rows)
+    else:
+        qs = _apply_ibgc_filters(
+            IntegratedBGC.objects.all(),
+            ibgc_ids=parsed_ids,
+            include_partials=include_partials,
+            validated_only=validated_only,
+            min_length_kb=min_length_kb,
+            max_length_kb=max_length_kb,
+            min_novelty=min_novelty,
+            max_novelty=max_novelty,
+            min_domain_novelty=min_domain_novelty,
+            max_domain_novelty=max_domain_novelty,
+            detector_tools=detector_tools,
+            source_tools=source_tools,
+            source_names=source_names,
+            assembly_type=assembly_type,
+            leaf_path_prefix=leaf_path_prefix,
+            bgc_class=bgc_class,
+            chemont_ids=chemont_ids,
+            bgc_accession=bgc_accession,
+            assembly_accession=assembly_accession,
+            assembly_ids=assembly_ids,
+            organism=organism,
+            biome_lineage=biome_lineage,
+            taxonomy_path=taxonomy_path,
+        )
+        total = qs.count() + len(asset_rows)
     return IbgcCountResponse(
         exact_count=total,
         cap=DASHBOARD_RESULT_CAP,
@@ -1526,31 +1543,35 @@ def ibgc_roster(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_ibgc_filters(
-        IntegratedBGC.objects.all(),
-        ibgc_ids=parsed_ids,
-        include_partials=include_partials,
-        validated_only=validated_only,
-        min_length_kb=min_length_kb,
-        max_length_kb=max_length_kb,
-        min_novelty=min_novelty,
-        max_novelty=max_novelty,
-        min_domain_novelty=min_domain_novelty,
-        max_domain_novelty=max_domain_novelty,
-        detector_tools=detector_tools,
-        source_tools=source_tools,
-        source_names=source_names,
-        assembly_type=assembly_type,
-        leaf_path_prefix=leaf_path_prefix,
-        bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-        assembly_ids=assembly_ids,
-        organism=organism,
-        biome_lineage=biome_lineage,
-        taxonomy_path=taxonomy_path,
-    )
+    asset_only = _asset_only_mode(asset_token, parsed_ids)
+    if asset_only:
+        qs = IntegratedBGC.objects.none()
+    else:
+        qs = _apply_ibgc_filters(
+            IntegratedBGC.objects.all(),
+            ibgc_ids=parsed_ids,
+            include_partials=include_partials,
+            validated_only=validated_only,
+            min_length_kb=min_length_kb,
+            max_length_kb=max_length_kb,
+            min_novelty=min_novelty,
+            max_novelty=max_novelty,
+            min_domain_novelty=min_domain_novelty,
+            max_domain_novelty=max_domain_novelty,
+            detector_tools=detector_tools,
+            source_tools=source_tools,
+            source_names=source_names,
+            assembly_type=assembly_type,
+            leaf_path_prefix=leaf_path_prefix,
+            bgc_class=bgc_class,
+            chemont_ids=chemont_ids,
+            bgc_accession=bgc_accession,
+            assembly_accession=assembly_accession,
+            assembly_ids=assembly_ids,
+            organism=organism,
+            biome_lineage=biome_lineage,
+            taxonomy_path=taxonomy_path,
+        )
 
     # Special-case: ``sort_by=similarity`` honours the caller-supplied order
     # of ``ibgc_ids`` (the dashboard passes them in similarity-descending order
@@ -1634,6 +1655,133 @@ def ibgc_roster(
     )
 
 
+# Cap on /ibgcs/ids/ so "Add all to shortlist" can fill the 1000-iBGC
+# shortlist in a single fetch without ever loading unbounded result sets.
+IBGC_IDS_MAX = 1_000
+
+
+@discovery_router.get("/ibgcs/ids/", response=IbgcIdsResponse)
+def ibgc_ids(
+    request,
+    sort_by: str = "novelty_score",
+    order: str = "desc",
+    include_partials: bool = True,
+    validated_only: bool = False,
+    min_length_kb: Optional[float] = None,
+    max_length_kb: Optional[float] = None,
+    min_novelty: Optional[float] = None,
+    max_novelty: Optional[float] = None,
+    min_domain_novelty: Optional[float] = None,
+    max_domain_novelty: Optional[float] = None,
+    detector_tools: Optional[str] = None,
+    source_tools: Optional[str] = None,  # deprecated alias
+    source_names: Optional[str] = None,
+    assembly_type: Optional[str] = None,
+    leaf_path_prefix: Optional[str] = None,
+    bgc_class: Optional[str] = None,
+    chemont_ids: Optional[str] = None,
+    bgc_accession: Optional[str] = None,
+    assembly_accession: Optional[str] = None,
+    assembly_ids: Optional[str] = None,
+    organism: Optional[str] = None,
+    biome_lineage: Optional[str] = None,
+    taxonomy_path: Optional[str] = None,
+    ibgc_ids: Optional[str] = None,
+    asset_token: Optional[str] = None,
+):
+    """Bulk iBGC ids matching the same filter surface as ``/ibgcs/roster/``.
+
+    Cheaper than the roster (no row hydration, no asset enrichment beyond
+    raw ids); capped at ``IBGC_IDS_MAX`` so callers can size buffers up
+    front. Honors ``sort_by`` / ``order`` so the returned ordering matches
+    what the roster would show. ``truncated=True`` when the filter would
+    have matched more rows than the cap.
+    """
+    parsed_ids: Optional[list[int]] = None
+    if ibgc_ids:
+        parsed_ids = [
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
+        ] or None
+
+    asset_only = _asset_only_mode(asset_token, parsed_ids)
+    if asset_only:
+        qs = IntegratedBGC.objects.none()
+    else:
+        qs = _apply_ibgc_filters(
+            IntegratedBGC.objects.all(),
+            ibgc_ids=parsed_ids,
+            include_partials=include_partials,
+            validated_only=validated_only,
+            min_length_kb=min_length_kb,
+            max_length_kb=max_length_kb,
+            min_novelty=min_novelty,
+            max_novelty=max_novelty,
+            min_domain_novelty=min_domain_novelty,
+            max_domain_novelty=max_domain_novelty,
+            detector_tools=detector_tools,
+            source_tools=source_tools,
+            source_names=source_names,
+            assembly_type=assembly_type,
+            leaf_path_prefix=leaf_path_prefix,
+            bgc_class=bgc_class,
+            chemont_ids=chemont_ids,
+            bgc_accession=bgc_accession,
+            assembly_accession=assembly_accession,
+            assembly_ids=assembly_ids,
+            organism=organism,
+            biome_lineage=biome_lineage,
+            taxonomy_path=taxonomy_path,
+        )
+
+    if sort_by == "similarity" and parsed_ids:
+        from django.db.models import IntegerField
+        from django.db.models.expressions import RawSQL
+        ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
+        ibgc_id_col = f"{IntegratedBGC._meta.db_table}.id"
+        qs = qs.annotate(
+            _sim_pos=RawSQL(
+                f"array_position(%s::int[], {ibgc_id_col})",
+                [ordered_ids],
+                output_field=IntegerField(),
+            )
+        ).order_by("_sim_pos")
+    else:
+        sort_map = {
+            "novelty_score": "novelty_score",
+            "domain_novelty": "domain_novelty",
+            "classification_path": "gene_cluster_family",
+            "id": "id",
+        }
+        if sort_by == "size_kb":
+            qs = qs.annotate(_size=F("end_position") - F("start_position"))
+            order_field = "_size"
+        else:
+            order_field = sort_map.get(sort_by, "novelty_score")
+        descending = order == "desc"
+        qs = qs.order_by(
+            F(order_field).desc(nulls_last=True) if descending
+            else F(order_field).asc(nulls_last=True)
+        )
+
+    # Asset iBGCs always sit at the head of the roster, so they should also
+    # lead the id list — same convention so "Add all" mirrors what the user
+    # sees on page 1.
+    asset_rows = _get_asset_roster_rows(asset_token)
+    asset_id_seq = [int(r["id"]) for r in asset_rows]
+
+    db_total = qs.count()
+    total_count = db_total + len(asset_id_seq)
+    remaining = max(0, IBGC_IDS_MAX - len(asset_id_seq))
+    db_id_seq = list(qs.values_list("id", flat=True)[:remaining])
+    ids = asset_id_seq + db_id_seq
+
+    return IbgcIdsResponse(
+        ids=ids,
+        total_count=total_count,
+        truncated=len(ids) < total_count,
+    )
+
+
 @discovery_router.get("/ibgcs/umap/", response=list[IbgcUmapPoint])
 def ibgc_umap(
     request,
@@ -1666,57 +1814,60 @@ def ibgc_umap(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = (
-        IntegratedBGC.objects
-        .exclude(umap_x__isnull=True)
-        .exclude(umap_y__isnull=True)
-    )
-    qs = _apply_ibgc_filters(
-        qs,
-        ibgc_ids=parsed_ids,
-        include_partials=include_partials,
-        validated_only=validated_only,
-        detector_tools=detector_tools,
-        source_tools=source_tools,
-        source_names=source_names,
-        assembly_type=assembly_type,
-        bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-        assembly_ids=assembly_ids,
-        organism=organism,
-        biome_lineage=biome_lineage,
-        taxonomy_path=taxonomy_path,
-    )
-
-    # Deterministic SQL-side stride: at multi-million-row scale we can't
-    # afford to materialise the full queryset and downsample in Python.
-    # ``id % stride = 0`` runs in the DB, returns the cap directly, and is
-    # reproducible across calls (so the UMAP doesn't flicker between
-    # refreshes).
-    total = qs.count()
-    if total > max_points:
-        stride = total // max_points + 1
-        qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
-    all_ibgcs = list(qs.order_by("id"))
-
-    facts = _ibgc_member_facts([n.id for n in all_ibgcs])
-    db_points = [
-        IbgcUmapPoint(
-            id=ibgc.id,
-            label=_ibgc_label(ibgc.id),
-            umap_x=ibgc.umap_x,
-            umap_y=ibgc.umap_y,
-            classification_path=ibgc.gene_cluster_family or "",
-            novelty_score=ibgc.novelty_score,
-            is_partial=_ibgc_is_partial(ibgc),
-            is_validated=facts[ibgc.id]["is_validated"],
-            is_type_strain=facts[ibgc.id]["is_type_strain"],
-            umap_projected=ibgc.umap_projected,
+    if _asset_only_mode(asset_token, parsed_ids):
+        db_points: list[IbgcUmapPoint] = []
+    else:
+        qs = (
+            IntegratedBGC.objects
+            .exclude(umap_x__isnull=True)
+            .exclude(umap_y__isnull=True)
         )
-        for ibgc in all_ibgcs
-    ]
+        qs = _apply_ibgc_filters(
+            qs,
+            ibgc_ids=parsed_ids,
+            include_partials=include_partials,
+            validated_only=validated_only,
+            detector_tools=detector_tools,
+            source_tools=source_tools,
+            source_names=source_names,
+            assembly_type=assembly_type,
+            bgc_class=bgc_class,
+            chemont_ids=chemont_ids,
+            bgc_accession=bgc_accession,
+            assembly_accession=assembly_accession,
+            assembly_ids=assembly_ids,
+            organism=organism,
+            biome_lineage=biome_lineage,
+            taxonomy_path=taxonomy_path,
+        )
+
+        # Deterministic SQL-side stride: at multi-million-row scale we can't
+        # afford to materialise the full queryset and downsample in Python.
+        # ``id % stride = 0`` runs in the DB, returns the cap directly, and is
+        # reproducible across calls (so the UMAP doesn't flicker between
+        # refreshes).
+        total = qs.count()
+        if total > max_points:
+            stride = total // max_points + 1
+            qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
+        all_ibgcs = list(qs.order_by("id"))
+
+        facts = _ibgc_member_facts([n.id for n in all_ibgcs])
+        db_points = [
+            IbgcUmapPoint(
+                id=ibgc.id,
+                label=_ibgc_label(ibgc.id),
+                umap_x=ibgc.umap_x,
+                umap_y=ibgc.umap_y,
+                classification_path=ibgc.gene_cluster_family or "",
+                novelty_score=ibgc.novelty_score,
+                is_partial=_ibgc_is_partial(ibgc),
+                is_validated=facts[ibgc.id]["is_validated"],
+                is_type_strain=facts[ibgc.id]["is_type_strain"],
+                umap_projected=ibgc.umap_projected,
+            )
+            for ibgc in all_ibgcs
+        ]
     asset_points: list[IbgcUmapPoint] = []
     for row in _get_asset_roster_rows(asset_token):
         pt = _asset_row_to_umap_point(row)
@@ -1759,25 +1910,6 @@ def ibgc_scatter(
             int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_ibgc_filters(
-        IntegratedBGC.objects.all(),
-        ibgc_ids=parsed_ids,
-        include_partials=include_partials,
-        validated_only=validated_only,
-        detector_tools=detector_tools,
-        source_tools=source_tools,
-        source_names=source_names,
-        assembly_type=assembly_type,
-        bgc_class=bgc_class,
-        chemont_ids=chemont_ids,
-        bgc_accession=bgc_accession,
-        assembly_accession=assembly_accession,
-        assembly_ids=assembly_ids,
-        organism=organism,
-        biome_lineage=biome_lineage,
-        taxonomy_path=taxonomy_path,
-    )
-
     # similarity_score is not a stored column — only meaningful when supplied
     # by a similar-iBGC or domain query. For the bare scatter endpoint, treat
     # it as null and the UI will offer it only post-query.
@@ -1788,49 +1920,69 @@ def ibgc_scatter(
             "use the query response payload instead of /ibgcs/scatter/",
         )
 
-    n_cds_subq = (
-        DashboardBgc.objects
-        .filter(integrated_bgc_id=OuterRef("id"))
-        .values("integrated_bgc_id")
-        .annotate(c=Count("cds_list"))
-        .values("c")
-    )
-    qs = qs.annotate(
-        size_kb=(F("end_position") - F("start_position")) / 1000.0,
-        n_cds=Subquery(n_cds_subq[:1]),
-    )
-
-    # Deterministic SQL-side stride (same approach as /ibgcs/umap/) — keeps
-    # the response reproducible across calls and avoids ``ORDER BY ?``,
-    # which is a full table sort at multi-million-row scale.
-    total = qs.count()
-    if total > max_points:
-        stride = total // max_points + 1
-        qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
-
     points: list[IbgcScatterPoint] = []
-    ibgc_list = list(qs)
-    facts = _ibgc_member_facts([n.id for n in ibgc_list])
-    for ibgc in ibgc_list:
-        x_val = getattr(ibgc, x_axis, None)
-        y_val = getattr(ibgc, y_axis, None)
-        if x_val is None or y_val is None:
-            continue
-        points.append(
-            IbgcScatterPoint(
-                id=ibgc.id,
-                x=float(x_val),
-                y=float(y_val),
-                classification_path=ibgc.gene_cluster_family or "",
-                novelty_score=ibgc.novelty_score,
-                domain_novelty=ibgc.domain_novelty,
-                is_partial=not facts[ibgc.id]["is_validated"]
-                           and ibgc.classification_run_id is None,
-                is_validated=facts[ibgc.id]["is_validated"],
-                is_type_strain=facts[ibgc.id]["is_type_strain"],
-                umap_projected=ibgc.umap_projected,
-            )
+    if not _asset_only_mode(asset_token, parsed_ids):
+        qs = _apply_ibgc_filters(
+            IntegratedBGC.objects.all(),
+            ibgc_ids=parsed_ids,
+            include_partials=include_partials,
+            validated_only=validated_only,
+            detector_tools=detector_tools,
+            source_tools=source_tools,
+            source_names=source_names,
+            assembly_type=assembly_type,
+            bgc_class=bgc_class,
+            chemont_ids=chemont_ids,
+            bgc_accession=bgc_accession,
+            assembly_accession=assembly_accession,
+            assembly_ids=assembly_ids,
+            organism=organism,
+            biome_lineage=biome_lineage,
+            taxonomy_path=taxonomy_path,
         )
+
+        n_cds_subq = (
+            DashboardBgc.objects
+            .filter(integrated_bgc_id=OuterRef("id"))
+            .values("integrated_bgc_id")
+            .annotate(c=Count("cds_list"))
+            .values("c")
+        )
+        qs = qs.annotate(
+            size_kb=(F("end_position") - F("start_position")) / 1000.0,
+            n_cds=Subquery(n_cds_subq[:1]),
+        )
+
+        # Deterministic SQL-side stride (same approach as /ibgcs/umap/) — keeps
+        # the response reproducible across calls and avoids ``ORDER BY ?``,
+        # which is a full table sort at multi-million-row scale.
+        total = qs.count()
+        if total > max_points:
+            stride = total // max_points + 1
+            qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
+
+        ibgc_list = list(qs)
+        facts = _ibgc_member_facts([n.id for n in ibgc_list])
+        for ibgc in ibgc_list:
+            x_val = getattr(ibgc, x_axis, None)
+            y_val = getattr(ibgc, y_axis, None)
+            if x_val is None or y_val is None:
+                continue
+            points.append(
+                IbgcScatterPoint(
+                    id=ibgc.id,
+                    x=float(x_val),
+                    y=float(y_val),
+                    classification_path=ibgc.gene_cluster_family or "",
+                    novelty_score=ibgc.novelty_score,
+                    domain_novelty=ibgc.domain_novelty,
+                    is_partial=not facts[ibgc.id]["is_validated"]
+                               and ibgc.classification_run_id is None,
+                    is_validated=facts[ibgc.id]["is_validated"],
+                    is_type_strain=facts[ibgc.id]["is_type_strain"],
+                    umap_projected=ibgc.umap_projected,
+                )
+            )
     asset_points: list[IbgcScatterPoint] = []
     for row in _get_asset_roster_rows(asset_token):
         pt = _asset_row_to_scatter_point(row, x_axis, y_axis)

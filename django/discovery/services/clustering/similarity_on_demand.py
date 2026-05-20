@@ -48,6 +48,10 @@ class ScoringCache:
     weight_domain: float
     weight_adjacency: float
     _id_to_row: dict[int, int]
+    # Signature accession → IPR entry accession, for resolving user-pasted
+    # Pfam/NCBIFAM/TIGRFAM accs onto the IPR-projected vocabulary. Empty
+    # dict for caches predating the IPR projection.
+    sig_to_ipr: dict[str, str] = None  # type: ignore[assignment]
 
     def row_index_for(self, ibgc_id: int) -> int | None:
         return self._id_to_row.get(int(ibgc_id))
@@ -66,6 +70,8 @@ class ScoringCache:
             return self.pair_vocab
         if key == "ibgc_ids":
             return self.ibgc_ids
+        if key == "sig_to_ipr":
+            return self.sig_to_ipr or {}
         raise KeyError(key)
 
 
@@ -113,6 +119,10 @@ def _load_cache(run) -> ScoringCache:
     ibgc_ids = np.load(cache_dir / "ibgc_ids.npy", allow_pickle=True)
     row_sums_domains = np.asarray(M_domains.sum(axis=1)).reshape(-1).astype(np.float32)
     row_sums_pairs = np.asarray(M_pairs.sum(axis=1)).reshape(-1).astype(np.float32)
+    sig_to_ipr_path = cache_dir / "sig_to_ipr.json"
+    sig_to_ipr: dict[str, str] = (
+        json.loads(sig_to_ipr_path.read_text()) if sig_to_ipr_path.exists() else {}
+    )
 
     weights = list(run.score_weights or (0.5, 0.5))
     total = float(weights[0]) + float(weights[1])
@@ -138,6 +148,7 @@ def _load_cache(run) -> ScoringCache:
         weight_domain=wd,
         weight_adjacency=wa,
         _id_to_row=id_to_row,
+        sig_to_ipr=sig_to_ipr,
     )
 
 

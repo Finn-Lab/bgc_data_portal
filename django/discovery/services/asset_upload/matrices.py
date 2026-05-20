@@ -22,6 +22,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Sequence
 
+from discovery.services.clustering.membership import project_to_ipr
+
 if TYPE_CHECKING:
     import numpy as np
     import scipy.sparse as sp
@@ -46,11 +48,14 @@ def build_asset_domain_matrix(
     """Return the asset's iBGC × domain binary matrix on the given vocabulary.
 
     Rows are ordered to match ``virtual_ibgcs``; columns to match
-    ``domain_accs`` (the primary run's vocabulary). Domains from
-    non-selected sources are silently dropped, mirroring the persistent
-    builder's behaviour. Per-protein-anchor dedup matches the persistent
-    path: ``(virtual_ibgc_index, domain_acc, cds_protein_id)`` collapses
-    to a single binary entry.
+    ``domain_accs`` (the primary run's vocabulary, **already IPR-projected**).
+    Each asset domain is projected via
+    :func:`discovery.services.clustering.membership.project_to_ipr` to the
+    same label space before lookup. Domains from non-selected ``ref_db``
+    sources are silently dropped, mirroring the persistent builder's
+    behaviour. Per-protein-anchor dedup matches the persistent path:
+    ``(virtual_ibgc_index, label, cds_protein_id)`` collapses to a single
+    binary entry.
     """
     import numpy as np
     import scipy.sparse as sp
@@ -68,7 +73,8 @@ def build_asset_domain_matrix(
                 continue
             if domain.ref_db and domain.ref_db.upper() not in upper_sources:
                 continue
-            col_idx = col_index.get(domain.domain_acc)
+            label = project_to_ipr(domain.domain_acc, domain.interpro_entry_acc)
+            col_idx = col_index.get(label)
             if col_idx is None:
                 continue
             anchor = domain.cds_protein_id or ""
@@ -115,8 +121,11 @@ def build_asset_adjacency_pair_matrix(
 
     1. Filter domains by ``ref_db`` ∈ ``sources``, drop rows without a CDS anchor.
     2. Sort by ``(cds_start, domain_start)`` across all member BGCs of the iBGC.
-    3. Sliding-window-2 over the ordered ``domain_acc`` list; canonicalise
-       each pair to a sorted tuple.
+    3. Project each accession to IPR-when-available
+       (see :func:`discovery.services.clustering.membership.project_to_ipr`).
+    4. Collapse contiguous repeats of the same projected label.
+    5. Sliding-window-2 over the collapsed list; canonicalise each pair to
+       a sorted tuple.
 
     Pairs outside the supplied ``pair_vocab`` are dropped (matches the
     column projection used by ``reclassify._align_rows``).
@@ -151,13 +160,22 @@ def build_asset_adjacency_pair_matrix(
             if cds_start is None:
                 # No genomic anchor → can't sit in an adjacency.
                 continue
-            entries.append((cds_start, domain.start_position, domain.domain_acc))
+            label = project_to_ipr(domain.domain_acc, domain.interpro_entry_acc)
+            entries.append((cds_start, domain.start_position, label))
 
         ordered = sorted(set(entries))
         if len(ordered) < 2:
             continue
 
-        accs = [a for _, _, a in ordered]
+        # Collapse contiguous repeats of the same projected label (see
+        # discovery.services.clustering.adjacency for the rule).
+        accs: list[str] = []
+        for _, _, label in ordered:
+            if accs and accs[-1] == label:
+                continue
+            accs.append(label)
+        if len(accs) < 2:
+            continue
         for i in range(len(accs) - 1):
             pair = tuple(sorted((accs[i], accs[i + 1])))
             col_idx = pair_index.get(pair)

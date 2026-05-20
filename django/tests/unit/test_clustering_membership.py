@@ -44,10 +44,11 @@ def _ibgc(contig, *, source_bgcs, start, end, tools):
     return ibgc
 
 
-def _domain(bgc, *, acc, ref_db, name="dummy", start=1, end=100):
+def _domain(bgc, *, acc, ref_db, name="dummy", start=1, end=100, ipr=""):
     return BgcDomain.objects.create(
         bgc=bgc, domain_acc=acc, domain_name=name,
         ref_db=ref_db, start_position=start, end_position=end,
+        interpro_entry_acc=ipr,
     )
 
 
@@ -121,3 +122,39 @@ def test_only_ibgc_rows_appear_partials_skipped():
     M, row_ids, domain_accs = build_ibgc_domain_matrix(sources=("PFAM",))
     assert M.shape[0] == 1
     assert "PF00099" not in domain_accs.tolist()
+
+
+def test_ipr_label_replaces_signature_acc_when_set():
+    """``M_domains`` columns are IPR-projected: a signature with a non-blank
+    ``interpro_entry_acc`` contributes under the IPR label, not the raw acc.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig, start=1, end=10_000)
+    _ibgc(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
+
+    _domain(bgc, acc="PF00001", ref_db="PFAM", ipr="IPR000001")
+    _domain(bgc, acc="NF12345", ref_db="NCBIFAM", ipr="")  # no mapping → fallback
+
+    M, _, accs = build_ibgc_domain_matrix(sources=("PFAM", "NCBIFAM"))
+
+    cols = set(accs.tolist())
+    assert "IPR000001" in cols
+    assert "PF00001" not in cols
+    assert "NF12345" in cols  # blank IPR → raw acc kept
+
+
+def test_distinct_signatures_collapse_to_same_ipr_column():
+    """Two Pfam signatures that share an IPR entry occupy one column."""
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig, start=1, end=10_000)
+    _ibgc(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
+
+    _domain(bgc, acc="PF00010", ref_db="PFAM", ipr="IPR000010", start=1, end=80)
+    _domain(bgc, acc="PF00011", ref_db="PFAM", ipr="IPR000010", start=200, end=280)
+
+    M, _, accs = build_ibgc_domain_matrix(sources=("PFAM",))
+
+    assert list(accs.tolist()) == ["IPR000010"]
+    # M counts one binary entry per (row, label), regardless of how many
+    # signatures fed it.
+    assert M.nnz == 1

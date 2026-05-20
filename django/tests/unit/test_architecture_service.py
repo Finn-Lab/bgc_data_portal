@@ -55,10 +55,11 @@ def _cds(bgc, start, end):
     )
 
 
-def _domain(bgc, *, cds, acc, ref_db="PFAM", aa_start=10):
+def _domain(bgc, *, cds, acc, ref_db="PFAM", aa_start=10, ipr="", ipr_desc=""):
     return BgcDomain.objects.create(
         bgc=bgc, cds=cds, domain_acc=acc, domain_name=acc,
         ref_db=ref_db, start_position=aa_start, end_position=aa_start + 50,
+        interpro_entry_acc=ipr, interpro_entry_description=ipr_desc,
     )
 
 
@@ -122,3 +123,42 @@ def test_architecture_skips_domains_without_cds():
 
     rows = bgc_architecture(bgc.id)
     assert [r["domain_acc"] for r in rows] == ["PF00001"]
+
+
+def test_architecture_projects_to_ipr_when_available():
+    """Each positional row emits the IPR acc/url/ref_db when
+    ``interpro_entry_acc`` is set; signatures without an IPR mapping keep
+    their raw values.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig)
+    cds1 = _cds(bgc, 100, 400)
+    cds2 = _cds(bgc, 500, 800)
+    _domain(bgc, cds=cds1, acc="PF00001", ipr="IPR000001", ipr_desc="ABC fold")
+    _domain(bgc, cds=cds2, acc="NF12345", ref_db="NCBIFAM")  # no IPR
+
+    rows = bgc_architecture(bgc.id)
+    accs = [r["domain_acc"] for r in rows]
+    assert accs == ["IPR000001", "NF12345"]
+    by_acc = {r["domain_acc"]: r for r in rows}
+    assert by_acc["IPR000001"]["ref_db"] == "InterPro"
+    assert by_acc["IPR000001"]["url"].endswith("/IPR000001/")
+    assert by_acc["NF12345"]["ref_db"] == "NCBIFAM"
+
+
+def test_architecture_positional_preserves_contiguous_repeats():
+    """The pooled positional surface does NOT collapse adjacent same-label
+    hits — that rule is local to M_pairs. The UI needs every hit visible.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig)
+    cds1 = _cds(bgc, 100, 400)
+    cds2 = _cds(bgc, 500, 800)
+    cds3 = _cds(bgc, 900, 1200)
+    _domain(bgc, cds=cds1, acc="PF00010", ipr="IPR000010")
+    _domain(bgc, cds=cds2, acc="PF00011", ipr="IPR000010")  # same IPR
+    _domain(bgc, cds=cds3, acc="PF00020", ipr="IPR000020")
+
+    rows = bgc_architecture(bgc.id)
+    accs = [r["domain_acc"] for r in rows]
+    assert accs == ["IPR000010", "IPR000010", "IPR000020"]

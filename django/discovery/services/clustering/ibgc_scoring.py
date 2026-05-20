@@ -44,6 +44,7 @@ IBGC_IDS_FILE = "ibgc_ids.npy"
 DOMAIN_ACCS_FILE = "domain_accs.npy"
 PAIR_VOCAB_FILE = "pair_vocab.npy"
 LEAF_PATHS_FILE = "leaf_paths.json"
+SIG_TO_IPR_FILE = "sig_to_ipr.json"
 
 
 def persist_scoring_cache(
@@ -55,6 +56,7 @@ def persist_scoring_cache(
     domain_accs: np.ndarray,
     pair_vocab: np.ndarray,
     leaf_paths: list[str],
+    sig_to_ipr: dict[str, str] | None = None,
 ) -> Path:
     """Write the small per-iBGC signature matrices needed by on-demand similarity.
 
@@ -62,6 +64,10 @@ def persist_scoring_cache(
     Find Similar and ARCH compute composite-Dice on demand against
     ``M_domains`` / ``M_pairs`` via
     :mod:`discovery.services.clustering.similarity_on_demand`.
+
+    ``sig_to_ipr`` (signature_acc → ipr_entry_acc) lets the architecture
+    search resolve user-pasted raw Pfam/NCBIFAM/TIGRFAM accessions onto
+    the IPR-projected vocabulary; persisted as JSON next to the matrices.
 
     Returns the cache directory path.
     """
@@ -75,6 +81,7 @@ def persist_scoring_cache(
     np.save(cache_dir / DOMAIN_ACCS_FILE, np.asarray(domain_accs, dtype=object))
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
+    (cache_dir / SIG_TO_IPR_FILE).write_text(json.dumps(sig_to_ipr or {}))
     # Purge any sim.npz left over from a previous schema — keeps the PVC tidy.
     legacy_sim = cache_dir / "sim.npz"
     if legacy_sim.exists():
@@ -88,15 +95,18 @@ def persist_scoring_cache(
 
 def load_scoring_cache(artifacts_dir: Path) -> dict:
     """Return ``M_domains``, ``M_pairs``, ``ibgc_ids``, ``domain_accs``,
-    ``pair_vocab``, ``leaf_paths``.
+    ``pair_vocab``, ``leaf_paths``, ``sig_to_ipr``.
 
     ``sim`` is no longer materialised — callers should use
     :mod:`discovery.services.clustering.similarity_on_demand` for similarity
-    queries.
+    queries. ``sig_to_ipr`` is an empty dict for caches written before the
+    IPR projection rolled out.
     """
     import scipy.sparse as sp
 
     cache_dir = Path(artifacts_dir) / SCORING_CACHE_SUBDIR
+    sig_path = cache_dir / SIG_TO_IPR_FILE
+    sig_to_ipr = json.loads(sig_path.read_text()) if sig_path.exists() else {}
     return {
         "M_domains": sp.load_npz(cache_dir / DOMAINS_FILE),
         "M_pairs": sp.load_npz(cache_dir / PAIRS_FILE),
@@ -104,6 +114,7 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
         "domain_accs": np.load(cache_dir / DOMAIN_ACCS_FILE, allow_pickle=True),
         "pair_vocab": np.load(cache_dir / PAIR_VOCAB_FILE, allow_pickle=True),
         "leaf_paths": json.loads((cache_dir / LEAF_PATHS_FILE).read_text()),
+        "sig_to_ipr": sig_to_ipr,
     }
 
 

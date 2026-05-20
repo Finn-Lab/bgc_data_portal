@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-// v2 raised the cap from 20 → 100 so a single shortlist can drive a
-// meaningful Report. Backend `MAX_SHORTLIST` in services/report.py matches.
-export const MAX_SHORTLIST = 100;
+// Cap matches backend `MAX_SHORTLIST` in services/report.py; sized so a
+// single "Add all to shortlist" action can fill the shortlist from a
+// filtered roster in one shot.
+export const MAX_SHORTLIST = 1000;
 
 interface ShortlistItem {
   id: number;
@@ -15,6 +16,10 @@ interface ShortlistState {
   bgcs: ShortlistItem[];
 
   addBgc: (item: ShortlistItem) => boolean;
+  /** Bulk add. Items already on the shortlist are silently kept; items
+   *  beyond MAX_SHORTLIST are dropped. Returns counts so the caller can
+   *  surface "added X, Y skipped" toasts. */
+  addBgcsBulk: (items: ShortlistItem[]) => { added: number; skipped: number };
   removeBgc: (id: number) => void;
   clearBgcs: () => void;
   replaceBgcs: (item: ShortlistItem) => void;
@@ -52,6 +57,26 @@ export const useShortlistStore = create<ShortlistState>()(
         if (current.some((b) => b.id === item.id)) return true;
         set({ bgcs: [...current, item] });
         return true;
+      },
+      addBgcsBulk: (items) => {
+        const current = get().bgcs;
+        const seen = new Set(current.map((b) => b.id));
+        const remaining = Math.max(0, MAX_SHORTLIST - current.length);
+        const accepted: ShortlistItem[] = [];
+        let skipped = 0;
+        for (const item of items) {
+          if (seen.has(item.id)) continue;
+          if (accepted.length >= remaining) {
+            skipped += 1;
+            continue;
+          }
+          accepted.push(item);
+          seen.add(item.id);
+        }
+        if (accepted.length > 0) {
+          set({ bgcs: [...current, ...accepted] });
+        }
+        return { added: accepted.length, skipped };
       },
       removeBgc: (id) =>
         set((s) => ({ bgcs: s.bgcs.filter((b) => b.id !== id) })),

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchIbgcRoster } from "@/api/ibgcs";
+import { fetchIbgcIds, fetchIbgcRoster } from "@/api/ibgcs";
 import type { IbgcRosterItem } from "@/api/types";
 import {
   Table,
@@ -13,12 +13,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import {
   appliedFiltersToApiParams,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
+import { MAX_SHORTLIST, useShortlistStore } from "@/stores/shortlist-store";
 import { IbgcContextMenu } from "./IbgcContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
@@ -141,6 +143,56 @@ export function IbgcRosterTable() {
   const items = data?.items ?? [];
   const pagination = data?.pagination;
 
+  const addBgcsBulk = useShortlistStore((s) => s.addBgcsBulk);
+  const shortlistCount = useShortlistStore((s) => s.bgcs.length);
+  const [isAddingAll, setIsAddingAll] = useState(false);
+
+  const onAddAllToShortlist = async () => {
+    if (isAddingAll) return;
+    if (shortlistCount >= MAX_SHORTLIST) {
+      toast.warning(`Shortlist is at the ${MAX_SHORTLIST} cap`);
+      return;
+    }
+    setIsAddingAll(true);
+    const toastId = toast.loading("Collecting iBGCs…");
+    try {
+      const resp = await fetchIbgcIds({
+        sort_by: sortBy,
+        order,
+        ...filterParams,
+      });
+      if (resp.ids.length === 0) {
+        toast.message("No iBGCs to add", { id: toastId });
+        return;
+      }
+      const items = resp.ids.map((id) => ({ id, label: `iBGC-${id}` }));
+      const { added, skipped } = addBgcsBulk(items);
+      // ``skipped`` already includes capacity overflow within the returned
+      // id batch; if the backend itself truncated the result set, prefix a
+      // hint so the user knows the filter actually matched more.
+      const truncatedNote = resp.truncated
+        ? ` (filter matched ${resp.total_count.toLocaleString()} — only the top ${resp.ids.length.toLocaleString()} were considered)`
+        : "";
+      if (added === 0) {
+        toast.warning(`Shortlist is at the ${MAX_SHORTLIST} cap`, { id: toastId });
+      } else if (skipped > 0) {
+        toast.success(
+          `Added ${added} iBGCs; ${skipped} skipped — shortlist full${truncatedNote}`,
+          { id: toastId },
+        );
+      } else {
+        toast.success(`Added ${added} iBGCs to shortlist${truncatedNote}`, {
+          id: toastId,
+        });
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Add all failed: ${msg}`, { id: toastId });
+    } finally {
+      setIsAddingAll(false);
+    }
+  };
+
   const toggleSort = (key: SortKey) => {
     if (key === sortBy) {
       setOrder(order === "desc" ? "asc" : "desc");
@@ -250,6 +302,14 @@ export function IbgcRosterTable() {
         totalPages={pagination?.total_pages ?? 1}
         totalCount={pagination?.total_count ?? 0}
         onChange={setPage}
+        onAddAllToShortlist={onAddAllToShortlist}
+        addAllDisabled={
+          isLoading ||
+          isAddingAll ||
+          (pagination?.total_count ?? 0) === 0 ||
+          shortlistCount >= MAX_SHORTLIST
+        }
+        addAllBusy={isAddingAll}
       />
     </div>
   );
@@ -360,15 +420,41 @@ interface PaginationProps {
   totalPages: number;
   totalCount: number;
   onChange: (page: number) => void;
+  onAddAllToShortlist: () => void;
+  addAllDisabled: boolean;
+  addAllBusy: boolean;
 }
 
-function Pagination({ page, totalPages, totalCount, onChange }: PaginationProps) {
+function Pagination({
+  page,
+  totalPages,
+  totalCount,
+  onChange,
+  onAddAllToShortlist,
+  addAllDisabled,
+  addAllBusy,
+}: PaginationProps) {
   return (
     <div className="flex items-center justify-between border-t px-3 py-1.5 text-xs">
       <span className="text-muted-foreground">
         {totalCount.toLocaleString()} iBGCs · page {page}/{totalPages}
       </span>
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 gap-1 px-2 text-xs"
+          disabled={addAllDisabled}
+          onClick={onAddAllToShortlist}
+          data-testid="add-all-to-shortlist"
+        >
+          {addAllBusy ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Plus className="h-3 w-3" />
+          )}
+          Add all to shortlist
+        </Button>
         <Button
           variant="ghost"
           size="icon"

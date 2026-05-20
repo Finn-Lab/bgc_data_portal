@@ -236,6 +236,19 @@ class PaginatedIbgcRosterResponse(Schema):
     pagination: PaginationMeta
 
 
+class IbgcIdsResponse(Schema):
+    """Bulk iBGC ids matching the active filter surface.
+
+    Powers the roster's "Add all to shortlist" action. ``truncated`` is
+    True when the underlying filter would have matched more than ``ids``
+    carries — callers should surface that to the user.
+    """
+
+    ids: list[int]
+    total_count: int
+    truncated: bool
+
+
 class IbgcMemberBgc(Schema):
     """Source DashboardBgc contributing to an iBGC (drill-down list)."""
 

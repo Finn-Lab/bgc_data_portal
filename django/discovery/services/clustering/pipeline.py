@@ -164,11 +164,13 @@ def run_clustering_pipeline(
         seed=seed,
         ibgc_etag=f"{IntegratedBGC.objects.count()}:{ibgc_max_id}",
         domain_etag=f"{n_domain_rows}:{domain_max_id}",
+        domain_vocab=ClusteringRun.DOMAIN_VOCAB_IPR_PROJECTED,
     )
     run, created = ClusteringRun.objects.update_or_create(
         sha256=sha,
         defaults={
             "domain_sources": list(upper_sources),
+            "domain_vocab": ClusteringRun.DOMAIN_VOCAB_IPR_PROJECTED,
             "score_weights": list(weights),
             "knn_k": effective_k,
             "leiden_resolutions": list(leiden_resolutions),
@@ -311,6 +313,10 @@ def run_clustering_pipeline(
 
             if artifacts_dir is not None:
                 try:
+                    sig_to_ipr = _build_sig_to_ipr_lookup(
+                        sources=upper_sources,
+                        vocab_set=set(domain_accs.tolist()),
+                    )
                     persist_scoring_cache(
                         artifacts_dir=Path(artifacts_dir),
                         M_domains=M_domains,
@@ -319,6 +325,7 @@ def run_clustering_pipeline(
                         domain_accs=domain_accs,
                         pair_vocab=pair_vocab,
                         leaf_paths=leaf_paths,
+                        sig_to_ipr=sig_to_ipr,
                     )
                 except Exception:  # noqa: BLE001 — cache miss is non-fatal
                     log.exception("Failed to persist iBGC scoring cache")
@@ -410,6 +417,45 @@ def _pick_source_bgc(ibgc_id: int) -> int | None:
     )
 
 
+def _build_sig_to_ipr_lookup(
+    *,
+    sources: tuple[str, ...],
+    vocab_set: set[str],
+) -> dict[str, str]:
+    """Return a ``{signature_acc: ipr_entry_acc}`` mapping restricted to the vocab.
+
+    Only includes signatures whose IPR entry actually appears in the active
+    domain-acc vocabulary (``vocab_set``). Lets architecture-search resolve
+    user-pasted Pfam/NCBIFAM/TIGRFAM accessions onto the IPR-projected
+    column space without polluting the lookup with entries pruned out by
+    later filtering.
+    """
+    from django.db.models.functions import Upper
+
+    from discovery.models import BgcDomain
+
+    pairs = (
+        BgcDomain.objects
+        .annotate(ref_db_upper=Upper("ref_db"))
+        .filter(
+            ref_db_upper__in=sources,
+            interpro_entry_acc__gt="",
+        )
+        .values_list("domain_acc", "interpro_entry_acc")
+        .distinct()
+    )
+    out: dict[str, str] = {}
+    for sig, ipr in pairs:
+        if not sig or not ipr:
+            continue
+        ipr_stripped = ipr.strip()
+        if not ipr_stripped or ipr_stripped not in vocab_set:
+            continue
+        out[sig] = ipr_stripped
+    log.info("sig_to_ipr lookup: %d signature→IPR mappings", len(out))
+    return out
+
+
 def _compute_run_sha(
     *,
     sources: tuple[str, ...],
@@ -419,10 +465,17 @@ def _compute_run_sha(
     seed: int,
     ibgc_etag: str,
     domain_etag: str,
+    domain_vocab: str,
 ) -> str:
-    """Return a stable sha256 hex digest for ``ClusteringRun.update_or_create``."""
+    """Return a stable sha256 hex digest for ``ClusteringRun.update_or_create``.
+
+    ``domain_vocab`` is hashed in so the IPR-projection cutover produces a
+    fresh sha (and a fresh scoring cache) even when every other parameter
+    is identical to a prior raw-vocab run.
+    """
     payload = "|".join([
         f"sources={','.join(sources)}",
+        f"vocab={domain_vocab}",
         f"weights={weights[0]:.6f},{weights[1]:.6f}",
         f"k={knn_k}",
         "res=" + ",".join(f"{r:.6f}" for r in leiden_resolutions),

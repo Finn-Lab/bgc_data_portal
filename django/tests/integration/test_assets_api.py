@@ -8,6 +8,7 @@ realistic end-to-end through the Redis cache without needing a worker.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import tarfile
 from unittest.mock import patch
@@ -290,3 +291,209 @@ def test_ibgc_detail_resolves_asset_via_negative_id(api_client, synchronous_task
     body = with_header.json()
     assert body["id"] == neg_id
     assert body["label"].startswith("iBGC-A")
+
+
+# ── Asset-only mode: chip filters alone do NOT pull DB rows ────────────────
+
+
+@pytest.fixture
+def seeded_db_ibgc():
+    """One persistent IntegratedBGC + source DashboardBgc.
+
+    Lets the asset-only-mode tests assert that the DB row is hidden when no
+    ``ibgc_ids`` allow-list accompanies the asset_token, and surfaces when one
+    does.
+    """
+    from discovery.models import (
+        AssemblySource,
+        AssemblyType,
+        DashboardAssembly,
+        DashboardBgc,
+        DashboardContig,
+        DashboardDetector,
+        IntegratedBGC,
+    )
+
+    src, _ = AssemblySource.objects.get_or_create(name="MIBiG")
+    assembly = DashboardAssembly.objects.create(
+        assembly_accession="DB_001",
+        organism_name="Seeded ref",
+        source=src,
+        assembly_type=AssemblyType.GENOME,
+    )
+    sha = hashlib.sha256(b"DB_001_0").hexdigest()
+    contig = DashboardContig.objects.create(
+        assembly=assembly,
+        sequence_sha256=sha,
+        accession="CONTIG_DB_001_0",
+        length=100_000,
+    )
+    ibgc = IntegratedBGC.objects.create(
+        contig=contig,
+        start_position=1_000,
+        end_position=11_000,
+        source_tools=["MIBiG"],
+        gene_cluster_family="cluster.0001",
+        umap_x=1.0,
+        umap_y=2.0,
+        umap_projected=False,
+        novelty_score=0.5,
+        domain_novelty=0.3,
+    )
+    det = DashboardDetector.objects.create(
+        name="MIBiG v3.1", tool="MIBiG", version="3.1.0",
+        tool_name_code="MIB", version_sort_key=310,
+    )
+    DashboardBgc.objects.create(
+        assembly=assembly, contig=contig,
+        bgc_accession="MGYB99999999.MIB.1.01",
+        start_position=1_000, end_position=11_000,
+        classification_path="Polyketide", detector=det,
+        integrated_bgc=ibgc,
+    )
+    return ibgc
+
+
+def _upload_asset(api_client) -> str:
+    raw = _minimal_tarball()
+    response = api_client.post(
+        UPLOAD_URL,
+        data={"file": SimpleUploadedFile("upload.tar.gz", raw)},
+        format="multipart",
+    )
+    assert response.status_code == 202, response.content
+    return response.json()["token"]
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_roster_asset_only_hides_db_rows_when_no_filter(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    """Asset loaded, no ``ibgc_ids`` → DB iBGC is excluded entirely."""
+    token = _upload_asset(api_client)
+
+    response = api_client.get(
+        f"/api/dashboard/ibgcs/roster/?asset_token={token}"
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    db_ids = [it["id"] for it in body["items"] if not it["is_asset"]]
+    asset_ids = [it["id"] for it in body["items"] if it["is_asset"]]
+    assert asset_ids, "asset rows still expected"
+    assert seeded_db_ibgc.id not in db_ids
+    assert body["pagination"]["total_count"] == len(asset_ids)
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_roster_asset_only_ignores_chip_filters(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    """A bgc_class chip alone must NOT pull DB rows into an asset session."""
+    token = _upload_asset(api_client)
+
+    response = api_client.get(
+        f"/api/dashboard/ibgcs/roster/?asset_token={token}&bgc_class=Polyketide"
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    db_ids = [it["id"] for it in body["items"] if not it["is_asset"]]
+    assert seeded_db_ibgc.id not in db_ids
+    assert body["pagination"]["total_count"] == sum(
+        1 for it in body["items"] if it["is_asset"]
+    )
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_roster_asset_plus_ibgc_ids_includes_db_row(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    """Explicit ``ibgc_ids`` (Run Query result) re-enables the DB row."""
+    token = _upload_asset(api_client)
+
+    response = api_client.get(
+        f"/api/dashboard/ibgcs/roster/"
+        f"?asset_token={token}&ibgc_ids={seeded_db_ibgc.id}"
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    db_ids = [it["id"] for it in body["items"] if not it["is_asset"]]
+    asset_ids = [it["id"] for it in body["items"] if it["is_asset"]]
+    assert seeded_db_ibgc.id in db_ids
+    assert asset_ids, "asset rows still prepended"
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_count_asset_only_excludes_db_rows(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    token = _upload_asset(api_client)
+    body = api_client.get(
+        f"/api/dashboard/ibgcs/count/?asset_token={token}"
+    ).json()
+    # Pre-change behaviour would have returned 1 (DB) + N (asset). Asset-only
+    # mode must drop the DB row from the count.
+    asset_count = body["exact_count"]
+    assert asset_count >= 1
+
+    # Without the asset_token, the DB row is counted as normal.
+    db_only = api_client.get("/api/dashboard/ibgcs/count/").json()
+    assert db_only["exact_count"] == 1
+    # Sanity check: chip filter alone with asset is also asset-only.
+    chip = api_client.get(
+        f"/api/dashboard/ibgcs/count/?asset_token={token}&bgc_class=Polyketide"
+    ).json()
+    assert chip["exact_count"] == asset_count
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_count_asset_plus_ibgc_ids_includes_db_row(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    token = _upload_asset(api_client)
+    body = api_client.get(
+        f"/api/dashboard/ibgcs/count/"
+        f"?asset_token={token}&ibgc_ids={seeded_db_ibgc.id}"
+    ).json()
+    asset_only = api_client.get(
+        f"/api/dashboard/ibgcs/count/?asset_token={token}"
+    ).json()
+    assert body["exact_count"] == asset_only["exact_count"] + 1
+
+
+@_disable_djdt
+@_skip_if_unmigrated
+@pytest.mark.django_db
+def test_umap_and_scatter_asset_only_hide_db_points(
+    api_client, synchronous_task, seeded_db_ibgc
+):
+    """Same contract on the map endpoints: asset alone → asset points only."""
+    token = _upload_asset(api_client)
+
+    umap = api_client.get(
+        f"/api/dashboard/ibgcs/umap/?asset_token={token}"
+    ).json()
+    assert all(p["id"] < 0 for p in umap), umap
+
+    scatter = api_client.get(
+        f"/api/dashboard/ibgcs/scatter/?asset_token={token}"
+    ).json()
+    # Scatter omits asset points whose chosen axes are null; just assert no
+    # DB row leaked through.
+    assert all(p["id"] < 0 for p in scatter), scatter
+
+    # With ibgc_ids → DB row is back in.
+    umap_with_ids = api_client.get(
+        f"/api/dashboard/ibgcs/umap/"
+        f"?asset_token={token}&ibgc_ids={seeded_db_ibgc.id}"
+    ).json()
+    assert any(p["id"] == seeded_db_ibgc.id for p in umap_with_ids)

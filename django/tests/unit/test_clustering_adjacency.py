@@ -6,6 +6,10 @@ Verifies:
   * Ordering uses (cds.start_position, BgcDomain.start_position).
   * The ref_db filter is applied BEFORE sequencing, so non-selected sources
     don't interrupt the adjacency string.
+  * IPR-when-available projection: signatures with ``interpro_entry_acc``
+    set are sequenced under the IPR label.
+  * Contiguous repeats of the same projected label collapse to one
+    occurrence before the sliding window; non-adjacent repeats survive.
 """
 
 from __future__ import annotations
@@ -58,10 +62,11 @@ def _cds(bgc, start, end, sha=""):
     )
 
 
-def _domain(bgc, *, cds, acc, ref_db="PFAM", aa_start=10, aa_end=80, name=""):
+def _domain(bgc, *, cds, acc, ref_db="PFAM", aa_start=10, aa_end=80, name="", ipr=""):
     return BgcDomain.objects.create(
         bgc=bgc, cds=cds, domain_acc=acc, domain_name=name or acc,
         ref_db=ref_db, start_position=aa_start, end_position=aa_end,
+        interpro_entry_acc=ipr,
     )
 
 
@@ -96,7 +101,10 @@ def test_single_domain_produces_empty_row():
     assert M.nnz == 0
 
 
-def test_adjacent_identical_domains_kept_as_self_pair():
+def test_adjacent_identical_labels_collapse_no_self_pair():
+    """Contiguous repeats of the same projected label collapse before
+    pair extraction, so no ``(A, A)`` self-pair survives.
+    """
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
     ibgc = _ibgc(contig, source_bgcs=[bgc])
@@ -104,13 +112,73 @@ def test_adjacent_identical_domains_kept_as_self_pair():
     cds2 = _cds(bgc, 500, 800)
     cds3 = _cds(bgc, 900, 1200)
     _domain(bgc, cds=cds1, acc="A")
-    _domain(bgc, cds=cds2, acc="A")
+    _domain(bgc, cds=cds2, acc="A")  # contiguous repeat → collapsed
     _domain(bgc, cds=cds3, acc="B")
 
     M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
     pairs = {tuple(p) for p in pair_vocab.tolist()}
-    assert ("A", "A") in pairs
-    assert ("A", "B") in pairs
+    assert ("A", "A") not in pairs
+    assert pairs == {("A", "B")}
+
+
+def test_non_adjacent_repeats_preserved_after_collapse():
+    """[A, B, A] keeps both adjacencies even though A repeats — only
+    *contiguous* repeats are collapsed.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig)
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
+    cds1 = _cds(bgc, 100, 400)
+    cds2 = _cds(bgc, 500, 800)
+    cds3 = _cds(bgc, 900, 1200)
+    _domain(bgc, cds=cds1, acc="A")
+    _domain(bgc, cds=cds2, acc="B")
+    _domain(bgc, cds=cds3, acc="A")
+
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
+    pairs = {tuple(p) for p in pair_vocab.tolist()}
+    assert pairs == {("A", "B")}  # both (A,B) and (B,A) canonicalise to (A,B)
+    assert M[0].sum() == 1  # only one distinct pair column
+
+
+def test_ipr_projection_used_when_available():
+    """Signatures with ``interpro_entry_acc`` set are sequenced under the
+    IPR label; signatures without fall back to the raw acc.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig)
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
+    cds1 = _cds(bgc, 100, 400)
+    cds2 = _cds(bgc, 500, 800)
+    cds3 = _cds(bgc, 900, 1200)
+    _domain(bgc, cds=cds1, acc="PF00001", ipr="IPR000001")
+    _domain(bgc, cds=cds2, acc="NF99999", ipr="")  # no IPR → raw acc
+    _domain(bgc, cds=cds3, acc="PF00002", ipr="IPR000002")
+
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM", "NCBIFAM"))
+    pairs = {tuple(p) for p in pair_vocab.tolist()}
+    assert pairs == {("IPR000001", "NF99999"), ("IPR000002", "NF99999")}
+
+
+def test_contiguous_distinct_signatures_collapse_under_same_ipr():
+    """Two distinct Pfam signatures that both map to the same IPR entry
+    collapse to a single occurrence after projection — no self-pair is
+    emitted.
+    """
+    contig = DashboardContigFactory()
+    bgc = _bgc(contig)
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
+    cds1 = _cds(bgc, 100, 400)
+    cds2 = _cds(bgc, 500, 800)
+    cds3 = _cds(bgc, 900, 1200)
+    _domain(bgc, cds=cds1, acc="PF00010", ipr="IPR000010")
+    _domain(bgc, cds=cds2, acc="PF00011", ipr="IPR000010")  # different sig, same IPR
+    _domain(bgc, cds=cds3, acc="PF00020", ipr="IPR000020")
+
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
+    pairs = {tuple(p) for p in pair_vocab.tolist()}
+    assert ("IPR000010", "IPR000010") not in pairs
+    assert pairs == {("IPR000010", "IPR000020")}
 
 
 def test_null_cds_domains_dropped_from_adjacency():

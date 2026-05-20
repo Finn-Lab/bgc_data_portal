@@ -10,6 +10,7 @@ import { GcfFilter } from "./GcfFilter";
 import { ChemOntClassFilter } from "./ChemOntClassFilter";
 import { AccessionsFilter } from "./AccessionsFilter";
 import { DomainsFilter } from "./DomainsFilter";
+import { LengthFilter } from "./LengthFilter";
 import { SequenceFilter } from "./SequenceFilter";
 import { ChemicalStructureFilter } from "./ChemicalStructureFilter";
 import { LoadAssetChip } from "./LoadAssetChip";
@@ -29,6 +30,7 @@ export function FilterPanel() {
       <GcfFilter />
       <ChemOntClassFilter />
       <AccessionsFilter />
+      <LengthFilter />
       <DomainsFilter />
       <SequenceFilter />
       <ChemicalStructureFilter />

@@ -103,6 +103,9 @@ export interface AppliedIbgcFilters {
   assemblyAccession: string;
   assemblyIds: string;
   organism: string;
+  // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
+  minLengthKb: number | null;
+  maxLengthKb: number | null;
 }
 
 export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
@@ -118,6 +121,8 @@ export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   assemblyAccession: "",
   assemblyIds: "",
   organism: "",
+  minLengthKb: null,
+  maxLengthKb: null,
 };
 
 /** True when no filter chip is set in the applied snapshot.
@@ -136,7 +141,9 @@ export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
     applied.bgcAccession === "" &&
     applied.assemblyAccession === "" &&
     applied.assemblyIds === "" &&
-    applied.organism === ""
+    applied.organism === "" &&
+    applied.minLengthKb == null &&
+    applied.maxLengthKb == null
   );
 }
 
@@ -174,6 +181,12 @@ export function appliedFiltersToApiParams(
   }
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
   if (applied.organism) params.organism = applied.organism;
+  if (applied.minLengthKb != null) {
+    params.min_length_kb = String(applied.minLengthKb);
+  }
+  if (applied.maxLengthKb != null) {
+    params.max_length_kb = String(applied.maxLengthKb);
+  }
   if (resultIbgcIds && resultIbgcIds.length > 0) {
     params.ibgc_ids = resultIbgcIds.join(",");
   }

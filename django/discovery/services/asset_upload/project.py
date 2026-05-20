@@ -384,6 +384,8 @@ def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[
     for cds in vibgc.cds:
         cds_start_by_id[(cds.bgc_key, cds.protein_id_str)] = cds.start_position
 
+    from discovery.services.architecture import _interpro_url
+
     seen: set[tuple[int, int, str]] = set()
     ordered: list[tuple[int, int, dict]] = []
     for d in vibgc.domains:
@@ -394,26 +396,34 @@ def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[
         cds_start = cds_start_by_id.get((d.bgc_key, d.cds_protein_id))
         if cds_start is None:
             continue
-        key = (cds_start, d.start_position, d.domain_acc)
+        ipr_acc = (d.interpro_entry_acc or "").strip()
+        if ipr_acc:
+            projected = {
+                "domain_acc": ipr_acc,
+                "domain_name": d.interpro_entry_description or d.domain_name,
+                "ref_db": "InterPro",
+                "url": _interpro_url(ipr_acc),
+                "start": 0,
+                "end": 0,
+                "score": None,
+                "go_slim": go_slim_for_terms(d.go_terms),
+            }
+        else:
+            projected = {
+                "domain_acc": d.domain_acc,
+                "domain_name": d.domain_name,
+                "ref_db": d.ref_db,
+                "url": d.url,
+                "start": 0,
+                "end": 0,
+                "score": None,
+                "go_slim": go_slim_for_terms(d.go_terms),
+            }
+        key = (cds_start, d.start_position, projected["domain_acc"])
         if key in seen:
             continue
         seen.add(key)
-        ordered.append(
-            (
-                cds_start,
-                d.start_position,
-                {
-                    "domain_acc": d.domain_acc,
-                    "domain_name": d.domain_name,
-                    "ref_db": d.ref_db,
-                    "url": d.url,
-                    "start": 0,
-                    "end": 0,
-                    "score": None,
-                    "go_slim": go_slim_for_terms(d.go_terms),
-                },
-            )
-        )
+        ordered.append((cds_start, d.start_position, projected))
     ordered.sort(key=lambda t: (t[0], t[1], t[2]["domain_acc"]))
     return [t[2] for t in ordered]
 

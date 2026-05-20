@@ -16,6 +16,9 @@ interface FilterState {
   bgcAccession: string;
   assemblyAccession: string;
   assemblyIds: string;
+  // iBGC length bounds in kilobases. ``null`` = unbounded on that side.
+  minLengthKb: number | null;
+  maxLengthKb: number | null;
   exploreQueryTriggered: boolean;
 
   setSourceNames: (v: string[]) => void;
@@ -31,6 +34,7 @@ interface FilterState {
   setBgcAccession: (v: string) => void;
   setAssemblyAccession: (v: string) => void;
   setAssemblyIds: (v: string) => void;
+  setLengthRangeKb: (min: number | null, max: number | null) => void;
   runExploreQuery: () => void;
   clearFilters: () => void;
 }
@@ -51,6 +55,8 @@ const initialState = {
   bgcAccession: "",
   assemblyAccession: "",
   assemblyIds: "",
+  minLengthKb: null as number | null,
+  maxLengthKb: null as number | null,
   exploreQueryTriggered: false,
 };
 
@@ -81,6 +87,8 @@ export const useFilterStore = create<FilterState>((set) => ({
   setBgcAccession: (v) => set({ bgcAccession: v, exploreQueryTriggered: false }),
   setAssemblyAccession: (v) => set({ assemblyAccession: v, exploreQueryTriggered: false }),
   setAssemblyIds: (v) => set({ assemblyIds: v, exploreQueryTriggered: false }),
+  setLengthRangeKb: (min, max) =>
+    set({ minLengthKb: min, maxLengthKb: max, exploreQueryTriggered: false }),
   runExploreQuery: () => set({ exploreQueryTriggered: true }),
   clearFilters: () => set(initialState),
 }));
