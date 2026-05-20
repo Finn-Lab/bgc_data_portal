@@ -1,16 +1,16 @@
 from django.contrib import admin
 
 from .models import (
-    DashboardAssembly,
-    DashboardBgc,
-    BgcDomain,
     ClusteringRun,
-    DashboardGCF,
-    DashboardNaturalProduct,
+    ConsensusBgc,
+    DashboardAssembly,
     DashboardBgcClass,
     DashboardDomain,
-    IntegratedBGC,
+    DashboardGCF,
+    IbgcNaturalProduct,
+    IntegratedBgc,
     PrecomputedStats,
+    SourceBgcPrediction,
 )
 
 
@@ -24,25 +24,36 @@ class DashboardAssemblyAdmin(admin.ModelAdmin):
     list_filter = ("is_type_strain",)
 
 
-@admin.register(DashboardBgc)
-class DashboardBgcAdmin(admin.ModelAdmin):
+@admin.register(ConsensusBgc)
+class ConsensusBgcAdmin(admin.ModelAdmin):
+    list_display = ("accession", "contig_id", "bgc_range")
+    search_fields = ("accession",)
+
+
+@admin.register(IntegratedBgc)
+class IntegratedBgcAdmin(admin.ModelAdmin):
     list_display = (
-        "bgc_accession", "classification_path", "novelty_score",
-        "domain_novelty", "size_kb", "is_partial",
+        "accession", "cbgc_id", "contig_id", "bgc_range",
+        "source_tools", "gene_cluster_family",
     )
-    search_fields = ("bgc_accession",)
-    list_filter = ("is_partial",)
+    search_fields = ("accession", "gene_cluster_family")
+
+
+@admin.register(SourceBgcPrediction)
+class SourceBgcPredictionAdmin(admin.ModelAdmin):
+    list_display = (
+        "prediction_accession", "detector", "bgc_range",
+        "is_partial", "is_validated", "integrated_bgc_id",
+    )
+    search_fields = ("prediction_accession",)
+    list_filter = ("is_partial", "is_validated", "detector")
 
 
 @admin.register(DashboardGCF)
 class DashboardGCFAdmin(admin.ModelAdmin):
     list_display = (
-        "family_path",
-        "level",
-        "member_count",
-        "validated_count",
-        "descendant_count",
-        "clustering_run_id",
+        "family_path", "level", "member_count",
+        "validated_count", "descendant_count", "clustering_run_id",
     )
     list_filter = ("level", "clustering_run")
     search_fields = ("family_path", "parent_path")
@@ -51,12 +62,8 @@ class DashboardGCFAdmin(admin.ModelAdmin):
 @admin.register(ClusteringRun)
 class ClusteringRunAdmin(admin.ModelAdmin):
     list_display = (
-        "id",
-        "created_at",
-        "knn_k",
-        "n_levels",
-        "n_ibgcs",
-        "n_leaf_communities",
+        "id", "created_at", "knn_k", "n_levels",
+        "n_ibgcs", "n_leaf_communities",
     )
     readonly_fields = (
         "created_at", "sha256", "n_proteins", "n_ibgcs",
@@ -65,18 +72,9 @@ class ClusteringRunAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(IntegratedBGC)
-class IntegratedBGCAdmin(admin.ModelAdmin):
-    list_display = (
-        "id", "contig_id", "start_position", "end_position",
-        "source_tools", "gene_cluster_family",
-    )
-    search_fields = ("gene_cluster_family",)
-
-
-@admin.register(DashboardNaturalProduct)
-class DashboardNaturalProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "np_class_path")
+@admin.register(IbgcNaturalProduct)
+class IbgcNaturalProductAdmin(admin.ModelAdmin):
+    list_display = ("name", "ibgc_id", "np_class_path")
     search_fields = ("name", "smiles")
 
 
