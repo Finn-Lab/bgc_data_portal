@@ -1,11 +1,11 @@
-"""Integration tests for the NRB filter surface.
+"""Integration tests for the iBGC filter surface.
 
 Covers the regressions that surfaced in dev: the v2 Discovery dashboard
 was sending the chip values silently for every dimension except a
 handful, so picking e.g. ``Detector = MIBiG`` did not narrow the roster
 at all. These tests pin the API contract — every chip listed in
 ``components/filters/FilterPanel.tsx`` must round-trip through
-``/api/dashboard/nrbs/roster/`` and produce the expected narrowing.
+``/api/dashboard/ibgcs/roster/`` and produce the expected narrowing.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from discovery.models import (
     DashboardContig,
     DashboardDetector,
     DashboardNaturalProduct,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 
 
@@ -50,8 +50,8 @@ def _make_contig(assembly, idx=0, taxonomy_path=""):
     )
 
 
-def _make_nrb(contig, *, start, end, source_tools, gene_cluster_family=""):
-    return NonRedundantBGC.objects.create(
+def _make_ibgc(contig, *, start, end, source_tools, gene_cluster_family=""):
+    return IntegratedBGC.objects.create(
         contig=contig,
         start_position=start,
         end_position=end,
@@ -66,8 +66,8 @@ def _make_nrb(contig, *, start, end, source_tools, gene_cluster_family=""):
 
 
 @pytest.fixture
-def nrb_dataset():
-    """Three NRBs across two assemblies with distinct detector/source/type."""
+def ibgc_dataset():
+    """Three iBGCs across two assemblies with distinct detector/source/type."""
     src_mibig, _ = AssemblySource.objects.get_or_create(name="MIBiG")
     src_gtdb, _ = AssemblySource.objects.get_or_create(name="GTDB")
 
@@ -89,18 +89,18 @@ def nrb_dataset():
     c_mibig = _make_contig(a_mibig, 0, "Bacteria.Actinomycetota")
     c_gtdb = _make_contig(a_gtdb, 0, "Bacteria.Pseudomonadota")
 
-    # NRB1 — MIBiG-only, from the MIBiG assembly.
-    nrb1 = _make_nrb(
+    # IBGC1 — MIBiG-only, from the MIBiG assembly.
+    ibgc1 = _make_ibgc(
         c_mibig, start=1_000, end=20_000, source_tools=["MIBiG"],
         gene_cluster_family="Polyketide",
     )
-    # NRB2 — antiSMASH on the GTDB assembly.
-    nrb2 = _make_nrb(
+    # IBGC2 — antiSMASH on the GTDB assembly.
+    ibgc2 = _make_ibgc(
         c_gtdb, start=1_000, end=15_000, source_tools=["antiSMASH"],
         gene_cluster_family="NRP",
     )
-    # NRB3 — antiSMASH + SanntiS chain on the GTDB assembly.
-    nrb3 = _make_nrb(
+    # IBGC3 — antiSMASH + SanntiS chain on the GTDB assembly.
+    ibgc3 = _make_ibgc(
         c_gtdb, start=30_000, end=45_000,
         source_tools=["SanntiS", "antiSMASH"],
         gene_cluster_family="RiPP",
@@ -115,28 +115,28 @@ def nrb_dataset():
         tool_name_code="ANT", version_sort_key=710,
     )
 
-    # Source DashboardBgc rows — one per NRB, wired to assembly + detector
+    # Source DashboardBgc rows — one per iBGC, wired to assembly + detector
     # so the helper's joins through ``source_bgcs`` resolve.
     DashboardBgc.objects.create(
         assembly=a_mibig, contig=c_mibig,
         bgc_accession="MGYB10000001.MIB.1.01",
         start_position=1_000, end_position=20_000,
         classification_path="Polyketide", detector=det_mibig,
-        is_validated=True, non_redundant_bgc=nrb1,
+        is_validated=True, integrated_bgc=ibgc1,
     )
     DashboardBgc.objects.create(
         assembly=a_gtdb, contig=c_gtdb,
         bgc_accession="MGYB10000002.ANT.1.01",
         start_position=1_000, end_position=15_000,
         classification_path="NRP", detector=det_anti,
-        non_redundant_bgc=nrb2,
+        integrated_bgc=ibgc2,
     )
     DashboardBgc.objects.create(
         assembly=a_gtdb, contig=c_gtdb,
         bgc_accession="MGYB10000003.ANT.1.01",
         start_position=30_000, end_position=45_000,
         classification_path="RiPP", detector=det_anti,
-        non_redundant_bgc=nrb3,
+        integrated_bgc=ibgc3,
     )
 
     DashboardBgcClass.objects.create(name="Polyketide", bgc_count=1)
@@ -146,13 +146,13 @@ def nrb_dataset():
     return {
         "assemblies": {"mibig": a_mibig, "gtdb": a_gtdb},
         "sources": {"mibig": src_mibig, "gtdb": src_gtdb},
-        "nrbs": {"mibig": nrb1, "antismash": nrb2, "chain": nrb3},
+        "ibgcs": {"mibig": ibgc1, "antismash": ibgc2, "chain": ibgc3},
     }
 
 
 def _roster_ids(api_client, **params):
     qs = "&".join(f"{k}={v}" for k, v in params.items())
-    url = f"/api/dashboard/nrbs/roster/?{qs}" if qs else "/api/dashboard/nrbs/roster/"
+    url = f"/api/dashboard/ibgcs/roster/?{qs}" if qs else "/api/dashboard/ibgcs/roster/"
     resp = api_client.get(url)
     assert resp.status_code == 200, resp.content
     data = json.loads(resp.content)
@@ -163,97 +163,97 @@ def _roster_ids(api_client, **params):
 
 
 @pytest.mark.django_db
-class TestNrbRosterFilters:
-    def test_baseline_returns_all(self, api_client, nrb_dataset):
+class TestIbgcRosterFilters:
+    def test_baseline_returns_all(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client)
-        assert ids == {nrb_dataset["nrbs"][k].id for k in ("mibig", "antismash", "chain")}
+        assert ids == {ibgc_dataset["ibgcs"][k].id for k in ("mibig", "antismash", "chain")}
 
-    def test_detector_tools_narrows_to_matching_nrbs(self, api_client, nrb_dataset):
-        # The original regression: Detector = MIBiG must filter the NRB
-        # roster to NRBs whose ``source_tools`` JSON includes MIBiG.
+    def test_detector_tools_narrows_to_matching_ibgcs(self, api_client, ibgc_dataset):
+        # The original regression: Detector = MIBiG must filter the iBGC
+        # roster to iBGCs whose ``source_tools`` JSON includes MIBiG.
         ids = _roster_ids(api_client, detector_tools="MIBiG")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_detector_tools_any_of(self, api_client, nrb_dataset):
-        # CSV is OR — any NRB whose source_tools contains any listed tool.
+    def test_detector_tools_any_of(self, api_client, ibgc_dataset):
+        # CSV is OR — any iBGC whose source_tools contains any listed tool.
         ids = _roster_ids(api_client, detector_tools="MIBiG,SanntiS")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id, nrb_dataset["nrbs"]["chain"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id, ibgc_dataset["ibgcs"]["chain"].id}
 
-    def test_source_tools_legacy_alias(self, api_client, nrb_dataset):
+    def test_source_tools_legacy_alias(self, api_client, ibgc_dataset):
         # Old callers still send ``source_tools`` — keep accepting it.
         ids = _roster_ids(api_client, source_tools="MIBiG")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_source_names_narrows_through_assembly_source(self, api_client, nrb_dataset):
+    def test_source_names_narrows_through_assembly_source(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client, source_names="MIBiG")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_assembly_type(self, api_client, nrb_dataset):
+    def test_assembly_type(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client, assembly_type="metagenome")
         assert ids == {
-            nrb_dataset["nrbs"]["antismash"].id,
-            nrb_dataset["nrbs"]["chain"].id,
+            ibgc_dataset["ibgcs"]["antismash"].id,
+            ibgc_dataset["ibgcs"]["chain"].id,
         }
 
-    def test_bgc_class(self, api_client, nrb_dataset):
+    def test_bgc_class(self, api_client, ibgc_dataset):
         # Regression: bgc_class must filter on the chemical class path
-        # held by source BGCs (``classification_path``), NOT on the NRB's
+        # held by source BGCs (``classification_path``), NOT on the iBGC's
         # ``gene_cluster_family`` (which is the leaf cluster path written
         # by the clustering pipeline). Picking BGC class = Polyketide
-        # against a fresh clustering returned 0 NRBs before this fix.
+        # against a fresh clustering returned 0 iBGCs before this fix.
         ids = _roster_ids(api_client, bgc_class="Polyketide")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
     def test_bgc_class_does_not_match_gene_cluster_family(
-        self, api_client, nrb_dataset
+        self, api_client, ibgc_dataset
     ):
         # If we set ``gene_cluster_family`` to look like a class path,
         # the bgc_class filter must still IGNORE it — only
         # source_bgcs.classification_path counts.
-        nrb = nrb_dataset["nrbs"]["antismash"]
-        nrb.gene_cluster_family = "Polyketide.foo"
-        nrb.save()
+        ibgc = ibgc_dataset["ibgcs"]["antismash"]
+        ibgc.gene_cluster_family = "Polyketide.foo"
+        ibgc.save()
         ids = _roster_ids(api_client, bgc_class="Polyketide")
-        # Only the MIBiG NRB whose source BGC has classification_path
-        # "Polyketide" should match — not the antiSMASH NRB whose
+        # Only the MIBiG iBGC whose source BGC has classification_path
+        # "Polyketide" should match — not the antiSMASH iBGC whose
         # gene_cluster_family happens to start with "Polyketide".
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_assembly_accession(self, api_client, nrb_dataset):
+    def test_assembly_accession(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client, assembly_accession="GTDB_001")
         assert ids == {
-            nrb_dataset["nrbs"]["antismash"].id,
-            nrb_dataset["nrbs"]["chain"].id,
+            ibgc_dataset["ibgcs"]["antismash"].id,
+            ibgc_dataset["ibgcs"]["chain"].id,
         }
 
-    def test_bgc_accession_substring(self, api_client, nrb_dataset):
+    def test_bgc_accession_substring(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client, bgc_accession="MGYB10000003")
-        assert ids == {nrb_dataset["nrbs"]["chain"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["chain"].id}
 
-    def test_assembly_ids(self, api_client, nrb_dataset):
-        mibig_id = nrb_dataset["assemblies"]["mibig"].id
+    def test_assembly_ids(self, api_client, ibgc_dataset):
+        mibig_id = ibgc_dataset["assemblies"]["mibig"].id
         ids = _roster_ids(api_client, assembly_ids=str(mibig_id))
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_organism(self, api_client, nrb_dataset):
+    def test_organism(self, api_client, ibgc_dataset):
         ids = _roster_ids(api_client, organism="Streptomyces")
         assert ids == {
-            nrb_dataset["nrbs"]["antismash"].id,
-            nrb_dataset["nrbs"]["chain"].id,
+            ibgc_dataset["ibgcs"]["antismash"].id,
+            ibgc_dataset["ibgcs"]["chain"].id,
         }
 
-    def test_combined_filters_intersect(self, api_client, nrb_dataset):
-        # Detector = antiSMASH AND bgc_class = RiPP → only the chain NRB.
+    def test_combined_filters_intersect(self, api_client, ibgc_dataset):
+        # Detector = antiSMASH AND bgc_class = RiPP → only the chain iBGC.
         ids = _roster_ids(
             api_client,
             detector_tools="antiSMASH",
             bgc_class="RiPP",
         )
-        assert ids == {nrb_dataset["nrbs"]["chain"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["chain"].id}
 
-    def test_chemont_ids(self, api_client, nrb_dataset):
-        # Wire up a per-CDS ChemOnt class on the MIBiG NRB's source BGC.
-        bgc = DashboardBgc.objects.get(non_redundant_bgc=nrb_dataset["nrbs"]["mibig"])
+    def test_chemont_ids(self, api_client, ibgc_dataset):
+        # Wire up a per-CDS ChemOnt class on the MIBiG iBGC's source BGC.
+        bgc = DashboardBgc.objects.get(integrated_bgc=ibgc_dataset["ibgcs"]["mibig"])
         cds = DashboardCds.objects.create(
             bgc=bgc,
             protein_id_str="cds_erythromycin_1",
@@ -270,28 +270,28 @@ class TestNrbRosterFilters:
             weight=2.1,
         )
         ids = _roster_ids(api_client, chemont_ids="CHEMONTID:0000048")
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
 
 @pytest.mark.django_db
-class TestNrbScatterFilters:
+class TestIbgcScatterFilters:
     """Variables Map / UMAP must apply the same filter surface so the
     scatter stays in lockstep with the roster after Run Query."""
 
-    def test_scatter_applies_detector_tools(self, api_client, nrb_dataset):
+    def test_scatter_applies_detector_tools(self, api_client, ibgc_dataset):
         resp = api_client.get(
-            "/api/dashboard/nrbs/scatter/?detector_tools=MIBiG"
+            "/api/dashboard/ibgcs/scatter/?detector_tools=MIBiG"
         )
         assert resp.status_code == 200
         data = json.loads(resp.content)
         ids = {p["id"] for p in data}
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}
 
-    def test_umap_applies_detector_tools(self, api_client, nrb_dataset):
+    def test_umap_applies_detector_tools(self, api_client, ibgc_dataset):
         resp = api_client.get(
-            "/api/dashboard/nrbs/umap/?detector_tools=MIBiG"
+            "/api/dashboard/ibgcs/umap/?detector_tools=MIBiG"
         )
         assert resp.status_code == 200
         data = json.loads(resp.content)
         ids = {p["id"] for p in data}
-        assert ids == {nrb_dataset["nrbs"]["mibig"].id}
+        assert ids == {ibgc_dataset["ibgcs"]["mibig"].id}

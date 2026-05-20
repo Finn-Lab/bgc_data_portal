@@ -227,7 +227,7 @@ class ClusteringRunFactory(DjangoModelFactory):
     leiden_resolutions = factory.LazyFunction(lambda: [0.03, 0.08, 0.15, 0.25])
     seed = 42
     n_proteins = 0
-    n_nrbs = factory.LazyFunction(lambda: random.randint(10, 1000))
+    n_ibgcs = factory.LazyFunction(lambda: random.randint(10, 1000))
     n_levels = 4
     n_root_communities = factory.LazyFunction(lambda: random.randint(1, 20))
     n_leaf_communities = factory.LazyFunction(lambda: random.randint(20, 200))

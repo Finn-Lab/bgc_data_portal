@@ -147,7 +147,7 @@ class ChemOntAnnotationNode(Schema):
 
 class NaturalProductSummary(Schema):
     """Curated per-BGC natural product (SMILES, structure). No longer carries
-    CHAMOIS-derived ChemOnt classes — those live at the BGC / NRB level."""
+    CHAMOIS-derived ChemOnt classes — those live at the BGC / iBGC level."""
 
     id: int
     name: str
@@ -193,19 +193,19 @@ class ValidatedReferencePoint(Schema):
     umap_y: float
 
 
-# ── NRB (Non-Redundant BGC) schemas ──────────────────────────────────────────
+# ── iBGC (Integrated BGC) schemas ──────────────────────────────────────────
 
 
-class NrbRosterItem(Schema):
-    """Row in the NRB-level results table.
+class IbgcRosterItem(Schema):
+    """Row in the iBGC-level results table.
 
-    NRBs are the primary unit in the v2 Discovery dashboard. Each NRB
+    iBGCs are the primary unit in the v2 Discovery dashboard. Each iBGC
     consolidates one or more source ``DashboardBgc`` rows; the table here
     flattens metadata that the UI needs in the roster view.
     """
 
     id: int
-    label: str  # human-facing identifier (e.g. "NRB-12345")
+    label: str  # human-facing identifier (e.g. "iBGC-12345")
     classification_path: str = ""  # leaf GCF path (gene_cluster_family)
     size_kb: float = 0.0  # (end - start) / 1000
     n_source_bgcs: int = 0
@@ -220,24 +220,24 @@ class NrbRosterItem(Schema):
     parent_assembly_accession: Optional[str] = None
     organism_name: Optional[str] = None
     contig_accession: Optional[str] = None
-    similarity_score: Optional[float] = None  # filled by similar-nrb / query
+    similarity_score: Optional[float] = None  # filled by similar-ibgc / query
     # Populated only by sequence-protein search responses — the protein_id
-    # of the highest-bitscore CDS within the NRB, and that CDS's aggregate
+    # of the highest-bitscore CDS within the iBGC, and that CDS's aggregate
     # alignment stats. Percent identity and query coverage are 0–100.
     best_hit_protein_id: Optional[str] = None
     best_pident: Optional[float] = None
     best_qcoverage: Optional[float] = None
-    # True for NRBs sourced from an uploaded asset (negative id, ephemeral).
+    # True for iBGCs sourced from an uploaded asset (negative id, ephemeral).
     is_asset: bool = False
 
 
-class PaginatedNrbRosterResponse(Schema):
-    items: list[NrbRosterItem]
+class PaginatedIbgcRosterResponse(Schema):
+    items: list[IbgcRosterItem]
     pagination: PaginationMeta
 
 
-class NrbMemberBgc(Schema):
-    """Source DashboardBgc contributing to an NRB (drill-down list)."""
+class IbgcMemberBgc(Schema):
+    """Source DashboardBgc contributing to an iBGC (drill-down list)."""
 
     id: int
     accession: str
@@ -247,7 +247,7 @@ class NrbMemberBgc(Schema):
     size_kb: float = 0.0
 
 
-class NrbDetail(Schema):
+class IbgcDetail(Schema):
     id: int
     label: str
     classification_path: str = ""
@@ -266,14 +266,14 @@ class NrbDetail(Schema):
     umap_y: Optional[float] = None
     parent_assembly: Optional[ParentAssemblySummary] = None
     representative_bgc_id: Optional[int] = None  # for region/CDS rendering
-    member_bgcs: list[NrbMemberBgc] = []
+    member_bgcs: list[IbgcMemberBgc] = []
     domain_architecture: list[DomainArchitectureItem] = []
     natural_products: list[NaturalProductSummary] = []
     chemont_tree: list[ChemOntAnnotationNode] = []
 
 
-class NrbScatterPoint(Schema):
-    """Point for the Variables Map (axes chosen from numeric NRB columns)."""
+class IbgcScatterPoint(Schema):
+    """Point for the Variables Map (axes chosen from numeric iBGC columns)."""
 
     id: int
     x: float
@@ -289,8 +289,8 @@ class NrbScatterPoint(Schema):
     is_asset: bool = False
 
 
-class NrbUmapPoint(Schema):
-    """Point for the UMAP tab; ``umap_projected`` flags partial-NRB inferred coords."""
+class IbgcUmapPoint(Schema):
+    """Point for the UMAP tab; ``umap_projected`` flags partial-iBGC inferred coords."""
 
     id: int
     label: str
@@ -305,13 +305,13 @@ class NrbUmapPoint(Schema):
     is_asset: bool = False
 
 
-class NrbCountResponse(Schema):
+class IbgcCountResponse(Schema):
     """Filter-surface count + capping metadata for the dashboard.
 
     Used by the v2 Discovery dashboard to drive the empty-state guard and
     the "showing X of Y, sampled" banner *before* firing the expensive
     roster / UMAP / Variables-map requests. Same filter surface as
-    ``/nrbs/roster/``.
+    ``/ibgcs/roster/``.
     """
 
     exact_count: int
@@ -319,16 +319,16 @@ class NrbCountResponse(Schema):
     will_sample: bool
 
 
-class SimilarNrbRequest(Schema):
-    nrb_id: int
+class SimilarIbgcRequest(Schema):
+    ibgc_id: int
     k: int = 25
 
 
-class NrbArchitectureResponse(Schema):
-    """Pooled positional domain accessions for an NRB.
+class IbgcArchitectureResponse(Schema):
+    """Pooled positional domain accessions for an iBGC.
 
     Lightweight payload for the "copy domain architecture" action — avoids
-    pulling the full NrbDetail. ``ordered_accs`` mirrors the ordering rule
+    pulling the full IbgcDetail. ``ordered_accs`` mirrors the ordering rule
     used by the clustering pipeline (CDS start, then domain start).
     """
 
@@ -337,7 +337,7 @@ class NrbArchitectureResponse(Schema):
     ordered_accs: list[str]
 
 
-class NrbArchitectureQueryRequest(Schema):
+class IbgcArchitectureQueryRequest(Schema):
     """Composite-Dice query over a user-supplied domain architecture.
 
     ``architecture`` is the ordered list of domain accessions; ``weight`` is
@@ -355,8 +355,8 @@ class NrbArchitectureQueryRequest(Schema):
 
 
 class ReportSnapshotRequest(Schema):
-    nrb_ids: list[int]
-    # When negative ids are present in ``nrb_ids`` the snapshot endpoint
+    ibgc_ids: list[int]
+    # When negative ids are present in ``ibgc_ids`` the snapshot endpoint
     # resolves them out of the asset cache identified by ``asset_token``.
     asset_token: Optional[str] = None
 
@@ -364,7 +364,7 @@ class ReportSnapshotRequest(Schema):
 class ReportSnapshotResponse(Schema):
     token: str
     expires_at: str
-    n_nrbs: int
+    n_ibgcs: int
 
 
 class DomainCompositionEntry(Schema):
@@ -372,7 +372,7 @@ class DomainCompositionEntry(Schema):
     domain_name: str = ""
     domain_description: str = ""
     go_slim: str = ""
-    nrb_count: int
+    ibgc_count: int
     fraction: float
     tier: str  # "core" | "variable" | "rare"
 
@@ -406,7 +406,7 @@ class DomainCompositionSummary(Schema):
 
 class GcfDistributionEntry(Schema):
     classification_path: str
-    nrb_count: int
+    ibgc_count: int
     fraction: float
 
 
@@ -420,7 +420,7 @@ class LengthBucket(Schema):
     count: int
 
 
-class ReportNrbRow(Schema):
+class ReportIbgcRow(Schema):
     id: int
     label: str
     classification_path: str = ""
@@ -449,7 +449,7 @@ class ReportAssemblyRow(Schema):
     taxonomy_phylum: Optional[str] = None
     assembly_size_mb: Optional[float] = None
     total_bgcs_in_assembly: int = 0
-    nrbs_in_shortlist: int = 0
+    ibgcs_in_shortlist: int = 0
     is_type_strain: bool = False
 
 
@@ -457,9 +457,9 @@ class ReportPayload(Schema):
     token: str
     generated_at: str
     expires_at: str
-    n_nrbs: int
+    n_ibgcs: int
     n_assemblies: int
-    nrb_rows: list[ReportNrbRow] = []
+    ibgc_rows: list[ReportIbgcRow] = []
     domain_composition: DomainCompositionSummary = DomainCompositionSummary()
     gcf_distribution: list[GcfDistributionEntry] = []
     score_distributions: list[dict] = []
@@ -470,7 +470,7 @@ class ReportPayload(Schema):
     source_distribution: list[CategoryCount] = []
     assembly_rows: list[ReportAssemblyRow] = []
     assembly_stats: dict = {}
-    # NRB-derived taxonomy sunburst (one count per NRB). Items follow the
+    # iBGC-derived taxonomy sunburst (one count per iBGC). Items follow the
     # ``SunburstNode`` shape ({id, label, parent, count}); typed as ``dict``
     # because SunburstNode is defined further down in this module.
     taxonomy_sunburst: list[dict] = []
@@ -791,7 +791,7 @@ class DiscoveryStatsResponse(Schema):
     genomes: int = 0
     metagenomes: int = 0
     validated_bgcs: int = 0
-    regions: int = 0
+    ibgcs: int = 0
     total_bgc_predictions: int = 0
     updated_at: Optional[datetime] = None
 

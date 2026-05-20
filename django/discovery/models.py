@@ -283,16 +283,16 @@ class RegionAccessionAlias(models.Model):
         return f"{self.alias_accession} → {self.region.accession}"
 
 
-# ── Non-Redundant BGC ─────────────────────────────────────────────────────────
+# ── Integrated BGC ─────────────────────────────────────────────────────────
 
 
-class NonRedundantBGC(models.Model):
-    """Consolidated BGC region. Complete registry of latest-version BGCs and
-    input table for the clustering pipeline (which filters down to the
-    clusterable subset).
+class IntegratedBGC(models.Model):
+    """Consolidated BGC region (iBGC). Complete registry of latest-version
+    BGCs and input table for the clustering pipeline (which filters down to
+    the clusterable subset).
 
     Built from latest-version ``DashboardBgc`` rows:
-      * Validated BGCs (``is_validated=True``) become standalone NRBs
+      * Validated BGCs (``is_validated=True``) become standalone iBGCs
         regardless of tool or ``is_partial`` — ground truth, never merged
         with predictions, never tagged with overlapping antiSMASH, never
         absorbed.
@@ -300,22 +300,22 @@ class NonRedundantBGC(models.Model):
         merged via transitive interval overlap (any positive intersection
         joins a component), **regardless of ``is_partial``**. The merged
         interval spans ``min(starts) → max(ends)``.
-      * For each chain NRB above, if any non-validated antiSMASH BGC on the
+      * For each chain iBGC above, if any non-validated antiSMASH BGC on the
         same contig overlaps it, ``'antiSMASH'`` is added to that chain's
         ``source_tools``. AntiSMASH coordinates are never used to widen a
         chain interval.
       * Non-validated antiSMASH predictions (regardless of ``is_partial``)
-        are admitted as their own NRB iff they do not overlap any
-        already-built NRB on the same contig (validated standalones and
-        chain NRBs alike). Overlapping antiSMASH calls are absorbed — their
-        source ``DashboardBgc.non_redundant_bgc`` stays NULL and they are
+        are admitted as their own iBGC iff they do not overlap any
+        already-built iBGC on the same contig (validated standalones and
+        chain iBGCs alike). Overlapping antiSMASH calls are absorbed — their
+        source ``DashboardBgc.integrated_bgc`` stays NULL and they are
         reclassified later via KNN.
 
-    Source ``DashboardBgc`` rows point here via ``DashboardBgc.non_redundant_bgc``.
+    Source ``DashboardBgc`` rows point here via ``DashboardBgc.integrated_bgc``.
     Clustering writes ``gene_cluster_family`` and ``umap_x``/``umap_y`` here
-    on the clusterable subset (NRBs with at least one ``is_partial=False``
+    on the clusterable subset (iBGCs with at least one ``is_partial=False``
     or ``is_validated=True`` source); source BGCs inherit those values via
-    back-propagation. NRBs composed entirely of partial, non-validated
+    back-propagation. iBGCs composed entirely of partial, non-validated
     sources are skipped by the clustering pipeline; their source BGCs
     receive paths via ``reclassify_bgcs``.
     """
@@ -324,7 +324,7 @@ class NonRedundantBGC(models.Model):
     contig = models.ForeignKey(
         DashboardContig,
         on_delete=models.CASCADE,
-        related_name="non_redundant_bgcs",
+        related_name="integrated_bgcs",
         db_index=True,
     )
     start_position = models.IntegerField()
@@ -348,24 +348,24 @@ class NonRedundantBGC(models.Model):
         default=False,
         help_text=(
             "True when umap_x/y were derived by averaging top-K nearest primary "
-            "NRB coordinates (partials reclassified via KNN) rather than by the "
-            "main UMAP layout. False for NRBs included in the clustering pass."
+            "iBGC coordinates (partials reclassified via KNN) rather than by the "
+            "main UMAP layout. False for iBGCs included in the clustering pass."
         ),
     )
     novelty_score = models.FloatField(
         null=True,
         blank=True,
         help_text=(
-            "1 − max composite-Dice similarity to the nearest validated NRB. "
-            "NULL when there are no validated NRBs in this run."
+            "1 − max composite-Dice similarity to the nearest validated iBGC. "
+            "NULL when there are no validated iBGCs in this run."
         ),
     )
     domain_novelty = models.FloatField(
         null=True,
         blank=True,
         help_text=(
-            "Fraction of this NRB's domains not shared by any other NRB of the "
-            "same leaf GCF. NULL for singleton GCFs and for NRBs without any "
+            "Fraction of this iBGC's domains not shared by any other iBGC of the "
+            "same leaf GCF. NULL for singleton GCFs and for iBGCs without any "
             "domains of the selected sources."
         ),
     )
@@ -374,7 +374,7 @@ class NonRedundantBGC(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="non_redundant_bgcs",
+        related_name="integrated_bgcs",
     )
     classified_at = models.DateTimeField(null=True, blank=True)
 
@@ -382,23 +382,23 @@ class NonRedundantBGC(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "discovery_non_redundant_bgc"
+        db_table = "discovery_integrated_bgc"
         constraints = [
             models.UniqueConstraint(
                 fields=["contig", "start_position", "end_position"],
-                name="uniq_nrb_contig_pos",
+                name="uniq_ibgc_contig_pos",
             ),
         ]
         indexes = [
             models.Index(
                 fields=["contig", "start_position", "end_position"],
-                name="idx_nrb_contig_pos",
+                name="idx_ibgc_contig_pos",
             ),
-            models.Index(fields=["gene_cluster_family"], name="idx_nrb_gcf"),
+            models.Index(fields=["gene_cluster_family"], name="idx_ibgc_gcf"),
         ]
 
     def __str__(self):
-        return f"NRB#{self.pk} contig={self.contig_id} {self.start_position}-{self.end_position}"
+        return f"iBGC#{self.pk} contig={self.contig_id} {self.start_position}-{self.end_position}"
 
 
 # ── BGC ─────────────────────────────────────────────────────────────────────────
@@ -460,8 +460,8 @@ class DashboardBgc(models.Model):
     )
 
     # ── Classification provenance (set by the clustering pipeline) ──────
-    # ``primary``      — source BGC of a NonRedundantBGC that drove community detection
-    # ``merged``       — source BGC of a NonRedundantBGC (set at NRB-build time, before clustering)
+    # ``primary``      — source BGC of an IntegratedBGC that drove community detection
+    # ``merged``       — source BGC of an IntegratedBGC (set at iBGC-build time, before clustering)
     # ``knn``          — assigned post-hoc via KNN reclassification (partials, stale BGCs)
     # ``unclassified`` — never matched any community (default for new rows)
     CLASSIFICATION_SOURCE_CHOICES = [
@@ -509,9 +509,9 @@ class DashboardBgc(models.Model):
         help_text="2-digit incremental within region + detector",
     )
 
-    # Non-redundant BGC (set during NRB build; NULL for partials and absorbed antiSMASH calls)
-    non_redundant_bgc = models.ForeignKey(
-        NonRedundantBGC,
+    # Integrated BGC (set during iBGC build; NULL for partials and absorbed antiSMASH calls)
+    integrated_bgc = models.ForeignKey(
+        IntegratedBGC,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
@@ -677,10 +677,10 @@ class BgcDomain(models.Model):
 
 
 class ClusteringRun(models.Model):
-    """One NRB-domain/adjacency-Dice → KNN-graph → hierarchical-CPM-Leiden run.
+    """One iBGC-domain/adjacency-Dice → KNN-graph → hierarchical-CPM-Leiden run.
 
     Stores parameters and counts only. The hierarchy itself lives in DashboardGCF
-    rows (one per node), on NonRedundantBGC.gene_cluster_family (leaf path per NRB),
+    rows (one per node), on IntegratedBGC.gene_cluster_family (leaf path per iBGC),
     and on DashboardBgc.gene_cluster_family (back-propagated to source BGCs).
     Re-running with identical inputs yields the same ``sha256`` and therefore the
     same ``pk`` (idempotent via update_or_create).
@@ -706,7 +706,7 @@ class ClusteringRun(models.Model):
 
     # Counts
     n_proteins = models.PositiveIntegerField(default=0)
-    n_nrbs = models.PositiveIntegerField(default=0)
+    n_ibgcs = models.PositiveIntegerField(default=0)
     n_levels = models.PositiveSmallIntegerField(default=0)
     n_root_communities = models.PositiveIntegerField(default=0)
     n_leaf_communities = models.PositiveIntegerField(default=0)
@@ -799,12 +799,12 @@ class DashboardGCF(models.Model):
         return self.family_path
 
 
-class NonRedundantBGCClusteringSnapshot(models.Model):
-    """Frozen per-NRB classification at import time, for rollback.
+class IntegratedBGCClusteringSnapshot(models.Model):
+    """Frozen per-iBGC classification at import time, for rollback.
 
     The HPC importer (``import_clustering_results``) writes one row per
-    primary or partial NRB before overwriting the live columns on
-    ``NonRedundantBGC``. ``set_active_clustering_run`` reads these to
+    primary or partial iBGC before overwriting the live columns on
+    ``IntegratedBGC``. ``set_active_clustering_run`` reads these to
     restore a previous run's state without recomputing.
     """
 
@@ -812,10 +812,10 @@ class NonRedundantBGCClusteringSnapshot(models.Model):
     clustering_run = models.ForeignKey(
         ClusteringRun,
         on_delete=models.CASCADE,
-        related_name="nrb_snapshots",
+        related_name="ibgc_snapshots",
     )
-    nrb = models.ForeignKey(
-        "NonRedundantBGC",
+    ibgc = models.ForeignKey(
+        "IntegratedBGC",
         on_delete=models.CASCADE,
         related_name="clustering_snapshots",
     )
@@ -827,11 +827,11 @@ class NonRedundantBGCClusteringSnapshot(models.Model):
     domain_novelty = models.FloatField(null=True, blank=True)
 
     class Meta:
-        db_table = "discovery_nrb_clustering_snapshot"
+        db_table = "discovery_ibgc_clustering_snapshot"
         constraints = [
             models.UniqueConstraint(
-                fields=["clustering_run", "nrb"],
-                name="uniq_snapshot_run_nrb",
+                fields=["clustering_run", "ibgc"],
+                name="uniq_snapshot_run_ibgc",
             ),
         ]
         indexes = [
@@ -839,7 +839,7 @@ class NonRedundantBGCClusteringSnapshot(models.Model):
         ]
 
     def __str__(self):
-        return f"snapshot(run={self.clustering_run_id}, nrb={self.nrb_id})"
+        return f"snapshot(run={self.clustering_run_id}, ibgc={self.ibgc_id})"
 
 
 # ── Natural Product ──────────────────────────────────────────────────────────────

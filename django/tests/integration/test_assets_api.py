@@ -29,7 +29,7 @@ _disable_djdt = override_settings(
 
 
 def _has_umap_projected_column() -> bool:
-    """The dashboard's NRB roster query SELECTs ``umap_projected``. A pending
+    """The dashboard's iBGC roster query SELECTs ``umap_projected``. A pending
     migration on some local dev DBs leaves it unmigrated, which would fail
     these tests through no fault of the asset code under test. Skip in that
     case so the asset behaviour is still exercised by the round-trip /
@@ -41,7 +41,7 @@ def _has_umap_projected_column() -> bool:
         with connection.cursor() as c:
             c.execute(
                 "SELECT 1 FROM information_schema.columns "
-                "WHERE table_name = 'discovery_non_redundant_bgc' "
+                "WHERE table_name = 'discovery_integrated_bgc' "
                 "AND column_name = 'umap_projected'"
             )
             return c.fetchone() is not None
@@ -51,7 +51,7 @@ def _has_umap_projected_column() -> bool:
 
 _skip_if_unmigrated = pytest.mark.skipif(
     not _has_umap_projected_column(),
-    reason="discovery_non_redundant_bgc.umap_projected column missing — "
+    reason="discovery_integrated_bgc.umap_projected column missing — "
     "run `python manage.py migrate discovery` before running these tests.",
 )
 
@@ -155,16 +155,16 @@ def test_upload_round_trip(api_client, synchronous_task):
     assert status_resp.status_code == 200
     payload = status_resp.json()
     assert payload["state"] == "SUCCESS"
-    assert payload["summary"]["n_nrbs"] >= 1
+    assert payload["summary"]["n_ibgcs"] >= 1
 
-    # Manifest + nrb list should be present in the cache.
+    # Manifest + ibgc list should be present in the cache.
     assert cache.get(f"asset:{token}:manifest") is not None
-    assert cache.get(f"asset:{token}:nrbs") is not None
+    assert cache.get(f"asset:{token}:ibgcs") is not None
 
     # DELETE wipes them.
     evict = api_client.delete(f"/api/dashboard/assets/{token}/")
     assert evict.status_code == 204
-    assert cache.get(f"asset:{token}:nrbs") is None
+    assert cache.get(f"asset:{token}:ibgcs") is None
     assert cache.get(f"asset:{token}:status") is None
 
 
@@ -180,7 +180,7 @@ def test_status_unknown_token(api_client):
 @_skip_if_unmigrated
 @pytest.mark.django_db
 def test_roster_injects_asset_rows(api_client, synchronous_task):
-    """An asset_token on /nrbs/roster/ surfaces the cached asset NRBs at
+    """An asset_token on /ibgcs/roster/ surfaces the cached asset iBGCs at
     the top of page 1 with ``is_asset=True``."""
     raw = _minimal_tarball()
     upload = api_client.post(
@@ -191,7 +191,7 @@ def test_roster_injects_asset_rows(api_client, synchronous_task):
     token = upload.json()["token"]
 
     response = api_client.get(
-        f"/api/dashboard/nrbs/roster/?asset_token={token}"
+        f"/api/dashboard/ibgcs/roster/?asset_token={token}"
     )
     assert response.status_code == 200, response.content
     body = response.json()
@@ -214,7 +214,7 @@ def test_count_includes_asset_rows(api_client, synchronous_task):
     token = upload.json()["token"]
 
     response = api_client.get(
-        f"/api/dashboard/nrbs/count/?asset_token={token}"
+        f"/api/dashboard/ibgcs/count/?asset_token={token}"
     )
     assert response.status_code == 200
     assert response.json()["exact_count"] >= 1
@@ -224,7 +224,7 @@ def test_count_includes_asset_rows(api_client, synchronous_task):
 @_skip_if_unmigrated
 @pytest.mark.django_db
 def test_report_snapshot_accepts_asset_id(api_client, synchronous_task):
-    """Asset NRBs can be shortlisted into the Report endpoint."""
+    """Asset iBGCs can be shortlisted into the Report endpoint."""
     import json
 
     raw = _minimal_tarball()
@@ -235,37 +235,37 @@ def test_report_snapshot_accepts_asset_id(api_client, synchronous_task):
     )
     token = upload.json()["token"]
     roster = api_client.get(
-        f"/api/dashboard/nrbs/roster/?asset_token={token}"
+        f"/api/dashboard/ibgcs/roster/?asset_token={token}"
     ).json()
     neg_id = roster["items"][0]["id"]
 
     # No asset_token → 400.
     resp_no_token = api_client.post(
         "/api/dashboard/report/snapshot/",
-        data=json.dumps({"nrb_ids": [neg_id]}),
+        data=json.dumps({"ibgc_ids": [neg_id]}),
         content_type="application/json",
     )
     assert resp_no_token.status_code == 400
 
-    # With asset_token → snapshot succeeds with n_nrbs=1.
+    # With asset_token → snapshot succeeds with n_ibgcs=1.
     resp = api_client.post(
         "/api/dashboard/report/snapshot/",
-        data=json.dumps({"nrb_ids": [neg_id], "asset_token": token}),
+        data=json.dumps({"ibgc_ids": [neg_id], "asset_token": token}),
         content_type="application/json",
     )
     assert resp.status_code == 200, resp.content
     body = resp.json()
-    assert body["n_nrbs"] == 1
+    assert body["n_ibgcs"] == 1
 
-    # GET the snapshot and confirm the asset row is in nrb_rows.
+    # GET the snapshot and confirm the asset row is in ibgc_rows.
     report = api_client.get(f"/api/dashboard/report/{body['token']}/").json()
-    assert any(r["id"] == neg_id for r in report["nrb_rows"])
+    assert any(r["id"] == neg_id for r in report["ibgc_rows"])
 
 
 @_disable_djdt
 @_skip_if_unmigrated
 @pytest.mark.django_db
-def test_nrb_detail_resolves_asset_via_negative_id(api_client, synchronous_task):
+def test_ibgc_detail_resolves_asset_via_negative_id(api_client, synchronous_task):
     raw = _minimal_tarball()
     upload = api_client.post(
         UPLOAD_URL,
@@ -274,19 +274,19 @@ def test_nrb_detail_resolves_asset_via_negative_id(api_client, synchronous_task)
     )
     token = upload.json()["token"]
     roster = api_client.get(
-        f"/api/dashboard/nrbs/roster/?asset_token={token}"
+        f"/api/dashboard/ibgcs/roster/?asset_token={token}"
     ).json()
     neg_id = roster["items"][0]["id"]
 
     # Without the token header → 404.
-    no_header = api_client.get(f"/api/dashboard/nrbs/{neg_id}/")
+    no_header = api_client.get(f"/api/dashboard/ibgcs/{neg_id}/")
     assert no_header.status_code == 404
 
     # With the token header → asset payload.
     with_header = api_client.get(
-        f"/api/dashboard/nrbs/{neg_id}/", HTTP_X_ASSET_TOKEN=token
+        f"/api/dashboard/ibgcs/{neg_id}/", HTTP_X_ASSET_TOKEN=token
     )
     assert with_header.status_code == 200
     body = with_header.json()
     assert body["id"] == neg_id
-    assert body["label"].startswith("NRB-A")
+    assert body["label"].startswith("iBGC-A")

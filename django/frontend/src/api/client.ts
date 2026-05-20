@@ -124,7 +124,7 @@ export async function apiDelete(path: string): Promise<boolean> {
   return true;
 }
 
-/** GET with custom headers — used to thread X-Asset-Token through ``/nrbs/{id}/``. */
+/** GET with custom headers — used to thread X-Asset-Token through ``/ibgcs/{id}/``. */
 export async function apiGetWithHeaders<T>(
   path: string,
   extraHeaders: Record<string, string>,

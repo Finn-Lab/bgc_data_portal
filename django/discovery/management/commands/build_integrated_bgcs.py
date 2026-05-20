@@ -1,17 +1,17 @@
-"""Rebuild the NonRedundantBGC table.
+"""Rebuild the IntegratedBGC table.
 
 This is the pre-clustering step that consolidates latest-version BGC
-predictions into a non-redundant set: GECCO + SanntiS predictions merged on
+predictions into a integrated set: GECCO + SanntiS predictions merged on
 transitive interval overlap, plus standalone antiSMASH calls.
 """
 
 from django.core.management.base import BaseCommand
 
-from discovery.tasks import build_non_redundant_bgcs_task
+from discovery.tasks import build_integrated_bgcs_task
 
 
 class Command(BaseCommand):
-    help = "Rebuild the NonRedundantBGC table from latest-version BGC predictions"
+    help = "Rebuild the IntegratedBGC table from latest-version BGC predictions"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -27,11 +27,11 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["sync"]:
-            self.stdout.write("Building NonRedundantBGC table synchronously ...")
-            result = build_non_redundant_bgcs_task.apply().result
+            self.stdout.write("Building IntegratedBGC table synchronously ...")
+            result = build_integrated_bgcs_task.apply().result
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
         else:
-            res = build_non_redundant_bgcs_task.apply_async(queue=options["queue"])
+            res = build_integrated_bgcs_task.apply_async(queue=options["queue"])
             self.stdout.write(
-                self.style.SUCCESS(f"Dispatched build_non_redundant_bgcs_task: {res.id}")
+                self.style.SUCCESS(f"Dispatched build_integrated_bgcs_task: {res.id}")
             )

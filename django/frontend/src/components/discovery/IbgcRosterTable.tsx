@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNrbRoster } from "@/api/nrbs";
-import type { NrbRosterItem } from "@/api/types";
+import { fetchIbgcRoster } from "@/api/ibgcs";
+import type { IbgcRosterItem } from "@/api/types";
 import {
   Table,
   TableBody,
@@ -19,7 +19,7 @@ import {
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import { NrbContextMenu } from "./NrbContextMenu";
+import { IbgcContextMenu } from "./IbgcContextMenu";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
 type SortKey =
@@ -51,14 +51,14 @@ function columnsFor(searchSource: string | null) {
   // a Best hit column showing the protein_id of the winning CDS.
   if (searchSource === "sequence") {
     return [
-      { key: "label" as ColumnKey, label: "NRB" },
+      { key: "label" as ColumnKey, label: "iBGC" },
       { key: "bitscore" as ColumnKey, label: "Bitscore" },
       { key: "best_hit" as ColumnKey, label: "Best hit" },
       ...BASE_TAIL_COLUMNS,
     ];
   }
   return [
-    { key: "label" as ColumnKey, label: "NRB" },
+    { key: "label" as ColumnKey, label: "iBGC" },
     { key: "similarity" as ColumnKey, label: "Sim." },
     ...BASE_TAIL_COLUMNS,
   ];
@@ -68,24 +68,24 @@ function fmtScore(v: number | null): string {
   return v == null ? "—" : v.toFixed(3);
 }
 
-export function NrbRosterTable() {
+export function IbgcRosterTable() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(50);
   const [sortBy, setSortBy] = useState<SortKey>("novelty_score");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
 
-  const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
-  const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
-  const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const setCompareIbgcId = useDiscoveryStore((s) => s.setCompareIbgcId);
+  const compareIbgcId = useDiscoveryStore((s) => s.compareIbgcId);
+  const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
   const searchSource = useDiscoveryStore((s) => s.searchSource);
 
-  // When a Find-Similar-NRBs query lands the result allow-list is in
+  // When a Find-Similar-iBGCs query lands the result allow-list is in
   // similarity-descending order; default the roster sort to "similarity" so
   // the table mirrors that rank. The user can still click any other column
   // header to override. We trigger off ``searchSource`` so the same logic
   // covers any future similarity-emitting source.
   useEffect(() => {
-    if (searchSource === "similar_nrb") {
+    if (searchSource === "similar_ibgc") {
       setSortBy("similarity");
       setOrder("desc");
     }
@@ -103,12 +103,12 @@ export function NrbRosterTable() {
 
   const filterParams = appliedFiltersToApiParams(
     applied,
-    resultNrbIds,
+    resultIbgcIds,
     assetToken,
   );
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
-    resultNrbIds !== null ||
+    resultIbgcIds !== null ||
     assetToken !== null;
 
   // Reset to page 1 whenever the applied filter set or result allow-list
@@ -120,7 +120,7 @@ export function NrbRosterTable() {
   }, [filterKey]);
   const { data, isLoading, isError } = useQuery({
     queryKey: [
-      "nrb-roster",
+      "ibgc-roster",
       page,
       pageSize,
       sortBy,
@@ -128,7 +128,7 @@ export function NrbRosterTable() {
       filterParams,
     ],
     queryFn: () =>
-      fetchNrbRoster({
+      fetchIbgcRoster({
         page,
         page_size: pageSize,
         sort_by: sortBy,
@@ -153,14 +153,14 @@ export function NrbRosterTable() {
 
   if (!hasActiveScope) {
     return (
-      <div className="flex h-full flex-col" data-testid="nrb-roster">
-        <EmptyScopeMessage surface="NRB roster" />
+      <div className="flex h-full flex-col" data-testid="ibgc-roster">
+        <EmptyScopeMessage surface="iBGC roster" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col" data-testid="nrb-roster">
+    <div className="flex h-full flex-col" data-testid="ibgc-roster">
       <ScrollArea className="flex-1">
         <Table>
           <TableHeader className="sticky top-0 bg-card z-10">
@@ -211,24 +211,24 @@ export function NrbRosterTable() {
                   colSpan={COLUMNS.length}
                   className="text-center py-8 text-destructive"
                 >
-                  Failed to load NRBs.
+                  Failed to load iBGCs.
                 </TableCell>
               </TableRow>
             )}
             {!isLoading &&
-              items.map((nrb) => (
-                <NrbRosterRow
-                  key={nrb.id}
-                  nrb={nrb}
-                  selected={compareNrbId === nrb.id}
+              items.map((ibgc) => (
+                <IbgcRosterRow
+                  key={ibgc.id}
+                  ibgc={ibgc}
+                  selected={compareIbgcId === ibgc.id}
                   searchSource={searchSource}
                   similarityOverride={
-                    resultSimilarityById?.[nrb.id] ?? null
+                    resultSimilarityById?.[ibgc.id] ?? null
                   }
                   bestHitProteinOverride={
-                    resultBestHitProteinById?.[nrb.id] ?? null
+                    resultBestHitProteinById?.[ibgc.id] ?? null
                   }
-                  onSelect={() => setCompareNrbId(nrb.id)}
+                  onSelect={() => setCompareIbgcId(ibgc.id)}
                 />
               ))}
             {!isLoading && items.length === 0 && (
@@ -237,7 +237,7 @@ export function NrbRosterTable() {
                   colSpan={COLUMNS.length}
                   className="text-center py-8 text-muted-foreground"
                 >
-                  No NRBs found.
+                  No iBGCs found.
                 </TableCell>
               </TableRow>
             )}
@@ -255,51 +255,51 @@ export function NrbRosterTable() {
   );
 }
 
-interface NrbRosterRowProps {
-  nrb: NrbRosterItem;
+interface IbgcRosterRowProps {
+  ibgc: IbgcRosterItem;
   selected: boolean;
   searchSource: string | null;
   /** Bitscore / Dice score from the active query, overlaid on the row
-   *  because ``/nrbs/roster/`` doesn't carry per-query metrics. */
+   *  because ``/ibgcs/roster/`` doesn't carry per-query metrics. */
   similarityOverride: number | null;
   bestHitProteinOverride: string | null;
   onSelect: () => void;
 }
 
-function NrbRosterRow({
-  nrb,
+function IbgcRosterRow({
+  ibgc,
   selected,
   searchSource,
   similarityOverride,
   bestHitProteinOverride,
   onSelect,
-}: NrbRosterRowProps) {
+}: IbgcRosterRowProps) {
   const isSeq = searchSource === "sequence";
-  const similarity = similarityOverride ?? nrb.similarity_score;
-  const bestHit = bestHitProteinOverride ?? nrb.best_hit_protein_id;
+  const similarity = similarityOverride ?? ibgc.similarity_score;
+  const bestHit = bestHitProteinOverride ?? ibgc.best_hit_protein_id;
   return (
-    <NrbContextMenu
-      nrbId={nrb.id}
-      nrbLabel={nrb.label}
-      isPartial={nrb.umap_projected}
-      isAsset={nrb.is_asset}
+    <IbgcContextMenu
+      ibgcId={ibgc.id}
+      ibgcLabel={ibgc.label}
+      isPartial={ibgc.umap_projected}
+      isAsset={ibgc.is_asset}
     >
       <TableRow
         onClick={onSelect}
-        data-testid="nrb-roster-row"
-        data-nrb-id={nrb.id}
-        data-is-asset={nrb.is_asset || undefined}
+        data-testid="ibgc-roster-row"
+        data-ibgc-id={ibgc.id}
+        data-is-asset={ibgc.is_asset || undefined}
         className={
           "cursor-pointer " +
-          (nrb.is_asset
+          (ibgc.is_asset
             ? "bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 "
             : "") +
           (selected ? "bg-accent" : "hover:bg-muted/40")
         }
       >
         <TableCell className="font-mono text-xs">
-          {nrb.label}
-          {nrb.is_asset && (
+          {ibgc.label}
+          {ibgc.is_asset && (
             <Badge
               className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"
               style={{ backgroundColor: "#b45309" }}
@@ -308,12 +308,12 @@ function NrbRosterRow({
               SUBMITTED
             </Badge>
           )}
-          {nrb.is_validated && (
+          {ibgc.is_validated && (
             <Badge variant="default" className="ml-2 h-4 px-1 text-[10px]">
               Validated
             </Badge>
           )}
-          {nrb.is_type_strain && (
+          {ibgc.is_type_strain && (
             <Badge
               className="ml-2 h-4 px-1 text-[10px] text-white border-transparent"
               style={{ backgroundColor: "#018786" }}
@@ -321,7 +321,7 @@ function NrbRosterRow({
               Type Strain
             </Badge>
           )}
-          {nrb.umap_projected && (
+          {ibgc.umap_projected && (
             <Badge variant="outline" className="ml-2 h-4 px-1 text-[10px]">
               projected
             </Badge>
@@ -341,17 +341,17 @@ function NrbRosterRow({
             {similarity != null ? similarity.toFixed(3) : "—"}
           </TableCell>
         )}
-        <TableCell>{nrb.size_kb.toFixed(1)}</TableCell>
-        <TableCell>{fmtScore(nrb.novelty_score)}</TableCell>
-        <TableCell>{fmtScore(nrb.domain_novelty)}</TableCell>
+        <TableCell>{ibgc.size_kb.toFixed(1)}</TableCell>
+        <TableCell>{fmtScore(ibgc.novelty_score)}</TableCell>
+        <TableCell>{fmtScore(ibgc.domain_novelty)}</TableCell>
         <TableCell className="text-xs text-muted-foreground">
-          {nrb.source_tools.join(", ")}
+          {ibgc.source_tools.join(", ")}
         </TableCell>
         <TableCell className="text-xs">
-          {nrb.parent_assembly_accession ?? "—"}
+          {ibgc.parent_assembly_accession ?? "—"}
         </TableCell>
       </TableRow>
-    </NrbContextMenu>
+    </IbgcContextMenu>
   );
 }
 
@@ -366,7 +366,7 @@ function Pagination({ page, totalPages, totalCount, onChange }: PaginationProps)
   return (
     <div className="flex items-center justify-between border-t px-3 py-1.5 text-xs">
       <span className="text-muted-foreground">
-        {totalCount.toLocaleString()} NRBs · page {page}/{totalPages}
+        {totalCount.toLocaleString()} iBGCs · page {page}/{totalPages}
       </span>
       <div className="flex items-center gap-1">
         <Button

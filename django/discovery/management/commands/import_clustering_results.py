@@ -5,9 +5,9 @@ and writes:
 
   * a new (or updated-by-sha256) ``ClusteringRun`` row
   * ``DashboardGCF`` nodes for the tree
-  * ``NonRedundantBGC`` per-row classification (primaries + partial projections)
-  * ``DashboardBgc`` back-prop on source BGCs of primary NRBs
-  * ``NonRedundantBGCClusteringSnapshot`` per-NRB pre-import values for rollback
+  * ``IntegratedBGC`` per-row classification (primaries + partial projections)
+  * ``DashboardBgc`` back-prop on source BGCs of primary iBGCs
+  * ``IntegratedBGCClusteringSnapshot`` per-iBGC pre-import values for rollback
 
 The whole operation is wrapped in ``@transaction.atomic`` so a failure leaves
 the live state untouched. ``--dry-run`` validates the tarball and prints a
@@ -27,7 +27,7 @@ from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
-NRB_BULK_UPDATE_FIELDS = (
+IBGC_BULK_UPDATE_FIELDS = (
     "umap_x",
     "umap_y",
     "umap_projected",
@@ -42,7 +42,7 @@ NRB_BULK_UPDATE_FIELDS = (
 class Command(BaseCommand):
     help = (
         "Import an HPC bgc-cluster output tarball: upsert ClusteringRun, "
-        "DashboardGCF, NonRedundantBGC, DashboardBgc back-prop, partials, "
+        "DashboardGCF, IntegratedBGC, DashboardBgc back-prop, partials, "
         "and rollback snapshot."
     )
 
@@ -69,15 +69,15 @@ class Command(BaseCommand):
         payload = read_outputs_tarball(tarball)
         run_meta = payload["run"]
         sha = run_meta["sha256"]
-        n_primary = len(payload["hierarchy"]["nrb_id"])
-        n_partials = len(payload["partial_assignments"]["nrb_id"])
+        n_primary = len(payload["hierarchy"]["ibgc_id"])
+        n_partials = len(payload["partial_assignments"]["ibgc_id"])
 
         self.stdout.write(
             f"Tarball: {tarball.name}\n"
             f"  sha256:       {sha}\n"
             f"  device:       {run_meta.get('device')}\n"
-            f"  primary NRBs: {n_primary}\n"
-            f"  partial NRBs: {n_partials}\n"
+            f"  primary iBGCs: {n_primary}\n"
+            f"  partial iBGCs: {n_partials}\n"
             f"  GCF nodes:    {len(payload['gcf_nodes']['family_path'])}\n"
             f"  levels:       {run_meta.get('n_levels')}\n"
         )
@@ -117,7 +117,7 @@ class Command(BaseCommand):
             "leiden_resolutions": params.get("leiden_resolutions", []),
             "seed": int(params.get("seed") or 42),
             "n_proteins": 0,
-            "n_nrbs": int(run_meta.get("n_nrbs", 0)),
+            "n_ibgcs": int(run_meta.get("n_ibgcs", 0)),
             "n_levels": int(run_meta.get("n_levels", 0)),
             "n_root_communities": int(run_meta.get("n_root_communities", 0)),
             "n_leaf_communities": int(run_meta.get("n_leaf_communities", 0)),
@@ -138,23 +138,23 @@ class Command(BaseCommand):
         DashboardGCF.objects.filter(clustering_run=run).delete()
         self._import_gcfs(run, payload["gcf_nodes"])
 
-        # Snapshot the *current* per-NRB columns of every NRB we'll touch,
+        # Snapshot the *current* per-iBGC columns of every iBGC we'll touch,
         # so set_active_clustering_run can roll back.
-        primary_ids = [int(x) for x in payload["hierarchy"]["nrb_id"]]
-        partial_ids = [int(x) for x in payload["partial_assignments"]["nrb_id"]]
+        primary_ids = [int(x) for x in payload["hierarchy"]["ibgc_id"]]
+        partial_ids = [int(x) for x in payload["partial_assignments"]["ibgc_id"]]
         touched_ids = primary_ids + partial_ids
         if touched_ids:
             self._snapshot_existing(run, touched_ids)
 
-        # Apply primary NRB classification.
+        # Apply primary iBGC classification.
         now = timezone.now()
-        self._update_primary_nrbs(run, payload, now)
+        self._update_primary_ibgcs(run, payload, now)
 
         # Back-propagate to source DashboardBgcs.
         self._backprop_dashboard_bgcs(run, payload, now)
 
         # Apply partial projections.
-        self._update_partial_nrbs(run, payload, now)
+        self._update_partial_ibgcs(run, payload, now)
 
         return run
 
@@ -163,26 +163,26 @@ class Command(BaseCommand):
     def _import_gcfs(self, run, gcf_table: dict):
         from discovery.models import DashboardBgc, DashboardGCF
 
-        rep_nrb_ids = [int(x) for x in gcf_table.get("representative_nrb_id", [])]
-        # Resolve representative_nrb_id -> a source DashboardBgc.id once per NRB.
+        rep_ibgc_ids = [int(x) for x in gcf_table.get("representative_ibgc_id", [])]
+        # Resolve representative_ibgc_id -> a source DashboardBgc.id once per iBGC.
         rep_bgc_map: dict[int, int | None] = {}
-        if rep_nrb_ids:
-            unique_ids = list({i for i in rep_nrb_ids if i})
+        if rep_ibgc_ids:
+            unique_ids = list({i for i in rep_ibgc_ids if i})
             qs = (
                 DashboardBgc.objects.filter(
-                    non_redundant_bgc_id__in=_bigint_array_in(unique_ids),
+                    integrated_bgc_id__in=_bigint_array_in(unique_ids),
                 )
-                .order_by("non_redundant_bgc_id", "id")
-                .values_list("non_redundant_bgc_id", "id")
+                .order_by("integrated_bgc_id", "id")
+                .values_list("integrated_bgc_id", "id")
             )
-            for nrb_id, bgc_id in qs:
-                rep_bgc_map.setdefault(int(nrb_id), int(bgc_id))
+            for ibgc_id, bgc_id in qs:
+                rep_bgc_map.setdefault(int(ibgc_id), int(bgc_id))
 
         rows: list[DashboardGCF] = []
         n = len(gcf_table.get("family_path", []))
         for i in range(n):
-            rep_nrb = rep_nrb_ids[i] if i < len(rep_nrb_ids) else None
-            rep_bgc_id = rep_bgc_map.get(int(rep_nrb)) if rep_nrb else None
+            rep_ibgc = rep_ibgc_ids[i] if i < len(rep_ibgc_ids) else None
+            rep_bgc_id = rep_bgc_map.get(int(rep_ibgc)) if rep_ibgc else None
             rows.append(
                 DashboardGCF(
                     clustering_run=run,
@@ -199,85 +199,85 @@ class Command(BaseCommand):
 
     # ── Snapshot ────────────────────────────────────────────────────────────
 
-    def _snapshot_existing(self, run, nrb_ids: list[int]):
+    def _snapshot_existing(self, run, ibgc_ids: list[int]):
         from discovery.models import (
-            NonRedundantBGC,
-            NonRedundantBGCClusteringSnapshot,
+            IntegratedBGC,
+            IntegratedBGCClusteringSnapshot,
         )
 
         existing = list(
-            NonRedundantBGC.objects.filter(id__in=_bigint_array_in(nrb_ids))
+            IntegratedBGC.objects.filter(id__in=_bigint_array_in(ibgc_ids))
             .only(
                 "id", "umap_x", "umap_y", "umap_projected",
                 "gene_cluster_family", "novelty_score", "domain_novelty",
             )
         )
         snaps = [
-            NonRedundantBGCClusteringSnapshot(
+            IntegratedBGCClusteringSnapshot(
                 clustering_run=run,
-                nrb_id=nrb.id,
-                umap_x=nrb.umap_x,
-                umap_y=nrb.umap_y,
-                umap_projected=nrb.umap_projected,
-                gene_cluster_family=nrb.gene_cluster_family or "",
-                novelty_score=nrb.novelty_score,
-                domain_novelty=nrb.domain_novelty,
+                ibgc_id=ibgc.id,
+                umap_x=ibgc.umap_x,
+                umap_y=ibgc.umap_y,
+                umap_projected=ibgc.umap_projected,
+                gene_cluster_family=ibgc.gene_cluster_family or "",
+                novelty_score=ibgc.novelty_score,
+                domain_novelty=ibgc.domain_novelty,
             )
-            for nrb in existing
+            for ibgc in existing
         ]
         # Wipe any existing snapshot rows for this run (idempotent re-import).
-        NonRedundantBGCClusteringSnapshot.objects.filter(clustering_run=run).delete()
-        NonRedundantBGCClusteringSnapshot.objects.bulk_create(
+        IntegratedBGCClusteringSnapshot.objects.filter(clustering_run=run).delete()
+        IntegratedBGCClusteringSnapshot.objects.bulk_create(
             snaps, batch_size=5_000, ignore_conflicts=False,
         )
         log.info("Snapshot wrote %d rows for run pk=%s", len(snaps), run.pk)
 
-    # ── Primary NRBs ────────────────────────────────────────────────────────
+    # ── Primary iBGCs ────────────────────────────────────────────────────────
 
-    def _update_primary_nrbs(self, run, payload: dict, now):
-        from discovery.models import NonRedundantBGC
+    def _update_primary_ibgcs(self, run, payload: dict, now):
+        from discovery.models import IntegratedBGC
 
         h = payload["hierarchy"]
         coords = payload["coords"]
         scores = payload["scores"]
-        n = len(h["nrb_id"])
+        n = len(h["ibgc_id"])
         if n == 0:
             return
 
         coords_by_id = {
-            int(coords["nrb_id"][i]): (
+            int(coords["ibgc_id"][i]): (
                 float(coords["umap_x"][i]),
                 float(coords["umap_y"][i]),
             )
-            for i in range(len(coords["nrb_id"]))
+            for i in range(len(coords["ibgc_id"]))
         }
         scores_by_id = {
-            int(scores["nrb_id"][i]): (
+            int(scores["ibgc_id"][i]): (
                 scores["novelty_score"][i],
                 scores["domain_novelty"][i],
             )
-            for i in range(len(scores["nrb_id"]))
+            for i in range(len(scores["ibgc_id"]))
         }
 
-        nrb_ids = [int(x) for x in h["nrb_id"]]
+        ibgc_ids = [int(x) for x in h["ibgc_id"]]
         leaf_paths = list(h["leaf_path"])
-        rows = list(NonRedundantBGC.objects.filter(id__in=_bigint_array_in(nrb_ids)))
-        leaf_by_id = dict(zip(nrb_ids, leaf_paths))
-        for nrb in rows:
-            x, y = coords_by_id.get(nrb.id, (None, None))
-            nv, dn = scores_by_id.get(nrb.id, (None, None))
-            nrb.umap_x = x
-            nrb.umap_y = y
-            nrb.umap_projected = False
-            nrb.gene_cluster_family = leaf_by_id[nrb.id]
-            nrb.novelty_score = nv
-            nrb.domain_novelty = dn
-            nrb.classification_run = run
-            nrb.classified_at = now
-        NonRedundantBGC.objects.bulk_update(
-            rows, list(NRB_BULK_UPDATE_FIELDS), batch_size=5_000,
+        rows = list(IntegratedBGC.objects.filter(id__in=_bigint_array_in(ibgc_ids)))
+        leaf_by_id = dict(zip(ibgc_ids, leaf_paths))
+        for ibgc in rows:
+            x, y = coords_by_id.get(ibgc.id, (None, None))
+            nv, dn = scores_by_id.get(ibgc.id, (None, None))
+            ibgc.umap_x = x
+            ibgc.umap_y = y
+            ibgc.umap_projected = False
+            ibgc.gene_cluster_family = leaf_by_id[ibgc.id]
+            ibgc.novelty_score = nv
+            ibgc.domain_novelty = dn
+            ibgc.classification_run = run
+            ibgc.classified_at = now
+        IntegratedBGC.objects.bulk_update(
+            rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
         )
-        log.info("Updated %d primary NonRedundantBGC rows", len(rows))
+        log.info("Updated %d primary IntegratedBGC rows", len(rows))
 
     # ── DashboardBgc back-prop ─────────────────────────────────────────────
 
@@ -286,32 +286,32 @@ class Command(BaseCommand):
 
         h = payload["hierarchy"]
         coords = payload["coords"]
-        nrb_ids = [int(x) for x in h["nrb_id"]]
-        if not nrb_ids:
+        ibgc_ids = [int(x) for x in h["ibgc_id"]]
+        if not ibgc_ids:
             return
-        leaf_by_id = dict(zip(nrb_ids, h["leaf_path"]))
+        leaf_by_id = dict(zip(ibgc_ids, h["leaf_path"]))
         coords_by_id = {
-            int(coords["nrb_id"][i]): (
+            int(coords["ibgc_id"][i]): (
                 float(coords["umap_x"][i]),
                 float(coords["umap_y"][i]),
             )
-            for i in range(len(coords["nrb_id"]))
+            for i in range(len(coords["ibgc_id"]))
         }
 
         source_bgcs = list(
             DashboardBgc.objects.filter(
-                non_redundant_bgc_id__in=_bigint_array_in(nrb_ids),
+                integrated_bgc_id__in=_bigint_array_in(ibgc_ids),
             ).only(
-                "id", "non_redundant_bgc_id", "umap_x", "umap_y",
+                "id", "integrated_bgc_id", "umap_x", "umap_y",
                 "gene_cluster_family", "classification_source",
                 "classification_run_id", "classified_at",
             )
         )
         for bgc in source_bgcs:
-            x, y = coords_by_id.get(bgc.non_redundant_bgc_id, (None, None))
+            x, y = coords_by_id.get(bgc.integrated_bgc_id, (None, None))
             bgc.umap_x = x
             bgc.umap_y = y
-            bgc.gene_cluster_family = leaf_by_id.get(bgc.non_redundant_bgc_id, "")
+            bgc.gene_cluster_family = leaf_by_id.get(bgc.integrated_bgc_id, "")
             bgc.classification_source = "primary"
             bgc.classification_run = run
             bgc.classified_at = now
@@ -327,14 +327,14 @@ class Command(BaseCommand):
 
     # ── Partial projections ────────────────────────────────────────────────
 
-    def _update_partial_nrbs(self, run, payload: dict, now):
-        from discovery.models import NonRedundantBGC
+    def _update_partial_ibgcs(self, run, payload: dict, now):
+        from discovery.models import IntegratedBGC
 
         p = payload["partial_assignments"]
-        n = len(p["nrb_id"])
+        n = len(p["ibgc_id"])
         if n == 0:
             return
-        ids = [int(x) for x in p["nrb_id"]]
+        ids = [int(x) for x in p["ibgc_id"]]
         leaf = list(p["leaf_path"])
         ux = [_maybe_float(x) for x in p["umap_x"]]
         uy = [_maybe_float(x) for x in p["umap_y"]]
@@ -342,21 +342,21 @@ class Command(BaseCommand):
         dn = [_maybe_float(x) for x in p["domain_novelty"]]
         by_id = {ids[i]: (leaf[i], ux[i], uy[i], nv[i], dn[i]) for i in range(n)}
 
-        rows = list(NonRedundantBGC.objects.filter(id__in=_bigint_array_in(ids)))
-        for nrb in rows:
-            leaf_p, x, y, novelty, dom = by_id[nrb.id]
-            nrb.umap_x = x
-            nrb.umap_y = y
-            nrb.umap_projected = True
-            nrb.gene_cluster_family = leaf_p or ""
-            nrb.novelty_score = novelty
-            nrb.domain_novelty = dom
-            nrb.classification_run = run
-            nrb.classified_at = now
-        NonRedundantBGC.objects.bulk_update(
-            rows, list(NRB_BULK_UPDATE_FIELDS), batch_size=5_000,
+        rows = list(IntegratedBGC.objects.filter(id__in=_bigint_array_in(ids)))
+        for ibgc in rows:
+            leaf_p, x, y, novelty, dom = by_id[ibgc.id]
+            ibgc.umap_x = x
+            ibgc.umap_y = y
+            ibgc.umap_projected = True
+            ibgc.gene_cluster_family = leaf_p or ""
+            ibgc.novelty_score = novelty
+            ibgc.domain_novelty = dom
+            ibgc.classification_run = run
+            ibgc.classified_at = now
+        IntegratedBGC.objects.bulk_update(
+            rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
         )
-        log.info("Updated %d partial-projection NonRedundantBGC rows", len(rows))
+        log.info("Updated %d partial-projection IntegratedBGC rows", len(rows))
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

@@ -4,14 +4,14 @@ import {
   useDiscoveryStore,
   type ResultsTab,
 } from "@/stores/discovery-store";
-import { NrbRosterTable } from "./NrbRosterTable";
+import { IbgcRosterTable } from "./IbgcRosterTable";
 import { VariablesMapTab } from "./VariablesMapTab";
 import { UmapMapTab } from "./UmapMapTab";
 
 /**
  * The Results card. Three tabs share a single right-click context menu and
- * a single left-click handler (sets `compareNrbId` in the discovery store).
- * Each tab renders the same underlying NRB set in a different projection.
+ * a single left-click handler (sets `compareIbgcId` in the discovery store).
+ * Each tab renders the same underlying iBGC set in a different projection.
  */
 export function ResultsCard() {
   const activeTab = useDiscoveryStore((s) => s.activeResultsTab);
@@ -42,7 +42,7 @@ export function ResultsCard() {
           value="roster"
           className="flex-1 overflow-hidden p-0 data-[state=inactive]:hidden"
         >
-          <NrbRosterTable />
+          <IbgcRosterTable />
         </TabsContent>
         <TabsContent
           value="variables"

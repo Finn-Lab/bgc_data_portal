@@ -16,7 +16,7 @@ docker compose exec django pytest tests/unit/test_foo.py::test_name -q  # Single
 pytest tests/e2e/playwright/specs/test_bgc_journey.py -q \
     --e2e-base-url http://localhost:8000              # legacy /mgnify_bgcs surface
 pytest tests/e2e/playwright/specs/test_v2_discovery_journey.py -q \
-    --e2e-v2-base-url http://localhost:8000           # v2 NRB-first dashboard
+    --e2e-v2-base-url http://localhost:8000           # v2 iBGC-first dashboard
 ```
 
 ### Code quality
@@ -32,7 +32,7 @@ pre-commit run --all-files
 ```bash
 docker compose exec django python manage.py migrate
 docker compose exec django python manage.py collectstatic
-docker compose exec django python manage.py build_non_redundant_bgcs
+docker compose exec django python manage.py build_integrated_bgcs
 
 # Clustering is an HPC handoff in prod (CLUSTERING_HPC_MODE=True):
 #   1. export signature matrices, ship to HPC, run `bgc-cluster run`
@@ -40,7 +40,7 @@ docker compose exec django python manage.py export_clustering_inputs --run-tag <
 #   2. (HPC) sbatch deployments/cronjobs/slurm/bgc_clustering_cpu.sh in.tgz out.tgz
 #   3. import the result tarball back into the DB
 docker compose exec django python manage.py import_clustering_results /data/clustering_artifacts/imports/<tag>.tgz
-#   rollback: restore per-NRB columns from a previous run's snapshot
+#   rollback: restore per-iBGC columns from a previous run's snapshot
 docker compose exec django python manage.py set_active_clustering_run --sha <previous_sha>
 
 # Dev-only (CLUSTERING_HPC_MODE unset): in-portal clustering still works.
@@ -56,8 +56,8 @@ docker compose exec django python manage.py update_discovery_stats
 ```
 django/
   bgc_data_portal/        # Project settings, root URLs, template views
-  discovery/              # v2 Discovery app (NRB-first)
-    models.py             # ORM models (NonRedundantBGC, DashboardBgc, ClusteringRun, …)
+  discovery/              # v2 Discovery app (iBGC-first)
+    models.py             # ORM models (IntegratedBGC, DashboardBgc, ClusteringRun, …)
     api.py                # Django Ninja REST API (OpenAPI at /api/docs)
     api_schemas.py        # Pydantic schemas for API I/O
     tasks.py              # Celery async tasks
@@ -65,7 +65,7 @@ django/
     services/             # Business logic layer
       clustering/         # Domain+adjacency Dice → KNN → hierarchical Leiden
         pipeline.py       # Orchestrator (persists per-run scoring cache)
-        nrb_scoring.py    # NRB novelty + domain_novelty + partial projection
+        ibgc_scoring.py    # iBGC novelty + domain_novelty + partial projection
         reclassify.py     # KNN reclassification of non-primary DashboardBgcs
         metrics.py        # Sørensen–Dice similarity
         bgc_similarity.py # Composite weighted-mean Dice
@@ -73,8 +73,8 @@ django/
         leiden.py         # Hierarchical CPM Leiden
         layout.py         # UMAP (precomputed_knn) → DRL fallback
         adjacency.py      # Adjacency-pair matrix builder
-        membership.py     # NRB × domain binary matrix builder
-        non_redundant.py  # NonRedundantBGC table builder
+        membership.py     # iBGC × domain binary matrix builder
+        integrated.py  # IntegratedBGC table builder
       protein_search/     # phmmer-based sequence search
       report.py           # Shortlist Report payload builder
       stats.py            # Aggregations for BGC/Assembly stats panels
@@ -88,15 +88,15 @@ django/
 
 ## Key Patterns
 
-**NRB-first** — In v2 the dashboard surfaces ``NonRedundantBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the NRB. `NonRedundantBGC.umap_projected = True` marks coords averaged from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered.
+**iBGC-first** — In v2 the dashboard surfaces ``IntegratedBGC`` rows (each consolidates one or more source ``DashboardBgc`` predictions). Old BGC-level endpoints (`/bgcs/{id}/`) still exist for drill-down but the primary unit everywhere is the iBGC. `IntegratedBGC.umap_projected = True` marks coords averaged from top-K primary neighbours (partials reclassified via KNN); `False` means the row was directly clustered.
 
-**Composite-Dice similarity** — Replaces the retired ESM embedding HNSW. Per `ClusteringRun`, ``run_clustering_pipeline`` builds the NRB×NRB composite-Dice matrix (`w_d · Dice(domains) + w_a · Dice(adjacency-pairs)`) and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds NRB novelty scoring and the `/query/similar-nrb/` endpoint.
+**Composite-Dice similarity** — Replaces the retired ESM embedding HNSW. Per `ClusteringRun`, ``run_clustering_pipeline`` builds the iBGC×iBGC composite-Dice matrix (`w_d · Dice(domains) + w_a · Dice(adjacency-pairs)`) and persists it under `<CLUSTERING_ARTIFACTS_DIR>/<sha[:12]>/scoring_cache/`. The cache feeds iBGC novelty scoring and the `/query/similar-ibgc/` endpoint.
 
-**NRB scoring** — `novelty_score = 1 − max(sim to validated NRB)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / NRBs without source-vocab domains). Computed inline by the pipeline (primary NRBs) and by `project_partial_nrbs` (partials, after reclassify).
+**iBGC scoring** — `novelty_score = 1 − max(sim to validated iBGC)` and `domain_novelty = |domains unique within leaf GCF| / |domains|` (NULL for singleton GCFs / iBGCs without source-vocab domains). Computed inline by the pipeline (primary iBGCs) and by `project_partial_ibgcs` (partials, after reclassify).
 
 **Async search** — POST to a search endpoint returns HTTP 202 with a `task_id`; poll the job-status endpoint for results. All search tasks run through Celery (RabbitMQ broker, Redis result backend). Sequence search uses pyhmmer's phmmer.
 
-**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 NRB ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in Redis (`report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
+**Shortlist Report** — Stateless. `POST /report/snapshot/` accepts ≤100 iBGC ids and returns a deterministic `sha256(sorted ids)[:32]` token after materialising the payload in Redis (`report:{token}` with 24h TTL). `GET /report/{token}/` serves the cached payload. No DB table; reload-safe within the TTL window.
 
 **Ingestion** — stream-based NDJSON packages; all writes are idempotent upserts keyed on stable identifiers.
 

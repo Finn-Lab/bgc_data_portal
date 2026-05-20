@@ -1,6 +1,6 @@
 """Tests for the pooled positional architecture helper.
 
-Mirrors the ordering rule used by ``build_nrb_adjacency_pair_matrix`` so
+Mirrors the ordering rule used by ``build_ibgc_adjacency_pair_matrix`` so
 both surfaces stay in lockstep.
 """
 
@@ -12,11 +12,11 @@ from discovery.models import (
     BgcDomain,
     DashboardBgc,
     DashboardCds,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 from discovery.services.architecture import (
     bgc_architecture,
-    nrb_architecture,
+    ibgc_architecture,
 )
 from tests.factories.discovery_models import DashboardContigFactory
 
@@ -34,17 +34,17 @@ def _bgc(contig, start=1, end=10_000):
     )
 
 
-def _nrb(contig, *, source_bgcs):
-    nrb = NonRedundantBGC.objects.create(
+def _ibgc(contig, *, source_bgcs):
+    ibgc = IntegratedBGC.objects.create(
         contig=contig,
         start_position=1,
         end_position=10_000,
         source_tools=["GECCO"],
     )
     DashboardBgc.objects.filter(id__in=[b.id for b in source_bgcs]).update(
-        non_redundant_bgc=nrb, classification_source="merged",
+        integrated_bgc=ibgc, classification_source="merged",
     )
-    return nrb
+    return ibgc
 
 
 def _cds(bgc, start, end):
@@ -77,11 +77,11 @@ def test_bgc_architecture_is_positional_not_alphabetical():
     assert [r["domain_acc"] for r in rows] == ["C", "A", "B"]
 
 
-def test_nrb_architecture_pools_across_member_bgcs():
+def test_ibgc_architecture_pools_across_member_bgcs():
     contig = DashboardContigFactory()
     bgc_a = _bgc(contig, start=1, end=5_000)
     bgc_b = _bgc(contig, start=5_001, end=10_000)
-    nrb = _nrb(contig, source_bgcs=[bgc_a, bgc_b])
+    ibgc = _ibgc(contig, source_bgcs=[bgc_a, bgc_b])
 
     cds_a = _cds(bgc_a, 100, 400)
     cds_b1 = _cds(bgc_b, 6_000, 6_400)
@@ -91,11 +91,11 @@ def test_nrb_architecture_pools_across_member_bgcs():
     _domain(bgc_b, cds=cds_b2, acc="C")
 
     member_ids = list(
-        DashboardBgc.objects.filter(non_redundant_bgc=nrb).values_list(
+        DashboardBgc.objects.filter(integrated_bgc=ibgc).values_list(
             "id", flat=True,
         )
     )
-    rows = nrb_architecture(member_ids)
+    rows = ibgc_architecture(member_ids)
     assert [r["domain_acc"] for r in rows] == ["A", "B", "C"]
 
 

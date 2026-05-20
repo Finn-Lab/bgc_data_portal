@@ -10,10 +10,10 @@ Computes all derived scores and materialized tables from raw loaded data:
 
 BGC-level novelty (``DashboardBgc.novelty_score``) and ``domain_novelty``
 were previously computed here from ESM-300M embeddings; both are retired in
-the v2 redesign in favour of NRB-level scoring written by
-``discovery.services.clustering.nrb_scoring`` over the composite-Dice
+the v2 redesign in favour of iBGC-level scoring written by
+``discovery.services.clustering.ibgc_scoring`` over the composite-Dice
 matrix. The DashboardBgc columns remain in the schema but are no longer
-recomputed — drill-down views read scores from the parent NonRedundantBGC.
+recomputed — drill-down views read scores from the parent IntegratedBGC.
 """
 
 from __future__ import annotations

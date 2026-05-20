@@ -1,7 +1,7 @@
 import { useDiscoveryStore } from "@/stores/discovery-store";
-import { CompactNrbDetail } from "./CompactNrbDetail";
+import { CompactIbgcDetail } from "./CompactIbgcDetail";
 
 export function ReferenceDetailSlot() {
-  const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
-  return <CompactNrbDetail nrbId={referenceNrbId} variant="reference" />;
+  const referenceIbgcId = useDiscoveryStore((s) => s.referenceIbgcId);
+  return <CompactIbgcDetail ibgcId={referenceIbgcId} variant="reference" />;
 }

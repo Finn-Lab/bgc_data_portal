@@ -4,9 +4,9 @@ Pipeline:
 
 1. Walk asset BGCs per contig and apply the canonical overlap-chain rules
    (validated standalones, GECCO+SanntiS chains, antiSMASH absorb-or-emit)
-   via the shared :func:`non_redundant._build_nrbs_for_contig`. Each
-   resulting NRB gets a negative integer id and is materialised as a
-   ``VirtualNrb`` carrying its member BGCs, CDS rows, domains, and NPs.
+   via the shared :func:`integrated._build_ibgcs_for_contig`. Each
+   resulting iBGC gets a negative integer id and is materialised as a
+   ``VirtualIbgc`` carrying its member BGCs, CDS rows, domains, and NPs.
 
 2. Load the most recent ``ClusteringRun``'s scoring cache from disk —
    primary domain matrix, primary adjacency-pair matrix, vocabularies,
@@ -14,21 +14,21 @@ Pipeline:
 
 3. Build the asset's domain + adjacency-pair matrices on the same column
    space, stack them under the primary matrices, run composite-Dice
-   similarity, take the top-K nearest primary neighbours per virtual NRB
+   similarity, take the top-K nearest primary neighbours per virtual iBGC
    and compute:
 
    * ``gene_cluster_family`` — weighted-vote leaf path of the K neighbours
    * ``umap_x`` / ``umap_y`` — similarity-weighted average of neighbours'
      coordinates
-   * ``novelty_score``       — ``1 − max(sim to validated primary NRB)``
-   * ``domain_novelty``      — fraction of this NRB's domains not present
+   * ``novelty_score``       — ``1 − max(sim to validated primary iBGC)``
+   * ``domain_novelty``      — fraction of this iBGC's domains not present
      in any primary member of the inherited leaf GCF
 
-   NRBs without any source-vocabulary overlap keep ``None``/``""`` for the
+   iBGCs without any source-vocabulary overlap keep ``None``/``""`` for the
    four quantities — they still appear in the roster, just dimmed on the
    maps.
 
-4. Materialise per-NRB Redis payloads (manifest, roster rows, NrbDetail,
+4. Materialise per-iBGC Redis payloads (manifest, roster rows, IbgcDetail,
    region, architecture) under the ``asset:{token}:*`` keyspace.
 """
 
@@ -67,8 +67,8 @@ MIN_TOTAL_SIMILARITY = 0.1
 
 
 @dataclass
-class VirtualNrb:
-    """One ephemeral NRB built from the asset, with everything its detail /
+class VirtualIbgc:
+    """One ephemeral iBGC built from the asset, with everything its detail /
     region / architecture payloads need pre-joined."""
 
     neg_id: int  # negative integer id (-1, -2, …)
@@ -102,22 +102,22 @@ class VirtualNrb:
 
     @property
     def label(self) -> str:
-        return f"NRB-A{abs(self.neg_id)}"
+        return f"iBGC-A{abs(self.neg_id)}"
 
 
-# ── Step 1: build virtual NRBs from asset rows ─────────────────────────────
+# ── Step 1: build virtual iBGCs from asset rows ─────────────────────────────
 
 
-def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
-    """Return the asset's virtual NRBs with negative ids assigned.
+def build_virtual_ibgcs(data: AssetData) -> list[VirtualIbgc]:
+    """Return the asset's virtual iBGCs with negative ids assigned.
 
     Reuses the canonical overlap-chain algorithm from
-    :func:`discovery.services.clustering.non_redundant._build_nrbs_for_contig`
+    :func:`discovery.services.clustering.integrated._build_ibgcs_for_contig`
     by giving each asset BGC a transient positive integer id, mapping back
     after the chains are formed.
     """
-    from discovery.services.clustering.non_redundant import (
-        _build_nrbs_for_contig,
+    from discovery.services.clustering.integrated import (
+        _build_ibgcs_for_contig,
     )
 
     asm_lookup = data.assembly_lookup()
@@ -133,7 +133,7 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
     for cls in data.cds_chemont:
         cds_chemont_by_bgc_protein[(cls.bgc_key, cls.protein_id_str)] = cls
 
-    virtual: list[VirtualNrb] = []
+    virtual: list[VirtualIbgc] = []
     next_neg_id = -1
 
     for contig_sha, bgcs in bgcs_by_contig.items():
@@ -158,12 +158,12 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
             )
             for i, b in id_to_bgc.items()
         ]
-        nrb_tuples, _absorbed, _validated_standalones = _build_nrbs_for_contig(
+        ibgc_tuples, _absorbed, _validated_standalones = _build_ibgcs_for_contig(
             contig_id=0,  # unused
             rows=rows,
         )
 
-        for interval_start, interval_end, source_tools, member_ids in nrb_tuples:
+        for interval_start, interval_end, source_tools, member_ids in ibgc_tuples:
             members = [id_to_bgc[i] for i in member_ids]
             cds_rows: list[AssetCds] = []
             dom_rows: list[AssetDomain] = []
@@ -184,7 +184,7 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
             )
             is_validated = any(m.is_validated for m in members)
 
-            vnrb = VirtualNrb(
+            vibgc = VirtualIbgc(
                 neg_id=next_neg_id,
                 contig_sha256=contig_sha,
                 contig_accession=contig.accession,
@@ -202,10 +202,10 @@ def build_virtual_nrbs(data: AssetData) -> list[VirtualNrb]:
                 natural_products=np_rows,
                 cds_chemont=cds_chemont_rows,
             )
-            virtual.append(vnrb)
+            virtual.append(vibgc)
             next_neg_id -= 1
 
-    log.info("build_virtual_nrbs: built %d virtual NRBs", len(virtual))
+    log.info("build_virtual_ibgcs: built %d virtual iBGCs", len(virtual))
     return virtual
 
 
@@ -220,28 +220,28 @@ def _latest_clustering_run():
 
 
 def _project_against_run(
-    virtual_nrbs: list[VirtualNrb],
+    virtual_ibgcs: list[VirtualIbgc],
     run,
 ) -> None:
     """Fill ``umap_x/y``, ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on each virtual NRB by KNN-projecting against the
-    primary NRBs of ``run``.
+    ``domain_novelty`` on each virtual iBGC by KNN-projecting against the
+    primary iBGCs of ``run``.
 
-    Mutates ``virtual_nrbs`` in place. Virtual NRBs with no source-vocab
+    Mutates ``virtual_ibgcs`` in place. Virtual iBGCs with no source-vocab
     overlap with the primary matrix are left unprojected (the four fields
     stay at their default ``None`` / ``""``).
     """
-    if not virtual_nrbs:
+    if not virtual_ibgcs:
         return
 
     import numpy as np
     import scipy.sparse as sp
 
-    from discovery.models import DashboardBgc, NonRedundantBGC
+    from discovery.models import DashboardBgc, IntegratedBGC
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity,
     )
-    from discovery.services.clustering.nrb_scoring import load_scoring_cache
+    from discovery.services.clustering.ibgc_scoring import load_scoring_cache
 
     sources = tuple(run.domain_sources) or DEFAULT_DOMAIN_SOURCES
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
@@ -251,7 +251,7 @@ def _project_against_run(
         cache_payload = load_scoring_cache(artifacts_dir)
     except FileNotFoundError as exc:
         log.warning(
-            "Scoring cache missing at %s — virtual NRBs cannot be projected (%s)",
+            "Scoring cache missing at %s — virtual iBGCs cannot be projected (%s)",
             artifacts_dir,
             exc,
         )
@@ -259,7 +259,7 @@ def _project_against_run(
 
     M_dom_pri = cache_payload["M_domains"]
     M_pair_pri = cache_payload["M_pairs"]
-    pri_row_ids = cache_payload["nrb_ids"]
+    pri_row_ids = cache_payload["ibgc_ids"]
     dom_accs = cache_payload["domain_accs"].tolist()
     pair_vocab = cache_payload["pair_vocab"].tolist()
     pri_leaf_paths = list(cache_payload["leaf_paths"])
@@ -271,8 +271,8 @@ def _project_against_run(
 
     # Primary metadata for coord averaging + leaf voting.
     primary_meta = {
-        nrb.id: (nrb.umap_x, nrb.umap_y, nrb.gene_cluster_family or "")
-        for nrb in NonRedundantBGC.objects.filter(
+        ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family or "")
+        for ibgc in IntegratedBGC.objects.filter(
             id__in=[int(x) for x in pri_row_ids.tolist()]
         ).only("id", "umap_x", "umap_y", "gene_cluster_family")
     }
@@ -288,13 +288,13 @@ def _project_against_run(
     )
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
-    validated_nrb_ids = set(
+    validated_ibgc_ids = set(
         DashboardBgc.objects.filter(
-            is_validated=True, non_redundant_bgc__isnull=False
-        ).values_list("non_redundant_bgc_id", flat=True)
+            is_validated=True, integrated_bgc__isnull=False
+        ).values_list("integrated_bgc_id", flat=True)
     )
     validated_col_set = {
-        pri_id_to_row[v] for v in validated_nrb_ids if v in pri_id_to_row
+        pri_id_to_row[v] for v in validated_ibgc_ids if v in pri_id_to_row
     }
 
     leaf_to_rows: dict[str, list[int]] = defaultdict(list)
@@ -308,10 +308,10 @@ def _project_against_run(
 
     # Build asset matrices on the primary's column space.
     M_dom_q = build_asset_domain_matrix(
-        virtual_nrbs, sources=sources, domain_accs=dom_accs
+        virtual_ibgcs, sources=sources, domain_accs=dom_accs
     )
     M_pair_q = build_asset_adjacency_pair_matrix(
-        virtual_nrbs, sources=sources, pair_vocab=pair_vocab
+        virtual_ibgcs, sources=sources, pair_vocab=pair_vocab
     )
 
     # Cast dom matrices to a common dtype for vstack.
@@ -323,7 +323,7 @@ def _project_against_run(
     sim_block = sim_full[n_primary:, :n_primary].tocsr()
     M_dom_q_csr = M_dom_q.tocsr()
 
-    for q_row, vnrb in enumerate(virtual_nrbs):
+    for q_row, vibgc in enumerate(virtual_ibgcs):
         sp_start = sim_block.indptr[q_row]
         sp_end = sim_block.indptr[q_row + 1]
         if sp_start == sp_end:
@@ -338,9 +338,9 @@ def _project_against_run(
             continue
 
         weights_norm = top_vals / top_sum
-        vnrb.umap_x = float((pri_coords[top_cols, 0] * weights_norm).sum())
-        vnrb.umap_y = float((pri_coords[top_cols, 1] * weights_norm).sum())
-        vnrb.umap_projected = True
+        vibgc.umap_x = float((pri_coords[top_cols, 0] * weights_norm).sum())
+        vibgc.umap_y = float((pri_coords[top_cols, 1] * weights_norm).sum())
+        vibgc.umap_projected = True
 
         votes: Counter[str] = Counter()
         for col, val in zip(top_cols.tolist(), top_vals.tolist()):
@@ -348,7 +348,7 @@ def _project_against_run(
             if leaf:
                 votes[leaf] += float(val)
         if votes:
-            vnrb.gene_cluster_family = votes.most_common(1)[0][0]
+            vibgc.gene_cluster_family = votes.most_common(1)[0][0]
 
         # Novelty against validated primary cols inside this row's non-zeros.
         if validated_col_set:
@@ -356,37 +356,37 @@ def _project_against_run(
             for col, val in zip(cols.tolist(), vals.tolist()):
                 if col in validated_col_set and val > max_sim_validated:
                     max_sim_validated = float(val)
-            vnrb.novelty_score = 1.0 - max_sim_validated
+            vibgc.novelty_score = 1.0 - max_sim_validated
 
         # Domain novelty against the inherited leaf GCF.
         q_dom_start = M_dom_q_csr.indptr[q_row]
         q_dom_end = M_dom_q_csr.indptr[q_row + 1]
         n_dom = int(q_dom_end - q_dom_start)
-        if n_dom and vnrb.gene_cluster_family:
-            col_sums_L = leaf_col_sums.get(vnrb.gene_cluster_family)
+        if n_dom and vibgc.gene_cluster_family:
+            col_sums_L = leaf_col_sums.get(vibgc.gene_cluster_family)
             if col_sums_L is not None:
                 domain_cols = M_dom_q_csr.indices[q_dom_start:q_dom_end]
                 n_unique = int((col_sums_L[domain_cols] == 0).sum())
-                vnrb.domain_novelty = n_unique / n_dom
+                vibgc.domain_novelty = n_unique / n_dom
 
 
 # ── Step 4: materialise Redis payloads ─────────────────────────────────────
 
 
-def _ordered_architecture(vnrb: VirtualNrb, sources: tuple[str, ...]) -> list[dict]:
-    """Pooled positional architecture across all member BGCs of the virtual NRB.
+def _ordered_architecture(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> list[dict]:
+    """Pooled positional architecture across all member BGCs of the virtual iBGC.
 
-    Mirrors :func:`discovery.services.architecture.nrb_architecture` but
+    Mirrors :func:`discovery.services.architecture.ibgc_architecture` but
     walks the in-memory rows.
     """
     upper_sources = tuple(s.upper() for s in sources)
     cds_start_by_id: dict[tuple[tuple[str, int, int, str], str], int] = {}
-    for cds in vnrb.cds:
+    for cds in vibgc.cds:
         cds_start_by_id[(cds.bgc_key, cds.protein_id_str)] = cds.start_position
 
     seen: set[tuple[int, int, str]] = set()
     ordered: list[tuple[int, int, dict]] = []
-    for d in vnrb.domains:
+    for d in vibgc.domains:
         if not d.domain_acc:
             continue
         if d.ref_db and d.ref_db.upper() not in upper_sources:
@@ -418,26 +418,26 @@ def _ordered_architecture(vnrb: VirtualNrb, sources: tuple[str, ...]) -> list[di
     return [t[2] for t in ordered]
 
 
-def _roster_row(vnrb: VirtualNrb) -> dict[str, Any]:
+def _roster_row(vibgc: VirtualIbgc) -> dict[str, Any]:
     return {
-        "id": vnrb.neg_id,
-        "label": vnrb.label,
-        "classification_path": vnrb.gene_cluster_family,
-        "size_kb": vnrb.size_kb,
-        "n_source_bgcs": len(vnrb.member_bgcs),
-        "source_tools": vnrb.source_tools,
-        "novelty_score": vnrb.novelty_score,
-        "domain_novelty": vnrb.domain_novelty,
-        "is_partial": vnrb.is_partial,
-        "is_validated": vnrb.is_validated,
-        "is_type_strain": vnrb.is_type_strain,
-        "umap_projected": vnrb.umap_projected,
-        "umap_x": vnrb.umap_x,
-        "umap_y": vnrb.umap_y,
+        "id": vibgc.neg_id,
+        "label": vibgc.label,
+        "classification_path": vibgc.gene_cluster_family,
+        "size_kb": vibgc.size_kb,
+        "n_source_bgcs": len(vibgc.member_bgcs),
+        "source_tools": vibgc.source_tools,
+        "novelty_score": vibgc.novelty_score,
+        "domain_novelty": vibgc.domain_novelty,
+        "is_partial": vibgc.is_partial,
+        "is_validated": vibgc.is_validated,
+        "is_type_strain": vibgc.is_type_strain,
+        "umap_projected": vibgc.umap_projected,
+        "umap_x": vibgc.umap_x,
+        "umap_y": vibgc.umap_y,
         "parent_assembly_id": None,
-        "parent_assembly_accession": vnrb.assembly_accession,
-        "organism_name": vnrb.organism_name,
-        "contig_accession": vnrb.contig_accession,
+        "parent_assembly_accession": vibgc.assembly_accession,
+        "organism_name": vibgc.organism_name,
+        "contig_accession": vibgc.contig_accession,
         "similarity_score": None,
         "best_hit_protein_id": None,
         "best_pident": None,
@@ -446,28 +446,28 @@ def _roster_row(vnrb: VirtualNrb) -> dict[str, Any]:
     }
 
 
-def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
+def _ibgc_detail(vibgc: VirtualIbgc, sources: tuple[str, ...]) -> dict[str, Any]:
     member_items = [
         {
-            "id": -idx - 1,  # synthetic, scoped to this asset NRB
-            "accession": f"{vnrb.label}.{idx + 1}",
+            "id": -idx - 1,  # synthetic, scoped to this asset iBGC
+            "accession": f"{vibgc.label}.{idx + 1}",
             "detector_name": m.detector_name,
             "is_partial": m.is_partial,
             "is_validated": m.is_validated,
             "size_kb": m.size_kb,
         }
-        for idx, m in enumerate(vnrb.member_bgcs)
+        for idx, m in enumerate(vibgc.member_bgcs)
     ]
     parent_assembly = {
         "assembly_id": None,
-        "accession": vnrb.assembly_accession,
-        "organism_name": vnrb.organism_name,
+        "accession": vibgc.assembly_accession,
+        "organism_name": vibgc.organism_name,
         "source_name": None,
-        "is_type_strain": vnrb.is_type_strain,
+        "is_type_strain": vibgc.is_type_strain,
         "url": "",
     }
     nps: list[dict[str, Any]] = []
-    for np_obj in vnrb.natural_products:
+    for np_obj in vibgc.natural_products:
         nps.append(
             {
                 "id": 0,
@@ -482,7 +482,7 @@ def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
     # Aggregate per-CDS chemont rows into a flat tree (no ontology lookup in
     # the asset path — keep it light; the frontend renders leaves directly).
     chemont_aggregate: dict[str, dict[str, Any]] = {}
-    for c in vnrb.cds_chemont:
+    for c in vibgc.cds_chemont:
         cur = chemont_aggregate.get(c.chemont_id)
         if cur is None:
             chemont_aggregate[c.chemont_id] = {
@@ -499,54 +499,54 @@ def _nrb_detail(vnrb: VirtualNrb, sources: tuple[str, ...]) -> dict[str, Any]:
     chemont_tree = list(chemont_aggregate.values())
 
     return {
-        "id": vnrb.neg_id,
-        "label": vnrb.label,
-        "classification_path": vnrb.gene_cluster_family,
-        "size_kb": vnrb.size_kb,
-        "start_position": vnrb.start_position,
-        "end_position": vnrb.end_position,
-        "contig_accession": vnrb.contig_accession,
-        "source_tools": vnrb.source_tools,
-        "novelty_score": vnrb.novelty_score,
-        "domain_novelty": vnrb.domain_novelty,
-        "is_partial": vnrb.is_partial,
-        "is_validated": vnrb.is_validated,
-        "is_type_strain": vnrb.is_type_strain,
-        "umap_projected": vnrb.umap_projected,
-        "umap_x": vnrb.umap_x,
-        "umap_y": vnrb.umap_y,
+        "id": vibgc.neg_id,
+        "label": vibgc.label,
+        "classification_path": vibgc.gene_cluster_family,
+        "size_kb": vibgc.size_kb,
+        "start_position": vibgc.start_position,
+        "end_position": vibgc.end_position,
+        "contig_accession": vibgc.contig_accession,
+        "source_tools": vibgc.source_tools,
+        "novelty_score": vibgc.novelty_score,
+        "domain_novelty": vibgc.domain_novelty,
+        "is_partial": vibgc.is_partial,
+        "is_validated": vibgc.is_validated,
+        "is_type_strain": vibgc.is_type_strain,
+        "umap_projected": vibgc.umap_projected,
+        "umap_x": vibgc.umap_x,
+        "umap_y": vibgc.umap_y,
         "parent_assembly": parent_assembly,
-        # Use the NRB's own negative id as the representative — the region
+        # Use the iBGC's own negative id as the representative — the region
         # endpoint resolves it back through asset_cache.read_region(token, id).
-        "representative_bgc_id": vnrb.neg_id if vnrb.member_bgcs else None,
+        "representative_bgc_id": vibgc.neg_id if vibgc.member_bgcs else None,
         "member_bgcs": member_items,
-        "domain_architecture": _ordered_architecture(vnrb, sources),
+        "domain_architecture": _ordered_architecture(vibgc, sources),
         "natural_products": nps,
         "chemont_tree": chemont_tree,
     }
 
 
-def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
-    """Region payload matching ``BgcRegionOut`` for the asset NRB.
+def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
+    """Region payload matching ``BgcRegionOut`` for the asset iBGC.
 
-    Coordinates are translated to be relative to the NRB interval, like the
+    Coordinates are translated to be relative to the iBGC interval, like the
     persistent region view does for DashboardBgc rows.
     """
-    window_start = vnrb.start_position
-    region_length = vnrb.end_position - vnrb.start_position
+    window_start = vibgc.start_position
+    region_length = vibgc.end_position - vibgc.start_position
 
     cds_list = []
     domain_list: list[dict[str, Any]] = []
     domains_by_cds_pid: dict[tuple[tuple[str, int, int, str], str], list[AssetDomain]] = defaultdict(list)
-    for d in vnrb.domains:
+    for d in vibgc.domains:
         domains_by_cds_pid[(d.bgc_key, d.cds_protein_id)].append(d)
     chemont_by_cds: dict[tuple[tuple[str, int, int, str], str], AssetCdsChemOnt] = {
-        (c.bgc_key, c.protein_id_str): c for c in vnrb.cds_chemont
+        (c.bgc_key, c.protein_id_str): c for c in vibgc.cds_chemont
     }
 
     from discovery.services.architecture import collapse_to_interpro_rows
 
-    for cds in vnrb.cds:
+    for cds in vibgc.cds:
         sequence = ""
         if cds.sequence_zlib_b64:
             try:
@@ -626,7 +626,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
 
     cluster_list = [
         {
-            "accession": f"{vnrb.label}.{idx + 1}",
+            "accession": f"{vibgc.label}.{idx + 1}",
             "start": m.start_position - window_start,
             "end": m.end_position - window_start,
             "source": m.detector_name,
@@ -636,7 +636,7 @@ def _region_payload(vnrb: VirtualNrb) -> dict[str, Any]:
                 else []
             ),
         }
-        for idx, m in enumerate(vnrb.member_bgcs)
+        for idx, m in enumerate(vibgc.member_bgcs)
     ]
 
     return {
@@ -657,34 +657,34 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
 
     Returns a summary dict (mirrored into the task status payload).
     """
-    virtual_nrbs = build_virtual_nrbs(data)
-    if not virtual_nrbs:
-        raise ValueError("No NRBs could be built from the upload")
+    virtual_ibgcs = build_virtual_ibgcs(data)
+    if not virtual_ibgcs:
+        raise ValueError("No iBGCs could be built from the upload")
 
     run = _latest_clustering_run()
     if run is not None:
-        _project_against_run(virtual_nrbs, run)
+        _project_against_run(virtual_ibgcs, run)
     else:
         log.warning(
-            "project_asset: no ClusteringRun present — NRBs persisted unprojected"
+            "project_asset: no ClusteringRun present — iBGCs persisted unprojected"
         )
 
     sources = tuple(run.domain_sources) if run else DEFAULT_DOMAIN_SOURCES
 
-    roster_rows = [_roster_row(v) for v in virtual_nrbs]
-    asset_cache.write_nrb_list(token, roster_rows)
+    roster_rows = [_roster_row(v) for v in virtual_ibgcs]
+    asset_cache.write_ibgc_list(token, roster_rows)
 
-    # Flat per-NRB-deduped domain-hit list for the report builder. Mirrors
+    # Flat per-iBGC-deduped domain-hit list for the report builder. Mirrors
     # the SQL ``domain_pairs`` set semantics at services/report.py:154.
     domain_hits: list[dict[str, Any]] = []
-    for vnrb in virtual_nrbs:
+    for vibgc in virtual_ibgcs:
         seen_accs: set[str] = set()
-        for d in vnrb.domains:
+        for d in vibgc.domains:
             if not d.domain_acc or d.domain_acc in seen_accs:
                 continue
             seen_accs.add(d.domain_acc)
             domain_hits.append({
-                "nrb_id": vnrb.neg_id,
+                "ibgc_id": vibgc.neg_id,
                 "domain_acc": d.domain_acc,
                 "domain_name": d.domain_name,
                 "domain_description": d.domain_description or d.domain_name,
@@ -692,33 +692,33 @@ def project_asset(token: str, data: AssetData, *, task_id: str = "") -> dict[str
             })
     asset_cache.write_domain_hits(token, domain_hits)
 
-    for vnrb in virtual_nrbs:
-        detail = _nrb_detail(vnrb, sources)
-        region = _region_payload(vnrb)
+    for vibgc in virtual_ibgcs:
+        detail = _ibgc_detail(vibgc, sources)
+        region = _region_payload(vibgc)
         architecture = [d["domain_acc"] for d in detail["domain_architecture"]]
-        asset_cache.write_nrb_detail(token, vnrb.neg_id, detail)
-        asset_cache.write_region(token, vnrb.neg_id, region)
-        asset_cache.write_architecture(token, vnrb.neg_id, architecture)
+        asset_cache.write_ibgc_detail(token, vibgc.neg_id, detail)
+        asset_cache.write_region(token, vibgc.neg_id, region)
+        asset_cache.write_architecture(token, vibgc.neg_id, architecture)
 
-    first = virtual_nrbs[0]
+    first = virtual_ibgcs[0]
     summary = {
         "token": token,
         "uploaded_at": datetime.now(timezone.utc).isoformat(),
-        "n_nrbs": len(virtual_nrbs),
-        "n_bgcs": sum(len(v.member_bgcs) for v in virtual_nrbs),
+        "n_ibgcs": len(virtual_ibgcs),
+        "n_bgcs": sum(len(v.member_bgcs) for v in virtual_ibgcs),
         "assembly_accession": first.assembly_accession,
         "organism": first.organism_name,
-        "source_label": ", ".join(sorted({b.detector_name for v in virtual_nrbs for b in v.member_bgcs})),
+        "source_label": ", ".join(sorted({b.detector_name for v in virtual_ibgcs for b in v.member_bgcs})),
         "clustering_run_id": run.id if run is not None else None,
         "projected": run is not None,
-        "n_projected": sum(1 for v in virtual_nrbs if v.umap_projected),
+        "n_projected": sum(1 for v in virtual_ibgcs if v.umap_projected),
     }
     asset_cache.write_manifest(token, summary)
     asset_cache.mark_success(token, task_id=task_id, summary=summary)
     log.info(
-        "project_asset: token=%s n_nrbs=%d projected=%d",
+        "project_asset: token=%s n_ibgcs=%d projected=%d",
         token,
-        len(virtual_nrbs),
+        len(virtual_ibgcs),
         summary["n_projected"],
     )
     return summary

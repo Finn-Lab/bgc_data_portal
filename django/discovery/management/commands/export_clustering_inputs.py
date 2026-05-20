@@ -1,7 +1,7 @@
-"""Export per-NRB signature matrices for an HPC clustering run.
+"""Export per-iBGC signature matrices for an HPC clustering run.
 
 Builds the small inputs the HPC ``bgc-cluster`` CLI needs (M_domains,
-M_pairs, vocabs, nrb_ids for primaries and partials, validated subset) and
+M_pairs, vocabs, ibgc_ids for primaries and partials, validated subset) and
 writes them as a single ``.tgz`` under ``CLUSTERING_ARTIFACTS_DIR/exports/``.
 No N×N matrix is produced — that's the whole point of the HPC handoff.
 """
@@ -26,7 +26,7 @@ DEFAULT_DOMAIN_SOURCES = ("PFAM", "NCBIFAM","TIGRFAM")
 
 class Command(BaseCommand):
     help = (
-        "Export per-NRB signature matrices as a tarball for the HPC "
+        "Export per-iBGC signature matrices as a tarball for the HPC "
         "bgc-cluster job. Writes to CLUSTERING_ARTIFACTS_DIR/exports/<tag>.tgz."
     )
 
@@ -97,68 +97,68 @@ class Command(BaseCommand):
         import scipy.sparse as sp
         from common_core.clustering.schema import ClusteringInputs, RunParams
 
-        from discovery.models import DashboardBgc, NonRedundantBGC
+        from discovery.models import DashboardBgc, IntegratedBGC
         from discovery.services.clustering.adjacency import (
-            build_nrb_adjacency_pair_matrix,
+            build_ibgc_adjacency_pair_matrix,
         )
         from discovery.services.clustering.membership import (
-            build_nrb_domain_matrix,
+            build_ibgc_domain_matrix,
         )
         from discovery.services.clustering.pipeline import _align_rows
 
-        if not NonRedundantBGC.objects.exists():
+        if not IntegratedBGC.objects.exists():
             raise CommandError(
-                "NonRedundantBGC table is empty — run build_non_redundant_bgcs first."
+                "IntegratedBGC table is empty — run build_integrated_bgcs first."
             )
 
-        # Primary set: NRBs with at least one non-partial-or-validated source BGC.
-        clusterable_nrb_ids = list(
-            DashboardBgc.objects.filter(non_redundant_bgc__isnull=False)
+        # Primary set: iBGCs with at least one non-partial-or-validated source BGC.
+        clusterable_ibgc_ids = list(
+            DashboardBgc.objects.filter(integrated_bgc__isnull=False)
             .filter(Q(is_partial=False) | Q(is_validated=True))
-            .values_list("non_redundant_bgc_id", flat=True)
+            .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
-        if not clusterable_nrb_ids:
+        if not clusterable_ibgc_ids:
             raise CommandError(
-                "No clusterable NRBs (all NRBs are partial+unvalidated)."
+                "No clusterable iBGCs (all iBGCs are partial+unvalidated)."
             )
 
-        M_domains, nrb_ids, domain_accs = build_nrb_domain_matrix(
-            sources=sources, nrb_ids_subset=clusterable_nrb_ids,
+        M_domains, ibgc_ids, domain_accs = build_ibgc_domain_matrix(
+            sources=sources, ibgc_ids_subset=clusterable_ibgc_ids,
         )
         if M_domains.shape[0] == 0:
-            raise CommandError("No NRBs with selected-source domains found.")
+            raise CommandError("No iBGCs with selected-source domains found.")
 
-        M_pairs, nrb_ids_adj, pair_vocab = build_nrb_adjacency_pair_matrix(
-            sources=sources, nrb_ids_subset=nrb_ids.tolist(),
+        M_pairs, ibgc_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
+            sources=sources, ibgc_ids_subset=ibgc_ids.tolist(),
         )
-        M_pairs = _align_rows(M_pairs, nrb_ids_adj, nrb_ids)
+        M_pairs = _align_rows(M_pairs, ibgc_ids_adj, ibgc_ids)
 
-        # Partials: NRBs not in the primary set.
-        partial_nrb_ids = list(
-            NonRedundantBGC.objects.exclude(id__in=list(nrb_ids.tolist()))
+        # Partials: iBGCs not in the primary set.
+        partial_ibgc_ids = list(
+            IntegratedBGC.objects.exclude(id__in=list(ibgc_ids.tolist()))
             .order_by("id")
             .values_list("id", flat=True)
         )
-        if partial_nrb_ids:
-            partials_M_domains, partials_row_ids, _ = build_nrb_domain_matrix(
+        if partial_ibgc_ids:
+            partials_M_domains, partials_row_ids, _ = build_ibgc_domain_matrix(
                 sources=sources,
                 domain_accs_subset=domain_accs.tolist(),
-                nrb_ids_subset=partial_nrb_ids,
+                ibgc_ids_subset=partial_ibgc_ids,
             )
             (
                 partials_M_pairs,
                 partials_pair_row_ids,
                 _,
-            ) = build_nrb_adjacency_pair_matrix(
+            ) = build_ibgc_adjacency_pair_matrix(
                 sources=sources,
                 pair_vocab_subset=pair_vocab.tolist(),
-                nrb_ids_subset=partial_nrb_ids,
+                ibgc_ids_subset=partial_ibgc_ids,
             )
             partials_M_pairs = _align_rows(
                 partials_M_pairs, partials_pair_row_ids, partials_row_ids,
             )
-            partials_nrb_ids = partials_row_ids
+            partials_ibgc_ids = partials_row_ids
         else:
             partials_M_domains = sp.csr_matrix(
                 (0, M_domains.shape[1]), dtype=M_domains.dtype,
@@ -166,13 +166,13 @@ class Command(BaseCommand):
             partials_M_pairs = sp.csr_matrix(
                 (0, M_pairs.shape[1]), dtype=M_pairs.dtype,
             )
-            partials_nrb_ids = np.empty(0, dtype=np.int64)
+            partials_ibgc_ids = np.empty(0, dtype=np.int64)
 
-        validated_nrb_ids = np.asarray(
+        validated_ibgc_ids = np.asarray(
             sorted(
                 DashboardBgc.objects.filter(
-                    is_validated=True, non_redundant_bgc__isnull=False,
-                ).values_list("non_redundant_bgc_id", flat=True).distinct()
+                    is_validated=True, integrated_bgc__isnull=False,
+                ).values_list("integrated_bgc_id", flat=True).distinct()
             ),
             dtype=np.int64,
         )
@@ -199,18 +199,18 @@ class Command(BaseCommand):
             partials_M_domains.shape[0],
             M_domains.shape[1],
             M_pairs.shape[1],
-            len(validated_nrb_ids),
+            len(validated_ibgc_ids),
         )
         return ClusteringInputs(
             M_domains=M_domains,
             M_pairs=M_pairs,
             domain_accs=domain_accs,
             pair_vocab=pair_vocab,
-            nrb_ids=nrb_ids,
+            ibgc_ids=ibgc_ids,
             partials_M_domains=partials_M_domains,
             partials_M_pairs=partials_M_pairs,
-            partials_nrb_ids=partials_nrb_ids,
-            validated_nrb_ids=validated_nrb_ids,
+            partials_ibgc_ids=partials_ibgc_ids,
+            validated_ibgc_ids=validated_ibgc_ids,
             params=params,
         )
 

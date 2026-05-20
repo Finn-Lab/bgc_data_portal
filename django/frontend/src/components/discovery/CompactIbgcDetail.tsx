@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchNrbDetail } from "@/api/nrbs";
+import { fetchIbgcDetail } from "@/api/ibgcs";
 import { fetchBgcRegion } from "@/api/bgcs";
 import { RegionPlot } from "@/components/bgc/RegionPlot";
-import { NrbActionsMenu } from "./NrbActionsMenu";
+import { IbgcActionsMenu } from "./IbgcActionsMenu";
 import { useDiscoveryStore } from "@/stores/discovery-store";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,13 +13,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
-  FlaskConical,
-  FileText,
-  Sparkles,
   Pin,
   Loader2,
   ChevronRight,
-  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -38,7 +34,7 @@ function molviewHref(smiles: string): string {
 }
 
 interface Props {
-  nrbId: number | null;
+  ibgcId: number | null;
   variant: "reference" | "compare";
 }
 
@@ -46,12 +42,12 @@ function fmt(v: number | null | undefined, digits = 3): string {
   return v == null ? "—" : v.toFixed(digits);
 }
 
-export function CompactNrbDetail({ nrbId, variant }: Props) {
+export function CompactIbgcDetail({ ibgcId, variant }: Props) {
   const assetToken = useDiscoveryStore((s) => s.assetToken);
-  const { data: nrb, isLoading, isError } = useQuery({
-    queryKey: ["nrb-detail", nrbId, nrbId !== null && nrbId < 0 ? assetToken : null],
-    queryFn: () => fetchNrbDetail(nrbId as number, assetToken),
-    enabled: nrbId !== null,
+  const { data: ibgc, isLoading, isError } = useQuery({
+    queryKey: ["ibgc-detail", ibgcId, ibgcId !== null && ibgcId < 0 ? assetToken : null],
+    queryFn: () => fetchIbgcDetail(ibgcId as number, assetToken),
+    enabled: ibgcId !== null,
   });
 
   const accent =
@@ -59,7 +55,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
       ? "border-primary/60"
       : "border-muted-foreground/30";
 
-  if (nrbId === null) {
+  if (ibgcId === null) {
     return (
       <Card
         className={cn(
@@ -70,7 +66,7 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
         {variant === "reference" ? (
           <span>
             <Pin className="mr-2 inline h-4 w-4" />
-            Right-click a result and choose “Set as reference NRB”
+            Right-click a result and choose “Set as reference iBGC”
           </span>
         ) : (
           <span>
@@ -90,12 +86,12 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
           accent,
         )}
       >
-        Failed to load NRB detail
+        Failed to load iBGC detail
       </Card>
     );
   }
 
-  if (isLoading || !nrb) {
+  if (isLoading || !ibgc) {
     return (
       <Card
         className={cn("flex h-full items-center justify-center", accent)}
@@ -117,13 +113,13 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
           >
             {variantLabel}
           </Badge>
-          <h3 className="font-mono text-sm font-semibold">{nrb.label}</h3>
-          {nrb.is_validated && (
+          <h3 className="font-mono text-sm font-semibold">{ibgc.label}</h3>
+          {ibgc.is_validated && (
             <Badge variant="default" className="text-[10px]">
               Validated
             </Badge>
           )}
-          {nrb.is_type_strain && (
+          {ibgc.is_type_strain && (
             <Badge
               className="text-[10px] text-white border-transparent"
               style={{ backgroundColor: "#018786" }}
@@ -131,47 +127,47 @@ export function CompactNrbDetail({ nrbId, variant }: Props) {
               Type Strain
             </Badge>
           )}
-          {nrb.umap_projected && (
+          {ibgc.umap_projected && (
             <Badge variant="outline" className="text-[10px]">
               projected
             </Badge>
           )}
         </div>
-        <NrbActionsMenu
-          nrbId={nrb.id}
-          nrbLabel={nrb.label}
+        <IbgcActionsMenu
+          ibgcId={ibgc.id}
+          ibgcLabel={ibgc.label}
           variant={variant}
-          isPartial={nrb.umap_projected}
-          isAsset={nrb.id < 0}
+          isPartial={ibgc.umap_projected}
+          isAsset={ibgc.id < 0}
         />
       </CardHeader>
 
       <CardContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden p-3 pt-0">
         <KpiStrip
-          naturalProducts={nrb.natural_products}
-          chemontTree={nrb.chemont_tree}
-          parentAssembly={nrb.parent_assembly}
-          novelty={nrb.novelty_score}
-          domainNovelty={nrb.domain_novelty}
+          naturalProducts={ibgc.natural_products}
+          chemontTree={ibgc.chemont_tree}
+          parentAssembly={ibgc.parent_assembly}
+          novelty={ibgc.novelty_score}
+          domainNovelty={ibgc.domain_novelty}
         />
 
         <div className="rounded border bg-muted/20 p-2 text-xs text-muted-foreground">
           <div className="font-mono">
-            {nrb.contig_accession ?? "no contig"} ·{" "}
-            {nrb.start_position.toLocaleString()}–
-            {nrb.end_position.toLocaleString()} ({nrb.size_kb.toFixed(1)} kb)
+            {ibgc.contig_accession ?? "no contig"} ·{" "}
+            {ibgc.start_position.toLocaleString()}–
+            {ibgc.end_position.toLocaleString()} ({ibgc.size_kb.toFixed(1)} kb)
           </div>
           <div className="mt-1">
-            <strong>{nrb.member_bgcs.length}</strong> source BGC(s) ·{" "}
-            <strong>{nrb.source_tools.join(", ") || "—"}</strong>
+            <strong>{ibgc.member_bgcs.length}</strong> source BGC(s) ·{" "}
+            <strong>{ibgc.source_tools.join(", ") || "—"}</strong>
           </div>
         </div>
 
         <RegionStrip
-          representativeBgcId={nrb.representative_bgc_id}
+          representativeBgcId={ibgc.representative_bgc_id}
         />
 
-        <MemberBgcStrip memberBgcs={nrb.member_bgcs} />
+        <MemberBgcStrip memberBgcs={ibgc.member_bgcs} />
       </CardContent>
     </Card>
   );
@@ -240,7 +236,7 @@ function KpiStrip({
   domainNovelty,
 }: KpiStripProps) {
   // Compounds chip count = distinct deepest ChemOnt classes seen across the
-  // NRB's CDSs, plus any curated NP names (deduped). Treat curated names
+  // iBGC's CDSs, plus any curated NP names (deduped). Treat curated names
   // (e.g. MIBiG compounds) and CHAMOIS classes as a single conceptual count.
   const leaves = chemontTree.flatMap(collectLeaves);
   const compoundsCount = naturalProducts.length + leaves.length;
@@ -265,27 +261,22 @@ function KpiStrip({
             title={parentAssembly.organism_name ?? parentAssembly.accession}
             className={cn(CHIP_BASE, CHIP_CLICKABLE, "text-foreground")}
           >
-            <FileText className="h-3.5 w-3.5" />
             <span className="text-muted-foreground">parent</span>
             <span className="font-semibold">{parentAcc}</span>
-            <ExternalLink className="h-3 w-3 text-muted-foreground" />
           </a>
         ) : (
           <span className={CHIP_BASE}>
-            <FileText className="h-3.5 w-3.5" />
             <span className="text-muted-foreground">parent</span>
             <span className="font-semibold">{parentAcc}</span>
           </span>
         )}
 
         <span className={CHIP_BASE}>
-          <Sparkles className="h-3.5 w-3.5" />
           <span className="text-muted-foreground">Novelty</span>
           <span className="font-semibold">{fmt(novelty, 2)}</span>
         </span>
 
         <span className={CHIP_BASE}>
-          <Sparkles className="h-3.5 w-3.5" />
           <span className="text-muted-foreground">Domain Novelty</span>
           <span className="font-semibold">{fmt(domainNovelty, 2)}</span>
         </span>
@@ -307,12 +298,8 @@ function CompoundsChip({
 }) {
   const chipBody = (
     <>
-      <FlaskConical className="h-3.5 w-3.5" />
-      <span className="text-muted-foreground">compounds</span>
+      <span className="text-muted-foreground">compound features</span>
       <span className="font-semibold">{String(count)}</span>
-      {molviewSmiles && (
-        <ExternalLink className="h-3 w-3 text-muted-foreground" />
-      )}
     </>
   );
 

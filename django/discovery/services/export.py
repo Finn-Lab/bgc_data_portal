@@ -25,7 +25,7 @@ def build_report_assembly_tsv(assembly_rows: list[dict]) -> str:
     """Tab-separated rendering of a Report shortlist's assembly roster.
 
     Columns mirror the ``ReportAssemblyRow`` shape (taxonomy_path + phylum,
-    biome, source, BGC counts, NRBs in shortlist, type-strain flag). One
+    biome, source, BGC counts, iBGCs in shortlist, type-strain flag). One
     row per assembly. Caller passes the cached payload's ``assembly_rows``.
     """
     buf = StringIO()
@@ -39,7 +39,7 @@ def build_report_assembly_tsv(assembly_rows: list[dict]) -> str:
         "source",
         "assembly_size_mb",
         "total_bgcs_in_assembly",
-        "nrbs_in_shortlist",
+        "ibgcs_in_shortlist",
         "is_type_strain",
     ])
     for r in assembly_rows:
@@ -52,7 +52,7 @@ def build_report_assembly_tsv(assembly_rows: list[dict]) -> str:
             r.get("source_name") or "",
             "" if r.get("assembly_size_mb") is None else f"{r['assembly_size_mb']:.3f}",
             r.get("total_bgcs_in_assembly", 0),
-            r.get("nrbs_in_shortlist", 0),
+            r.get("ibgcs_in_shortlist", 0),
             "true" if r.get("is_type_strain") else "false",
         ])
     return buf.getvalue()

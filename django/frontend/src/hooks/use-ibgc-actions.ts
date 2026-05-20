@@ -7,9 +7,9 @@ import { useShortlistStore } from "@/stores/shortlist-store";
 import { toast } from "sonner";
 import { Pin, Search, Plus, RefreshCw, Clipboard } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { fetchNrbArchitecture, postSimilarNrbQuery } from "@/api/nrbs";
+import { fetchIbgcArchitecture, postSimilarIbgcQuery } from "@/api/ibgcs";
 
-export interface NrbActionItem {
+export interface IbgcActionItem {
   key:
     | "set-ref"
     | "find-similar"
@@ -27,14 +27,14 @@ export interface NrbActionItem {
   disabledHint?: string;
 }
 
-interface UseNrbActionsOptions {
-  /** When set to "reference", "Set as reference NRB" is shown disabled
-   *  because this NRB is already pinned in the reference slot. */
+interface UseIbgcActionsOptions {
+  /** When set to "reference", "Set as reference iBGC" is shown disabled
+   *  because this iBGC is already pinned in the reference slot. */
   variant?: "reference" | "compare";
-  /** When true the NRB is a partial (umap_projected) — find-similar is
+  /** When true the iBGC is a partial (umap_projected) — find-similar is
    *  disabled because the backend rejects partial seeds. */
   isPartial?: boolean;
-  /** When true the NRB is sourced from an uploaded asset (negative id).
+  /** When true the iBGC is sourced from an uploaded asset (negative id).
    *  Find-similar / sequence-search are skipped per the locked scope. */
   isAsset?: boolean;
 }
@@ -48,12 +48,12 @@ async function copyToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export function useNrbActions(
-  nrbId: number,
-  nrbLabel: string,
-  options: UseNrbActionsOptions = {},
-): NrbActionItem[] {
-  const setReferenceNrbId = useDiscoveryStore((s) => s.setReferenceNrbId);
+export function useIbgcActions(
+  ibgcId: number,
+  ibgcLabel: string,
+  options: UseIbgcActionsOptions = {},
+): IbgcActionItem[] {
+  const setReferenceIbgcId = useDiscoveryStore((s) => s.setReferenceIbgcId);
   const setQueryResult = useDiscoveryStore((s) => s.setQueryResult);
   const setAppliedFilters = useDiscoveryStore((s) => s.setAppliedFilters);
   const assetToken = useDiscoveryStore((s) => s.assetToken);
@@ -65,18 +65,18 @@ export function useNrbActions(
   const isAsset = options.isAsset === true;
 
   const onSetRef = () => {
-    setReferenceNrbId(nrbId);
-    toast.success(`Pinned ${nrbLabel} as reference`);
+    setReferenceIbgcId(ibgcId);
+    toast.success(`Pinned ${ibgcLabel} as reference`);
   };
 
   const onFindSimilar = async () => {
-    setReferenceNrbId(nrbId);
+    setReferenceIbgcId(ibgcId);
     // Re-snapshot the current filter-chip values into ``appliedFilters``
-    // before the result lands. The roster/maps intersect ``nrb_ids`` with
+    // before the result lands. The roster/maps intersect ``ibgc_ids`` with
     // ``appliedFilters``, and that snapshot is otherwise only updated by
     // the Run Query button — so without this step, clearing chips in the
     // UI would not affect a subsequent Find Similar run. Mirrors the
-    // snapshot block in ``useRunNrbQuery.run``.
+    // snapshot block in ``useRunIbgcQuery.run``.
     const f = useFilterStore.getState();
     setAppliedFilters({
       sourceNames: f.sourceNames,
@@ -92,10 +92,10 @@ export function useNrbActions(
       assemblyIds: f.assemblyIds,
       organism: f.search,
     });
-    const toastId = toast.loading(`Finding NRBs similar to ${nrbLabel}…`);
+    const toastId = toast.loading(`Finding iBGCs similar to ${ibgcLabel}…`);
     try {
-      const resp = await postSimilarNrbQuery(
-        { nrb_id: nrbId, k: 100 },
+      const resp = await postSimilarIbgcQuery(
+        { ibgc_id: ibgcId, k: 100 },
         1,
         100,
       );
@@ -106,9 +106,9 @@ export function useNrbActions(
           similarity[item.id] = item.similarity_score;
         }
       }
-      setQueryResult(ids, similarity, "similar_nrb", null, null, null);
+      setQueryResult(ids, similarity, "similar_ibgc", null, null, null);
       // Detect filter chips still active in the Top Filters strip — the
-      // roster intersects ``nrb_ids`` with those chips, which can silently
+      // roster intersects ``ibgc_ids`` with those chips, which can silently
       // drop the visible row count below ``ids.length``. Surface that in
       // the toast description so the user knows where the rows went. Uses
       // the freshly-snapshotted ``appliedFilters`` so it reflects what the
@@ -116,7 +116,7 @@ export function useNrbActions(
       const chipsActive = !isAppliedFiltersEmpty(
         useDiscoveryStore.getState().appliedFilters,
       );
-      toast.success(`Found ${ids.length} similar NRB(s)`, {
+      toast.success(`Found ${ids.length} similar iBGC(s)`, {
         id: toastId,
         description: chipsActive
           ? "Top Filters chips still applied — clear them to see the full neighbourhood."
@@ -131,10 +131,10 @@ export function useNrbActions(
   const onCopyArchitecture = async () => {
     const toastId = toast.loading(`Copying domain architecture…`);
     try {
-      const resp = await fetchNrbArchitecture(nrbId, assetToken);
+      const resp = await fetchIbgcArchitecture(ibgcId, assetToken);
       if (resp.ordered_accs.length === 0) {
         toast.warning(
-          `${nrbLabel} has no PFAM/NCBIFAM domains to copy`,
+          `${ibgcLabel} has no PFAM/NCBIFAM domains to copy`,
           { id: toastId },
         );
         return;
@@ -161,20 +161,20 @@ export function useNrbActions(
   };
 
   const onAddToShortlist = () => {
-    const ok = addBgc({ id: nrbId, label: nrbLabel });
-    if (ok) toast.success(`Added ${nrbLabel} to shortlist`);
+    const ok = addBgc({ id: ibgcId, label: ibgcLabel });
+    if (ok) toast.success(`Added ${ibgcLabel} to shortlist`);
     else toast.warning("Shortlist is at the 100 cap");
   };
 
   const onClearAndAdd = () => {
-    replaceBgcs({ id: nrbId, label: nrbLabel });
-    toast.success(`Shortlist replaced with ${nrbLabel}`);
+    replaceBgcs({ id: ibgcId, label: ibgcLabel });
+    toast.success(`Shortlist replaced with ${ibgcLabel}`);
   };
 
   return [
     {
       key: "set-ref",
-      label: "Set as reference NRB",
+      label: "Set as reference iBGC",
       icon: Pin,
       onClick: onSetRef,
       disabled: isReference,
@@ -182,14 +182,14 @@ export function useNrbActions(
     },
     {
       key: "find-similar",
-      label: "Find similar NRBs",
+      label: "Find similar iBGCs",
       icon: Search,
       onClick: onFindSimilar,
       disabled: isPartial || isAsset,
       disabledHint: isAsset
         ? "Submitted asset — out of scope"
         : isPartial
-          ? "Partial NRB"
+          ? "Partial iBGC"
           : undefined,
     },
     {

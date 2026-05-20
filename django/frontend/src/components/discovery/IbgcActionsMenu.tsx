@@ -8,32 +8,32 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useNrbActions } from "@/hooks/use-nrb-actions";
+import { useIbgcActions } from "@/hooks/use-ibgc-actions";
 
 interface Props {
-  nrbId: number;
-  nrbLabel: string;
-  /** Forwarded to ``useNrbActions`` so the menu disables "Set as reference"
+  ibgcId: number;
+  ibgcLabel: string;
+  /** Forwarded to ``useIbgcActions`` so the menu disables "Set as reference"
    *  when the card it lives on is already the reference. */
   variant?: "reference" | "compare";
-  /** True when the NRB is a projected partial — gates the find-similar
+  /** True when the iBGC is a projected partial — gates the find-similar
    *  action because the backend only accepts primary seeds. */
   isPartial?: boolean;
-  /** True when the NRB is sourced from an uploaded asset (negative id) —
+  /** True when the iBGC is sourced from an uploaded asset (negative id) —
    *  hides find-similar per the locked scope. */
   isAsset?: boolean;
 }
 
-/** Kebab dropdown surfacing the same actions as the NRB roster right-click
- *  menu, sized for the dense ``CompactNrbDetail`` header. */
-export function NrbActionsMenu({
-  nrbId,
-  nrbLabel,
+/** Kebab dropdown surfacing the same actions as the iBGC roster right-click
+ *  menu, sized for the dense ``CompactIbgcDetail`` header. */
+export function IbgcActionsMenu({
+  ibgcId,
+  ibgcLabel,
   variant,
   isPartial,
   isAsset,
 }: Props) {
-  const items = useNrbActions(nrbId, nrbLabel, { variant, isPartial, isAsset });
+  const items = useIbgcActions(ibgcId, ibgcLabel, { variant, isPartial, isAsset });
 
   return (
     <DropdownMenu>
@@ -42,7 +42,7 @@ export function NrbActionsMenu({
           variant="ghost"
           size="icon"
           className="h-7 w-7 shrink-0"
-          aria-label="NRB actions"
+          aria-label="iBGC actions"
         >
           <MoreVertical className="h-4 w-4" />
         </Button>

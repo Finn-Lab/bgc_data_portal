@@ -1,4 +1,4 @@
-"""In-memory builders for the NRB × domain and NRB × adjacency-pair matrices.
+"""In-memory builders for the iBGC × domain and iBGC × adjacency-pair matrices.
 
 These mirror :mod:`discovery.services.clustering.membership` and
 :mod:`discovery.services.clustering.adjacency`, but consume an in-memory
@@ -12,9 +12,9 @@ Vocabulary handling: callers pass the primary run's ``domain_accs`` and
 exact same column space; asset rows lose vocabulary not seen by the
 primary run, which is fine — that's what the projection math expects.
 
-The asset row order is determined by ``virtual_nrbs`` — the same dict the
+The asset row order is determined by ``virtual_ibgcs`` — the same dict the
 projection step uses to walk results back into Redis. Row N in the
-returned matrix corresponds to the Nth ``VirtualNrb``.
+returned matrix corresponds to the Nth ``VirtualIbgc``.
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     import numpy as np
     import scipy.sparse as sp
 
-    from .project import VirtualNrb
+    from .project import VirtualIbgc
 
 log = logging.getLogger(__name__)
 
@@ -38,18 +38,18 @@ def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
 
 
 def build_asset_domain_matrix(
-    virtual_nrbs: Sequence["VirtualNrb"],
+    virtual_ibgcs: Sequence["VirtualIbgc"],
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     domain_accs: Sequence[str],
 ) -> "sp.csr_matrix":
-    """Return the asset's NRB × domain binary matrix on the given vocabulary.
+    """Return the asset's iBGC × domain binary matrix on the given vocabulary.
 
-    Rows are ordered to match ``virtual_nrbs``; columns to match
+    Rows are ordered to match ``virtual_ibgcs``; columns to match
     ``domain_accs`` (the primary run's vocabulary). Domains from
     non-selected sources are silently dropped, mirroring the persistent
     builder's behaviour. Per-protein-anchor dedup matches the persistent
-    path: ``(virtual_nrb_index, domain_acc, cds_protein_id)`` collapses
+    path: ``(virtual_ibgc_index, domain_acc, cds_protein_id)`` collapses
     to a single binary entry.
     """
     import numpy as np
@@ -62,8 +62,8 @@ def build_asset_domain_matrix(
     cols_out: list[int] = []
     seen: set[tuple[int, int, str]] = set()
 
-    for row_idx, vnrb in enumerate(virtual_nrbs):
-        for domain in vnrb.domains:
+    for row_idx, vibgc in enumerate(virtual_ibgcs):
+        for domain in vibgc.domains:
             if not domain.domain_acc:
                 continue
             if domain.ref_db and domain.ref_db.upper() not in upper_sources:
@@ -81,7 +81,7 @@ def build_asset_domain_matrix(
 
     if not rows_out:
         return sp.csr_matrix(
-            (len(virtual_nrbs), len(domain_accs)), dtype=np.uint8
+            (len(virtual_ibgcs), len(domain_accs)), dtype=np.uint8
         )
 
     # Project the per-anchor entries down to (row, col) binary membership.
@@ -91,7 +91,7 @@ def build_asset_domain_matrix(
     data = np.ones(len(pairs), dtype=np.uint8)
     M = sp.csr_matrix(
         (data, (rows_arr, cols_arr)),
-        shape=(len(virtual_nrbs), len(domain_accs)),
+        shape=(len(virtual_ibgcs), len(domain_accs)),
         dtype=np.uint8,
     )
     log.info(
@@ -104,17 +104,17 @@ def build_asset_domain_matrix(
 
 
 def build_asset_adjacency_pair_matrix(
-    virtual_nrbs: Sequence["VirtualNrb"],
+    virtual_ibgcs: Sequence["VirtualIbgc"],
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     pair_vocab: Sequence[tuple[str, str]],
 ) -> "sp.csr_matrix":
-    """Return the asset's NRB × adjacent-domain-pair binary matrix.
+    """Return the asset's iBGC × adjacent-domain-pair binary matrix.
 
-    Mirrors :func:`discovery.services.clustering.adjacency.build_nrb_adjacency_pair_matrix`:
+    Mirrors :func:`discovery.services.clustering.adjacency.build_ibgc_adjacency_pair_matrix`:
 
     1. Filter domains by ``ref_db`` ∈ ``sources``, drop rows without a CDS anchor.
-    2. Sort by ``(cds_start, domain_start)`` across all member BGCs of the NRB.
+    2. Sort by ``(cds_start, domain_start)`` across all member BGCs of the iBGC.
     3. Sliding-window-2 over the ordered ``domain_acc`` list; canonicalise
        each pair to a sorted tuple.
 
@@ -131,16 +131,16 @@ def build_asset_adjacency_pair_matrix(
     cols_out: list[int] = []
     seen: set[tuple[int, int]] = set()
 
-    for row_idx, vnrb in enumerate(virtual_nrbs):
+    for row_idx, vibgc in enumerate(virtual_ibgcs):
         # Position-sorted (cds_start, domain_start, acc) entries. cds_start
         # comes from the CDS that owns each domain — look it up from the
-        # virtual NRB's CDS list, keyed on (bgc_key, protein_id).
+        # virtual iBGC's CDS list, keyed on (bgc_key, protein_id).
         cds_start_by_id: dict[tuple[tuple[str, int, int, str], str], int] = {}
-        for cds in vnrb.cds:
+        for cds in vibgc.cds:
             cds_start_by_id[(cds.bgc_key, cds.protein_id_str)] = cds.start_position
 
         entries: list[tuple[int, int, str]] = []
-        for domain in vnrb.domains:
+        for domain in vibgc.domains:
             if not domain.domain_acc:
                 continue
             if domain.ref_db and domain.ref_db.upper() not in upper_sources:
@@ -172,7 +172,7 @@ def build_asset_adjacency_pair_matrix(
 
     if not rows_out:
         return sp.csr_matrix(
-            (len(virtual_nrbs), len(pair_vocab)), dtype=np.uint8
+            (len(virtual_ibgcs), len(pair_vocab)), dtype=np.uint8
         )
 
     rows_arr = np.asarray(rows_out, dtype=np.int64)
@@ -180,7 +180,7 @@ def build_asset_adjacency_pair_matrix(
     data = np.ones(len(rows_out), dtype=np.uint8)
     M = sp.csr_matrix(
         (data, (rows_arr, cols_arr)),
-        shape=(len(virtual_nrbs), len(pair_vocab)),
+        shape=(len(virtual_ibgcs), len(pair_vocab)),
         dtype=np.uint8,
     )
     log.info(

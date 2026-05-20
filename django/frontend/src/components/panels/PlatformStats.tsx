@@ -29,21 +29,25 @@ export function PlatformStats() {
       className="ml-auto hidden items-stretch divide-x divide-border md:flex"
       aria-label="Discovery Platform totals"
     >
-      <StatTile value={data?.genomes} label="Genomes" isLoading={isLoading} />
-      <StatTile
-        value={data?.metagenomes}
-        label="Metagenomes"
-        isLoading={isLoading}
-      />
       <StatTile
         value={data?.validated_bgcs}
         label="Validated BGCs"
         isLoading={isLoading}
       />
-      <StatTile value={data?.regions} label="Regions" isLoading={isLoading} />
+      <StatTile
+        value={data?.ibgcs}
+        label="Integrated BGCs"
+        isLoading={isLoading}
+      />
       <StatTile
         value={data?.total_bgc_predictions}
-        label="BGC predictions"
+        label="Predicted BGCs"
+        isLoading={isLoading}
+      />
+      <StatTile value={data?.genomes} label="Genomes" isLoading={isLoading} />
+      <StatTile
+        value={data?.metagenomes}
+        label="Metagenomes"
         isLoading={isLoading}
       />
     </div>

@@ -70,7 +70,7 @@ export const TOOLTIP_REGISTRY: Record<string, TooltipEntry> = {
     docsUrl: "/docs/similarity-scores.html#sorensen-dice",
   },
   architecture_search: {
-    text: "Composite-Dice over a positional domain architecture. Each NRB is scored as w\u00B7Dice(domain set) + (1\u2212w)\u00B7Dice(adjacent-pair set). Adjacency rewards matching neighbour pairs in the supplied order; S\u00F8rensen-Dice measures unordered domain overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
+    text: "Composite-Dice over a positional domain architecture. Each iBGC is scored as w\u00B7Dice(domain set) + (1\u2212w)\u00B7Dice(adjacent-pair set). Adjacency rewards matching neighbour pairs in the supplied order; S\u00F8rensen-Dice measures unordered domain overlap. Slide right to favour bag-of-domains; slide left to favour gene-order similarity. Accessions outside the clustering run's vocabulary are silently dropped.",
     docsUrl: "/docs/similarity-scores.html#architecture-search",
   },
   tanimoto: {

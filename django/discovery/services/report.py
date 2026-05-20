@@ -1,7 +1,7 @@
 """Shortlist Report payload builder.
 
-Stateless: given a list of NRB ids, return a ready-to-render dict with all
-the panels the Report Page needs (NRB rows, domain composition, GCF
+Stateless: given a list of iBGC ids, return a ready-to-render dict with all
+the panels the Report Page needs (iBGC rows, domain composition, GCF
 distribution, score distributions, completeness pie, BGC class pie, length
 histogram, predictor distribution, assembly roster, assembly stats).
 
@@ -23,7 +23,7 @@ from discovery.models import (
     DashboardAssembly,
     DashboardBgc,
     DashboardContig,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 
 log = logging.getLogger(__name__)
@@ -56,26 +56,26 @@ def _taxonomy_phylum(taxonomy_path: Optional[str]) -> Optional[str]:
     return parts[1] if len(parts) >= 2 else parts[0]
 
 
-def _is_partial(nrb: NonRedundantBGC) -> bool:
-    return bool(nrb.umap_projected) or nrb.classification_run_id is None
+def _is_partial(ibgc: IntegratedBGC) -> bool:
+    return bool(ibgc.umap_projected) or ibgc.classification_run_id is None
 
 
 def build_report_payload(
-    nrb_ids: list[int],
+    ibgc_ids: list[int],
     *,
-    extra_nrb_rows: Optional[list[dict]] = None,
+    extra_ibgc_rows: Optional[list[dict]] = None,
     extra_domain_rows: Optional[list[dict]] = None,
 ) -> dict:
-    """Assemble the complete report payload for a shortlist of NRB ids.
+    """Assemble the complete report payload for a shortlist of iBGC ids.
 
-    ``extra_nrb_rows`` are already-shaped asset roster rows (from
-    ``asset:{token}:nrbs`` in Redis); ``extra_domain_rows`` is the asset's
-    flat per-NRB-deduped domain-hit list (from
+    ``extra_ibgc_rows`` are already-shaped asset roster rows (from
+    ``asset:{token}:ibgcs`` in Redis); ``extra_domain_rows`` is the asset's
+    flat per-iBGC-deduped domain-hit list (from
     ``asset:{token}:domain_hits``). Together they feed every panel that
-    derives from per-NRB or per-domain rows: score distributions,
+    derives from per-iBGC or per-domain rows: score distributions,
     completeness pie, length histogram, BGC-class pie, predictor pie,
     domain composition (and the GO slim matrix), GCF distribution, and
-    the source distribution (asset NRBs all collapse into a single
+    the source distribution (asset iBGCs all collapse into a single
     'Assets' bucket).
 
     Taxonomy sunburst + assembly stats stay persistent-only — assets have
@@ -85,35 +85,35 @@ def build_report_payload(
     (minus ``token`` which the endpoint sets).
     """
     # Negative ids belong to assets; keep them out of ORM filters but let
-    # the asset rows feed every per-NRB/per-domain aggregate below.
-    db_nrb_ids = sorted({nid for nid in nrb_ids if nid >= 0})
-    extra_nrb_rows = list(extra_nrb_rows or [])
+    # the asset rows feed every per-iBGC/per-domain aggregate below.
+    db_ibgc_ids = sorted({nid for nid in ibgc_ids if nid >= 0})
+    extra_ibgc_rows = list(extra_ibgc_rows or [])
     extra_domain_rows = list(extra_domain_rows or [])
-    nrbs = list(
-        NonRedundantBGC.objects.select_related("contig").filter(id__in=db_nrb_ids)
+    ibgcs = list(
+        IntegratedBGC.objects.select_related("contig").filter(id__in=db_ibgc_ids)
     )
-    n_nrbs = len(nrbs) + len(extra_nrb_rows)
+    n_ibgcs = len(ibgcs) + len(extra_ibgc_rows)
     now = timezone.now()
     expires_at = now + timedelta(seconds=REPORT_TTL_SECONDS)
 
-    if n_nrbs == 0:
+    if n_ibgcs == 0:
         return _empty_payload(now, expires_at)
 
-    # ── Member BGCs grouped by NRB (single sweep) ─────────────────────────
+    # ── Member BGCs grouped by iBGC (single sweep) ─────────────────────────
     members = list(
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id__in=db_nrb_ids)
+        .filter(integrated_bgc_id__in=db_ibgc_ids)
         .select_related("assembly", "assembly__source", "contig", "detector")
     )
-    members_by_nrb: dict[int, list[DashboardBgc]] = defaultdict(list)
+    members_by_ibgc: dict[int, list[DashboardBgc]] = defaultdict(list)
     for m in members:
-        members_by_nrb[m.non_redundant_bgc_id].append(m)
+        members_by_ibgc[m.integrated_bgc_id].append(m)
 
-    # ── NRB rows + parent-assembly collection ─────────────────────────────
+    # ── iBGC rows + parent-assembly collection ─────────────────────────────
     assembly_ids: set[int] = set()
-    nrb_rows: list[dict] = []
-    for nrb in nrbs:
-        mems = members_by_nrb.get(nrb.id, [])
+    ibgc_rows: list[dict] = []
+    for ibgc in ibgcs:
+        mems = members_by_ibgc.get(ibgc.id, [])
         is_validated = any(m.is_validated for m in mems)
         # ORed across all member assemblies — matches dashboard semantics.
         is_type_strain = any(
@@ -122,17 +122,17 @@ def build_report_payload(
         first_asm = mems[0].assembly if mems else None
         if first_asm:
             assembly_ids.add(first_asm.id)
-        contig = nrb.contig
-        nrb_rows.append({
-            "id": nrb.id,
-            "label": f"NRB-{nrb.id}",
-            "classification_path": nrb.gene_cluster_family or "",
-            "size_kb": round((nrb.end_position - nrb.start_position) / 1000.0, 3),
-            "novelty_score": nrb.novelty_score,
-            "domain_novelty": nrb.domain_novelty,
+        contig = ibgc.contig
+        ibgc_rows.append({
+            "id": ibgc.id,
+            "label": f"iBGC-{ibgc.id}",
+            "classification_path": ibgc.gene_cluster_family or "",
+            "size_kb": round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
+            "novelty_score": ibgc.novelty_score,
+            "domain_novelty": ibgc.domain_novelty,
             "n_source_bgcs": len(mems),
-            "source_tools": list(nrb.source_tools or []),
-            "is_partial": _is_partial(nrb),
+            "source_tools": list(ibgc.source_tools or []),
+            "is_partial": _is_partial(ibgc),
             "is_validated": is_validated,
             "is_type_strain": is_type_strain,
             "parent_assembly_accession": first_asm.assembly_accession if first_asm else None,
@@ -144,15 +144,15 @@ def build_report_payload(
         })
 
     # ── Domain composition (core / variable / rare per acc) ───────────────
-    domain_to_nrbs: dict[str, set[int]] = defaultdict(set)
+    domain_to_ibgcs: dict[str, set[int]] = defaultdict(set)
     domain_name_lookup: dict[str, str] = {}
     domain_desc_lookup: dict[str, str] = {}
     domain_goslim_lookup: dict[str, str] = {}
     domain_pairs = (
         BgcDomain.objects
-        .filter(bgc__non_redundant_bgc_id__in=db_nrb_ids)
+        .filter(bgc__integrated_bgc_id__in=db_ibgc_ids)
         .values_list(
-            "bgc__non_redundant_bgc_id",
+            "bgc__integrated_bgc_id",
             "domain_acc",
             "domain_name",
             "domain_description",
@@ -170,7 +170,7 @@ def build_report_payload(
     for nid, acc, name, desc, slim in domain_pairs:
         if not acc:
             continue
-        domain_to_nrbs[acc].add(nid)
+        domain_to_ibgcs[acc].add(nid)
         if name and acc not in domain_name_lookup:
             domain_name_lookup[acc] = name
         if desc and acc not in domain_desc_lookup:
@@ -179,14 +179,14 @@ def build_report_payload(
         if slim_str and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim_str
 
-    # Fold in asset domain hits (negative NRB ids); the set keyed by acc
-    # treats them identically to persisted NRBs for the tier denominator.
+    # Fold in asset domain hits (negative iBGC ids); the set keyed by acc
+    # treats them identically to persisted iBGCs for the tier denominator.
     for r in extra_domain_rows:
         acc = r.get("domain_acc")
         if not acc:
             continue
-        nid = int(r["nrb_id"])
-        domain_to_nrbs[acc].add(nid)
+        nid = int(r["ibgc_id"])
+        domain_to_ibgcs[acc].add(nid)
         name = r.get("domain_name") or ""
         if name and acc not in domain_name_lookup:
             domain_name_lookup[acc] = name
@@ -201,14 +201,14 @@ def build_report_payload(
     core_count = variable_count = rare_count = 0
     # Per (go_slim, tier) bucket of distinct domains for the heatmap.
     matrix_buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    # Long-format rows for the analyst JSON export (one per NRB × domain hit).
+    # Long-format rows for the analyst JSON export (one per iBGC × domain hit).
     domains_long: list[dict] = []
     NO_GOSLIM = "No GO slim"
-    for acc, hit_nrbs in sorted(
-        domain_to_nrbs.items(), key=lambda kv: (-len(kv[1]), kv[0])
+    for acc, hit_ibgcs in sorted(
+        domain_to_ibgcs.items(), key=lambda kv: (-len(kv[1]), kv[0])
     ):
-        c = len(hit_nrbs)
-        frac = c / n_nrbs
+        c = len(hit_ibgcs)
+        frac = c / n_ibgcs
         if frac >= CORE_FRACTION:
             tier = "core"
             core_count += 1
@@ -226,7 +226,7 @@ def build_report_payload(
             "domain_name": name,
             "domain_description": desc,
             "go_slim": slim,
-            "nrb_count": c,
+            "ibgc_count": c,
             "fraction": round(frac, 4),
             "tier": tier,
         })
@@ -235,15 +235,15 @@ def build_report_payload(
             "domain_name": name,
             "domain_description": desc,
         })
-        for nid in sorted(hit_nrbs):
+        for nid in sorted(hit_ibgcs):
             domains_long.append({
-                "nrb_id": nid,
+                "ibgc_id": nid,
                 "domain_acc": acc,
                 "domain_name": name,
                 "domain_description": desc,
                 "go_slim": slim,
                 "tier": tier,
-                "occurs_in_n_nrbs": c,
+                "occurs_in_n_ibgcs": c,
                 "fraction": round(frac, 4),
             })
     domain_composition = {
@@ -284,37 +284,37 @@ def build_report_payload(
 
     # ── GCF distribution ──────────────────────────────────────────────────
     gcf_counts: dict[str, int] = defaultdict(int)
-    for nrb in nrbs:
-        gcf_counts[nrb.gene_cluster_family or "(unclassified)"] += 1
-    # Asset NRBs were KNN-projected onto the latest ClusteringRun in
+    for ibgc in ibgcs:
+        gcf_counts[ibgc.gene_cluster_family or "(unclassified)"] += 1
+    # Asset iBGCs were KNN-projected onto the latest ClusteringRun in
     # services/asset_upload/project.py:_project_against_run — their
     # classification_path is the inherited leaf GCF.
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         gcf_counts[r.get("classification_path") or "(unclassified)"] += 1
     gcf_distribution = sorted(
         [
             {
                 "classification_path": p,
-                "nrb_count": c,
-                "fraction": round(c / n_nrbs, 4),
+                "ibgc_count": c,
+                "fraction": round(c / n_ibgcs, 4),
             }
             for p, c in gcf_counts.items()
         ],
-        key=lambda r: (-r["nrb_count"], r["classification_path"]),
+        key=lambda r: (-r["ibgc_count"], r["classification_path"]),
     )
 
     # ── Score distributions (capped sample for histogram rendering) ───────
     novelty_vals = [
-        float(n.novelty_score) for n in nrbs if n.novelty_score is not None
+        float(n.novelty_score) for n in ibgcs if n.novelty_score is not None
     ]
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         if r.get("novelty_score") is not None:
             novelty_vals.append(float(r["novelty_score"]))
     novelty_vals = novelty_vals[:SCORE_SAMPLE_CAP]
     dn_vals = [
-        float(n.domain_novelty) for n in nrbs if n.domain_novelty is not None
+        float(n.domain_novelty) for n in ibgcs if n.domain_novelty is not None
     ]
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         if r.get("domain_novelty") is not None:
             dn_vals.append(float(r["domain_novelty"]))
     dn_vals = dn_vals[:SCORE_SAMPLE_CAP]
@@ -324,18 +324,18 @@ def build_report_payload(
     ]
 
     # ── Completeness pie ──────────────────────────────────────────────────
-    projected_n = sum(1 for n in nrbs if n.umap_projected)
+    projected_n = sum(1 for n in ibgcs if n.umap_projected)
     unclustered_n = sum(
-        1 for n in nrbs
+        1 for n in ibgcs
         if not n.umap_projected and n.classification_run_id is None
     )
     # Asset rows: projected when umap_projected, else unclustered.
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         if r.get("umap_projected"):
             projected_n += 1
         else:
             unclustered_n += 1
-    primary_n = n_nrbs - projected_n - unclustered_n
+    primary_n = n_ibgcs - projected_n - unclustered_n
     completeness_pie = [
         {"name": "Clustered (primary)", "count": primary_n},
         {"name": "Projected partial", "count": projected_n},
@@ -343,13 +343,13 @@ def build_report_payload(
     ]
 
     # ── BGC class pie ─────────────────────────────────────────────────────
-    # Mirrors the ``bgc_class`` filter (api.py): an NRB matches a class when
+    # Mirrors the ``bgc_class`` filter (api.py): an iBGC matches a class when
     # any of its source DashboardBgcs has ``classification_path`` starting
-    # with that class. An NRB with source members in multiple classes counts
+    # with that class. An iBGC with source members in multiple classes counts
     # once per distinct class.
     class_counts: dict[str, int] = defaultdict(int)
-    for nrb in nrbs:
-        mems = members_by_nrb.get(nrb.id, [])
+    for ibgc in ibgcs:
+        mems = members_by_ibgc.get(ibgc.id, [])
         classes: set[str] = set()
         for m in mems:
             cp = (m.classification_path or "").strip()
@@ -359,7 +359,7 @@ def build_report_payload(
             classes.add("(unclassified)")
         for head in classes:
             class_counts[head] += 1
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         cp = (r.get("classification_path") or "").strip()
         head = cp.split(".")[0] if cp else "(unclassified)"
         class_counts[head] += 1
@@ -370,13 +370,13 @@ def build_report_payload(
 
     # ── Length histogram ──────────────────────────────────────────────────
     bucket_counts = [0] * len(LENGTH_BUCKETS)
-    for nrb in nrbs:
-        kb = (nrb.end_position - nrb.start_position) / 1000.0
+    for ibgc in ibgcs:
+        kb = (ibgc.end_position - ibgc.start_position) / 1000.0
         for i, (lo, hi, _) in enumerate(LENGTH_BUCKETS):
             if lo <= kb < hi:
                 bucket_counts[i] += 1
                 break
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         kb = float(r.get("size_kb") or 0.0)
         for i, (lo, hi, _) in enumerate(LENGTH_BUCKETS):
             if lo <= kb < hi:
@@ -389,10 +389,10 @@ def build_report_payload(
 
     # ── Predictor distribution ────────────────────────────────────────────
     predictor_counts: dict[str, int] = defaultdict(int)
-    for nrb in nrbs:
-        for tool in (nrb.source_tools or []):
+    for ibgc in ibgcs:
+        for tool in (ibgc.source_tools or []):
             predictor_counts[tool] += 1
-    for r in extra_nrb_rows:
+    for r in extra_ibgc_rows:
         for tool in (r.get("source_tools") or []):
             predictor_counts[tool] += 1
     predictor_distribution = sorted(
@@ -400,22 +400,22 @@ def build_report_payload(
         key=lambda r: (-r["count"], r["name"]),
     )
 
-    # ── Source distribution (NRBs per source collection) ──────────────────
-    # For each NRB, collect the set of source-collection names across its
-    # source DashboardBgcs (deduped per NRB so an NRB with two members from
+    # ── Source distribution (iBGCs per source collection) ──────────────────
+    # For each iBGC, collect the set of source-collection names across its
+    # source DashboardBgcs (deduped per iBGC so an iBGC with two members from
     # the same collection counts once for that collection).
     source_counts: dict[str, int] = defaultdict(int)
-    for nrb in nrbs:
+    for ibgc in ibgcs:
         names: set[str] = set()
-        for m in members_by_nrb.get(nrb.id, []):
+        for m in members_by_ibgc.get(ibgc.id, []):
             src = getattr(m.assembly, "source", None) if m.assembly else None
             if src and src.name:
                 names.add(src.name)
         for name in names:
             source_counts[name] += 1
-    # Asset NRBs have no AssemblySource row; collapse them into one bucket.
-    if extra_nrb_rows:
-        source_counts["Assets"] += len(extra_nrb_rows)
+    # Asset iBGCs have no AssemblySource row; collapse them into one bucket.
+    if extra_ibgc_rows:
+        source_counts["Assets"] += len(extra_ibgc_rows)
     source_distribution = sorted(
         [{"name": k, "count": v} for k, v in source_counts.items()],
         key=lambda r: (-r["count"], r["name"]),
@@ -434,10 +434,10 @@ def build_report_payload(
         if c["taxonomy_path"] and c["assembly_id"] not in contig_taxonomy_lookup:
             contig_taxonomy_lookup[c["assembly_id"]] = c["taxonomy_path"]
 
-    nrbs_per_assembly: dict[int, int] = defaultdict(int)
-    for r in nrb_rows:
+    ibgcs_per_assembly: dict[int, int] = defaultdict(int)
+    for r in ibgc_rows:
         if r["parent_assembly_id"]:
-            nrbs_per_assembly[r["parent_assembly_id"]] += 1
+            ibgcs_per_assembly[r["parent_assembly_id"]] += 1
 
     assembly_rows = []
     for asm in assemblies:
@@ -452,7 +452,7 @@ def build_report_payload(
             "taxonomy_phylum": _taxonomy_phylum(tx),
             "assembly_size_mb": asm.assembly_size_mb,
             "total_bgcs_in_assembly": asm.bgc_count,
-            "nrbs_in_shortlist": nrbs_per_assembly.get(asm.id, 0),
+            "ibgcs_in_shortlist": ibgcs_per_assembly.get(asm.id, 0),
             "is_type_strain": asm.is_type_strain,
         })
 
@@ -471,27 +471,27 @@ def build_report_payload(
         )
         assembly_stats = {}
 
-    # ── NRB-derived taxonomy sunburst ─────────────────────────────────────
-    # One count per NRB (using its contig's taxonomy_path), so the sunburst
+    # ── iBGC-derived taxonomy sunburst ─────────────────────────────────────
+    # One count per iBGC (using its contig's taxonomy_path), so the sunburst
     # reflects shortlist hits — not the size of the parent assembly.
     from discovery.services.stats import build_taxonomy_sunburst_from_paths
-    nrb_taxonomy_paths = [
-        n.contig.taxonomy_path for n in nrbs
+    ibgc_taxonomy_paths = [
+        n.contig.taxonomy_path for n in ibgcs
         if n.contig and n.contig.taxonomy_path
     ]
-    taxonomy_sunburst = build_taxonomy_sunburst_from_paths(nrb_taxonomy_paths)
+    taxonomy_sunburst = build_taxonomy_sunburst_from_paths(ibgc_taxonomy_paths)
 
     # Prepend ephemeral asset rows so they appear at the top of the report's
-    # NRB roster (matches the dashboard's ordering).
-    if extra_nrb_rows:
-        nrb_rows = list(extra_nrb_rows) + nrb_rows
+    # iBGC roster (matches the dashboard's ordering).
+    if extra_ibgc_rows:
+        ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
 
     return {
         "generated_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
-        "n_nrbs": n_nrbs,
+        "n_ibgcs": n_ibgcs,
         "n_assemblies": len(assembly_rows),
-        "nrb_rows": nrb_rows,
+        "ibgc_rows": ibgc_rows,
         "domain_composition": domain_composition,
         "gcf_distribution": gcf_distribution,
         "score_distributions": score_distributions,
@@ -504,7 +504,7 @@ def build_report_payload(
         "assembly_stats": assembly_stats,
         "taxonomy_sunburst": taxonomy_sunburst,
         "domain_goslim_matrix": domain_goslim_matrix,
-        # Internal: long-form per-NRB × domain rows for the analyst export.
+        # Internal: long-form per-iBGC × domain rows for the analyst export.
         # Not part of the ``ReportPayload`` schema (stripped before responding).
         "_domains_long": domains_long,
     }
@@ -526,10 +526,10 @@ def build_report_analyst_export(token: str, payload: dict) -> dict:
             "token": token,
             "generated_at": payload.get("generated_at"),
             "expires_at": payload.get("expires_at"),
-            "n_nrbs": payload.get("n_nrbs", 0),
+            "n_ibgcs": payload.get("n_ibgcs", 0),
             "n_assemblies": payload.get("n_assemblies", 0),
         },
-        "nrbs": payload.get("nrb_rows", []),
+        "ibgcs": payload.get("ibgc_rows", []),
         "assemblies": payload.get("assembly_rows", []),
         "domains_long": payload.get("_domains_long", []),
         "bgc_class_counts": payload.get("bgc_class_pie", []),
@@ -547,9 +547,9 @@ def _empty_payload(now, expires_at) -> dict:
     return {
         "generated_at": now.isoformat(),
         "expires_at": expires_at.isoformat(),
-        "n_nrbs": 0,
+        "n_ibgcs": 0,
         "n_assemblies": 0,
-        "nrb_rows": [],
+        "ibgc_rows": [],
         "domain_composition": {
             "core_count": 0, "variable_count": 0, "rare_count": 0,
             "total_unique": 0, "rows": [],

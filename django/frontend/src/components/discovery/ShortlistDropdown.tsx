@@ -19,7 +19,7 @@ import { toast } from "sonner";
  * Header-bar shortlist menu (v2). Replaces the right-rail sidebar
  * shortlist tray.
  *
- *   - Shows the BGC/NRB count as a badge on the trigger.
+ *   - Shows the BGC/iBGC count as a badge on the trigger.
  *   - "Generate Report" mints a snapshot and opens ``/report?token=…`` in
  *     a new tab. The same shortlist always resolves to the same token so
  *     re-runs are cheap.
@@ -35,19 +35,19 @@ export function ShortlistDropdown() {
 
   const onGenerate = () => {
     if (bgcs.length === 0) {
-      toast.info("Shortlist is empty — add NRBs via right-click");
+      toast.info("Shortlist is empty — add iBGCs via right-click");
       return;
     }
-    const nrbIds = bgcs.map((b) => b.id);
-    const hasAssetIds = nrbIds.some((id) => id < 0);
+    const ibgcIds = bgcs.map((b) => b.id);
+    const hasAssetIds = ibgcIds.some((id) => id < 0);
     if (hasAssetIds && !assetToken) {
       toast.error(
-        "Asset upload no longer in cache — re-upload to include those NRBs in a report.",
+        "Asset upload no longer in cache — re-upload to include those iBGCs in a report.",
       );
       return;
     }
     snapshot.mutate(
-      { nrbIds, assetToken },
+      { ibgcIds, assetToken },
       {
         onSuccess: (resp) => {
           // window.open bypasses React Router, so we need the absolute
@@ -77,7 +77,7 @@ export function ShortlistDropdown() {
           data-testid="shortlist-trigger"
         >
           <ListChecks className="h-4 w-4" />
-          Shortlist
+          iBGC Shortlist
           <Badge
             variant="secondary"
             className="ml-1 px-1.5 font-mono"
@@ -111,7 +111,7 @@ export function ShortlistDropdown() {
         <DropdownMenuSeparator />
         {bgcs.length === 0 && (
           <div className="px-3 py-3 text-xs text-muted-foreground">
-            Shortlist is empty. Right-click an NRB → "Add to shortlist".
+            Shortlist is empty. Right-click an iBGC → "Add to shortlist".
           </div>
         )}
         {bgcs.length > 0 && (

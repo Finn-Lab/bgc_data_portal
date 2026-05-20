@@ -1,17 +1,17 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNrbUmap } from "@/api/nrbs";
+import { fetchIbgcUmap } from "@/api/ibgcs";
 import { Loader2 } from "lucide-react";
 import {
   appliedFiltersToApiParams,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import { NrbScatterPlot } from "./NrbScatterPlot";
+import { IbgcScatterPlot } from "./IbgcScatterPlot";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 
 export function UmapMapTab() {
-  const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
@@ -20,18 +20,18 @@ export function UmapMapTab() {
 
   const filterParams = appliedFiltersToApiParams(
     applied,
-    resultNrbIds,
+    resultIbgcIds,
     assetToken,
   );
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
-    resultNrbIds !== null ||
+    resultIbgcIds !== null ||
     assetToken !== null;
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["nrb-umap", filterParams],
+    queryKey: ["ibgc-umap", filterParams],
     queryFn: () =>
-      fetchNrbUmap({ include_partials: true, ...filterParams }),
+      fetchIbgcUmap({ include_partials: true, ...filterParams }),
     enabled: hasActiveScope,
   });
 
@@ -76,7 +76,7 @@ export function UmapMapTab() {
             {(error as Error)?.message ?? "Failed to load UMAP"}
           </div>
         ) : (
-          <NrbScatterPlot
+          <IbgcScatterPlot
             points={points}
             xLabel="UMAP 1"
             yLabel="UMAP 2"

@@ -1,4 +1,4 @@
-"""Tests for build_nrb_adjacency_pair_matrix.
+"""Tests for build_ibgc_adjacency_pair_matrix.
 
 Verifies:
   * Sliding-window-2 pair extraction over a genome-ordered domain sequence.
@@ -16,10 +16,10 @@ from discovery.models import (
     BgcDomain,
     DashboardBgc,
     DashboardCds,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 from discovery.services.clustering.adjacency import (
-    build_nrb_adjacency_pair_matrix,
+    build_ibgc_adjacency_pair_matrix,
 )
 from tests.factories.discovery_models import DashboardContigFactory
 
@@ -37,17 +37,17 @@ def _bgc(contig, start=1, end=10_000):
     )
 
 
-def _nrb(contig, *, source_bgcs, start=1, end=10_000, tools=("GECCO",)):
-    nrb = NonRedundantBGC.objects.create(
+def _ibgc(contig, *, source_bgcs, start=1, end=10_000, tools=("GECCO",)):
+    ibgc = IntegratedBGC.objects.create(
         contig=contig,
         start_position=start,
         end_position=end,
         source_tools=sorted(tools),
     )
     DashboardBgc.objects.filter(id__in=[b.id for b in source_bgcs]).update(
-        non_redundant_bgc=nrb, classification_source="merged",
+        integrated_bgc=ibgc, classification_source="merged",
     )
-    return nrb
+    return ibgc
 
 
 def _cds(bgc, start, end, sha=""):
@@ -68,7 +68,7 @@ def _domain(bgc, *, cds, acc, ref_db="PFAM", aa_start=10, aa_end=80, name=""):
 def test_three_domain_sequence_yields_two_pairs():
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     cds2 = _cds(bgc, 500, 800)
     cds3 = _cds(bgc, 900, 1200)
@@ -76,8 +76,8 @@ def test_three_domain_sequence_yields_two_pairs():
     _domain(bgc, cds=cds2, acc="B")
     _domain(bgc, cds=cds3, acc="C")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(sources=("PFAM",))
-    assert list(row_ids) == [nrb.id]
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
+    assert list(row_ids) == [ibgc.id]
     pairs = {tuple(p) for p in pair_vocab.tolist()}
     assert pairs == {("A", "B"), ("B", "C")}
 
@@ -85,13 +85,13 @@ def test_three_domain_sequence_yields_two_pairs():
 def test_single_domain_produces_empty_row():
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     _domain(bgc, cds=cds1, acc="A")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(sources=("PFAM",))
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
     # Row exists but has zero pairs.
-    assert list(row_ids) == [nrb.id]
+    assert list(row_ids) == [ibgc.id]
     assert M.shape[1] == 0
     assert M.nnz == 0
 
@@ -99,7 +99,7 @@ def test_single_domain_produces_empty_row():
 def test_adjacent_identical_domains_kept_as_self_pair():
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     cds2 = _cds(bgc, 500, 800)
     cds3 = _cds(bgc, 900, 1200)
@@ -107,7 +107,7 @@ def test_adjacent_identical_domains_kept_as_self_pair():
     _domain(bgc, cds=cds2, acc="A")
     _domain(bgc, cds=cds3, acc="B")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(sources=("PFAM",))
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
     pairs = {tuple(p) for p in pair_vocab.tolist()}
     assert ("A", "A") in pairs
     assert ("A", "B") in pairs
@@ -116,7 +116,7 @@ def test_adjacent_identical_domains_kept_as_self_pair():
 def test_null_cds_domains_dropped_from_adjacency():
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     cds2 = _cds(bgc, 900, 1200)
     _domain(bgc, cds=cds1, acc="A")
@@ -127,7 +127,7 @@ def test_null_cds_domains_dropped_from_adjacency():
     )
     _domain(bgc, cds=cds2, acc="B")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(sources=("PFAM",))
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(sources=("PFAM",))
     pairs = {tuple(p) for p in pair_vocab.tolist()}
     # X is invisible to adjacency; sequence is [A, B] → {(A,B)} only.
     assert pairs == {("A", "B")}
@@ -137,23 +137,23 @@ def test_adjacency_matches_mixed_case_stored_ref_db():
     """Mirrors the membership-side test: bulk loader stores mixed-case ref_db."""
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     cds2 = _cds(bgc, 500, 800)
     _domain(bgc, cds=cds1, acc="A", ref_db="Pfam")
     _domain(bgc, cds=cds2, acc="B", ref_db="NCBIfam")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(
         sources=("PFAM", "NCBIFAM","TIGRFAM"),
     )
-    assert list(row_ids) == [nrb.id]
+    assert list(row_ids) == [ibgc.id]
     assert {tuple(p) for p in pair_vocab.tolist()} == {("A", "B")}
 
 
 def test_ref_db_filter_applies_before_sequencing():
     contig = DashboardContigFactory()
     bgc = _bgc(contig)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
     cds1 = _cds(bgc, 100, 400)
     cds2 = _cds(bgc, 500, 800)
     cds3 = _cds(bgc, 900, 1200)
@@ -163,7 +163,7 @@ def test_ref_db_filter_applies_before_sequencing():
     _domain(bgc, cds=cds2, acc="T", ref_db="TIGRFAM")
     _domain(bgc, cds=cds3, acc="B", ref_db="NCBIFAM")
 
-    M, row_ids, pair_vocab = build_nrb_adjacency_pair_matrix(
+    M, row_ids, pair_vocab = build_ibgc_adjacency_pair_matrix(
         sources=("PFAM", "NCBIFAM","TIGRFAM"),
     )
     pairs = {tuple(p) for p in pair_vocab.tolist()}

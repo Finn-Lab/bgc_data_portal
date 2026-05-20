@@ -23,7 +23,7 @@ import type {
   GcfDistributionEntry,
   LengthBucket,
   ReportAssemblyRow,
-  ReportNrbRow,
+  ReportIbgcRow,
   ReportPayload,
   ReportScoreDistribution,
   SunburstNode,
@@ -40,7 +40,7 @@ import {
  *
  * URL state:
  *   - ``?token=<sha>`` — render cached payload by token.
- *   - ``?nrbs=1,2,3`` — POST snapshot first, then redirect/render with token.
+ *   - ``?ibgcs=1,2,3`` — POST snapshot first, then redirect/render with token.
  *
  * Both forms are accepted so the Generate-Report button in the dashboard
  * header can choose between sharing a stable token URL vs. opening a fresh
@@ -49,24 +49,24 @@ import {
 export function ReportPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const token = searchParams.get("token");
-  const nrbsParam = searchParams.get("nrbs");
+  const ibgcsParam = searchParams.get("ibgcs");
 
   const snapshot = useReportSnapshot();
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   const { data, isLoading, isError, error } = useReport(token);
 
-  // If only ``?nrbs=`` was supplied (or token expired), mint a token from
+  // If only ``?ibgcs=`` was supplied (or token expired), mint a token from
   // the list and update the URL so the user can share/reload it.
   useEffect(() => {
     if (token) return;
-    if (!nrbsParam) return;
-    const ids = nrbsParam
+    if (!ibgcsParam) return;
+    const ids = ibgcsParam
       .split(",")
       .map((s) => parseInt(s, 10))
       .filter((n) => Number.isFinite(n));
     if (ids.length === 0) return;
     snapshot.mutate(
-      { nrbIds: ids, assetToken },
+      { ibgcIds: ids, assetToken },
       {
         onSuccess: (resp) => {
           setSearchParams({ token: resp.token }, { replace: true });
@@ -74,9 +74,9 @@ export function ReportPage() {
       },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, nrbsParam]);
+  }, [token, ibgcsParam]);
 
-  if (!token && !nrbsParam) {
+  if (!token && !ibgcsParam) {
     return (
       <PageShell>
         <p className="text-muted-foreground">
@@ -130,7 +130,7 @@ function ReportBody({ payload }: { payload: ReportPayload }) {
   return (
     <div data-report-root className="space-y-4">
       <ReportHeader payload={payload} />
-      <NrbResultsSection rows={payload.nrb_rows} />
+      <IbgcResultsSection rows={payload.ibgc_rows} />
       <BgcStatsSection payload={payload} />
       <TaxonomySunburstSection nodes={payload.taxonomy_sunburst} />
       <AssemblyRosterSection rows={payload.assembly_rows} />
@@ -157,7 +157,7 @@ function TaxonomySunburstSection({ nodes }: { nodes: SunburstNode[] }) {
               values: nodes.map((n) => n.count),
               branchvalues: "total",
               hovertemplate:
-                "<b>%{label}</b><br>%{value} NRB(s)<extra></extra>",
+                "<b>%{label}</b><br>%{value} iBGC(s)<extra></extra>",
             },
           ]}
           layout={{
@@ -181,32 +181,32 @@ function ReportHeader({ payload }: { payload: ReportPayload }) {
         <div>
           <h1 className="text-2xl font-semibold">BGC Shortlist Report</h1>
           <p className="text-xs text-muted-foreground">
-            {payload.n_nrbs} NRB(s) · {payload.n_assemblies} assembly(ies)
+            {payload.n_ibgcs} iBGC(s) · {payload.n_assemblies} assembly(ies)
           </p>
         </div>
         <ReportDownloadButtons
           token={payload.token}
-          label={`${payload.n_nrbs} NRBs`}
+          label={`${payload.n_ibgcs} iBGCs`}
         />
       </CardHeader>
     </Card>
   );
 }
 
-// ── NRB results table ──────────────────────────────────────────────────────
+// ── iBGC results table ──────────────────────────────────────────────────────
 
-function NrbResultsSection({ rows }: { rows: ReportNrbRow[] }) {
+function IbgcResultsSection({ rows }: { rows: ReportIbgcRow[] }) {
   return (
     <Card>
       <CardHeader className="p-4">
-        <CardTitle className="text-base">NRB Results</CardTitle>
+        <CardTitle className="text-base">iBGC Results</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <ScrollArea className="max-h-[420px]">
           <Table>
             <TableHeader className="sticky top-0 bg-card z-10">
               <TableRow>
-                <TableHead>NRB</TableHead>
+                <TableHead>iBGC</TableHead>
                 <TableHead>Assembly</TableHead>
                 <TableHead>Organism</TableHead>
                 <TableHead>Phylum</TableHead>
@@ -302,7 +302,7 @@ function BgcStatsSection({ payload }: { payload: ReportPayload }) {
 
 function SourceDistributionPanel({ rows }: { rows: CategoryCount[] }) {
   return (
-    <PanelCard title="Source distribution (NRBs per collection)">
+    <PanelCard title="Source distribution (iBGCs per collection)">
       <Plot
         data={[
           {
@@ -317,7 +317,7 @@ function SourceDistributionPanel({ rows }: { rows: CategoryCount[] }) {
           autosize: true,
           height: 240,
           margin: { l: 140, r: 16, t: 8, b: 30 },
-          xaxis: { title: { text: "NRBs" } },
+          xaxis: { title: { text: "iBGCs" } },
           yaxis: { automargin: true, tickfont: { size: 10 } },
         }}
         useResizeHandler
@@ -367,7 +367,7 @@ function DomainCompositionPanel({
           <TableHeader>
             <TableRow>
               <TableHead>Domain</TableHead>
-              <TableHead className="text-right">NRBs</TableHead>
+              <TableHead className="text-right">iBGCs</TableHead>
               <TableHead className="text-right">Fraction</TableHead>
               <TableHead>Tier</TableHead>
             </TableRow>
@@ -383,7 +383,7 @@ function DomainCompositionPanel({
                     </span>
                   )}
                 </TableCell>
-                <TableCell className="text-right">{d.nrb_count}</TableCell>
+                <TableCell className="text-right">{d.ibgc_count}</TableCell>
                 <TableCell className="text-right">
                   {(d.fraction * 100).toFixed(1)}%
                 </TableCell>
@@ -566,7 +566,7 @@ function GcfDistributionPanel({ rows }: { rows: GcfDistributionEntry[] }) {
           {
             type: "bar",
             orientation: "h",
-            x: top.map((r) => r.nrb_count),
+            x: top.map((r) => r.ibgc_count),
             y: top.map((r) => r.classification_path || "(unclassified)"),
             marker: { color: "#3b82f6" },
           },
@@ -575,7 +575,7 @@ function GcfDistributionPanel({ rows }: { rows: GcfDistributionEntry[] }) {
           autosize: true,
           height: 280,
           margin: { l: 160, r: 16, t: 8, b: 30 },
-          xaxis: { title: { text: "NRBs" } },
+          xaxis: { title: { text: "iBGCs" } },
           yaxis: { automargin: true, tickfont: { size: 10 } },
         }}
         useResizeHandler
@@ -607,7 +607,7 @@ function ScoreDistributionPanel({
           margin: { l: 40, r: 16, t: 8, b: 30 },
           barmode: "overlay",
           xaxis: { title: { text: "Score" }, range: [0, 1] },
-          yaxis: { title: { text: "NRBs" } },
+          yaxis: { title: { text: "iBGCs" } },
           legend: { orientation: "h", y: -0.2 },
         }}
         useResizeHandler
@@ -689,7 +689,7 @@ function LengthHistogramPanel({ rows }: { rows: LengthBucket[] }) {
           height: 240,
           margin: { l: 40, r: 16, t: 8, b: 36 },
           xaxis: { title: { text: "kb" } },
-          yaxis: { title: { text: "NRBs" } },
+          yaxis: { title: { text: "iBGCs" } },
         }}
         useResizeHandler
         style={{ width: "100%" }}
@@ -762,7 +762,7 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
                 <TableHead>Source</TableHead>
                 <TableHead className="text-right">Size (Mb)</TableHead>
                 <TableHead className="text-right">BGCs (total)</TableHead>
-                <TableHead className="text-right">NRBs (shortlist)</TableHead>
+                <TableHead className="text-right">iBGCs (shortlist)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -793,7 +793,7 @@ function AssemblyRosterSection({ rows }: { rows: ReportAssemblyRow[] }) {
                     {r.total_bgcs_in_assembly}
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {r.nrbs_in_shortlist}
+                    {r.ibgcs_in_shortlist}
                   </TableCell>
                 </TableRow>
               ))}
@@ -812,7 +812,7 @@ function AssemblyStatsSection({
 }: {
   stats: Record<string, unknown>;
 }) {
-  // Taxonomy lives in its own NRB-derived TaxonomySunburstSection card; here
+  // Taxonomy lives in its own iBGC-derived TaxonomySunburstSection card; here
   // we only surface biome + per-assembly source distributions.
   const biomeDistribution = useMemo(
     () => (stats?.biome_distribution as CategoryCount[]) ?? [],

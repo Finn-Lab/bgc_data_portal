@@ -12,9 +12,9 @@ trips over it before users do.
 
 from __future__ import annotations
 
-from discovery.services.architecture import bgc_architecture, nrb_architecture  # noqa: F401
+from discovery.services.architecture import bgc_architecture, ibgc_architecture  # noqa: F401
 from discovery.services.asset_upload.matrices import DEFAULT_DOMAIN_SOURCES as ASSET_DEFAULTS
-from discovery.services.clustering.adjacency import build_nrb_adjacency_pair_matrix  # noqa: F401
+from discovery.services.clustering.adjacency import build_ibgc_adjacency_pair_matrix  # noqa: F401
 from discovery.services.clustering.membership import (
     DEFAULT_DOMAIN_SOURCES as MEMBERSHIP_DEFAULTS,
 )
@@ -39,7 +39,7 @@ def test_asset_matrix_default_sources_unchanged():
 
 
 def test_architecture_module_default_sources_unchanged():
-    """Pooled positional architecture (used by nrb_detail / bgc_detail and
+    """Pooled positional architecture (used by ibgc_detail / bgc_detail and
     the architecture-search query) imports its default from the
     clustering.membership module."""
     from discovery.services import architecture as arch_mod

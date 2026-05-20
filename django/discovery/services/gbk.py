@@ -86,28 +86,28 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
                 },
             ))
 
-    # ── NRB feature (consolidated non-redundant BGC) ─────────────────────────
-    nrb = getattr(bgc, "non_redundant_bgc", None)
-    if nrb is not None:
-        nrb_rel_start = _crop(nrb.start_position, window_start, window_end) - window_start
-        nrb_rel_end = _crop(nrb.end_position, window_start, window_end) - window_start
-        if nrb_rel_end > nrb_rel_start:
-            nrb_qualifiers = {
-                "ID": [f"NRB-{nrb.id}"],
-                "start": [str(nrb.start_position + 1)],
-                "end": [str(nrb.end_position)],
-                "source_tools": [",".join(nrb.source_tools or [])],
+    # ── iBGC feature (consolidated integrated BGC) ─────────────────────────
+    ibgc = getattr(bgc, "integrated_bgc", None)
+    if ibgc is not None:
+        ibgc_rel_start = _crop(ibgc.start_position, window_start, window_end) - window_start
+        ibgc_rel_end = _crop(ibgc.end_position, window_start, window_end) - window_start
+        if ibgc_rel_end > ibgc_rel_start:
+            ibgc_qualifiers = {
+                "ID": [f"iBGC-{ibgc.id}"],
+                "start": [str(ibgc.start_position + 1)],
+                "end": [str(ibgc.end_position)],
+                "source_tools": [",".join(ibgc.source_tools or [])],
             }
-            if nrb.gene_cluster_family:
-                nrb_qualifiers["gene_cluster_family"] = [nrb.gene_cluster_family]
-            if nrb.novelty_score is not None:
-                nrb_qualifiers["novelty_score"] = [f"{nrb.novelty_score:.4f}"]
-            if nrb.domain_novelty is not None:
-                nrb_qualifiers["domain_novelty"] = [f"{nrb.domain_novelty:.4f}"]
+            if ibgc.gene_cluster_family:
+                ibgc_qualifiers["gene_cluster_family"] = [ibgc.gene_cluster_family]
+            if ibgc.novelty_score is not None:
+                ibgc_qualifiers["novelty_score"] = [f"{ibgc.novelty_score:.4f}"]
+            if ibgc.domain_novelty is not None:
+                ibgc_qualifiers["domain_novelty"] = [f"{ibgc.domain_novelty:.4f}"]
             features.append(SeqFeature(
-                FeatureLocation(nrb_rel_start, nrb_rel_end),
-                type="NRB",
-                qualifiers=nrb_qualifiers,
+                FeatureLocation(ibgc_rel_start, ibgc_rel_end),
+                type="iBGC",
+                qualifiers=ibgc_qualifiers,
             ))
 
     # ── BGC feature (the SanntiS / antiSMASH / GECCO prediction) ─────────────
@@ -184,10 +184,10 @@ def _fetch_bgcs_for_gbk(filter_kwargs: dict):
             "contig__seq",
             "detector",
             "region",
-            "non_redundant_bgc",
+            "integrated_bgc",
         )
         .prefetch_related("cds_list", "cds_list__seq")
-        .order_by("non_redundant_bgc_id", "id")
+        .order_by("integrated_bgc_id", "id")
     )
 
 
@@ -200,14 +200,14 @@ def build_multi_bgc_gbk(bgc_ids: List[int]) -> str:
     return handle.getvalue()
 
 
-def build_shortlist_gbk_zip(nrb_ids: List[int]) -> bytes:
+def build_shortlist_gbk_zip(ibgc_ids: List[int]) -> bytes:
     """Build a zip archive of GBK files, one per source DashboardBgc.
 
-    Source BGCs are grouped by their parent NRB; files are named
-    ``NRB-{nrb_id}/{bgc_accession}.gbk`` so the resulting tree reflects the
-    NRB → source-BGC hierarchy. Returns the zip bytes (in-memory).
+    Source BGCs are grouped by their parent iBGC; files are named
+    ``iBGC-{ibgc_id}/{bgc_accession}.gbk`` so the resulting tree reflects the
+    iBGC → source-BGC hierarchy. Returns the zip bytes (in-memory).
     """
-    bgcs = list(_fetch_bgcs_for_gbk({"non_redundant_bgc_id__in": list(nrb_ids)}))
+    bgcs = list(_fetch_bgcs_for_gbk({"integrated_bgc_id__in": list(ibgc_ids)}))
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -215,7 +215,7 @@ def build_shortlist_gbk_zip(nrb_ids: List[int]) -> bytes:
             record = build_bgc_genbank_record(bgc)
             handle = StringIO()
             SeqIO.write([record], handle, "genbank")
-            nrb_id = bgc.non_redundant_bgc_id or 0
-            filename = f"NRB-{nrb_id}/{bgc.bgc_accession}.gbk"
+            ibgc_id = bgc.integrated_bgc_id or 0
+            filename = f"iBGC-{ibgc_id}/{bgc.bgc_accession}.gbk"
             zf.writestr(filename, handle.getvalue())
     return buf.getvalue()

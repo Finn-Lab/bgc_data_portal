@@ -1,9 +1,9 @@
-"""Report payload assembly with asset NRB rows + domain hits.
+"""Report payload assembly with asset iBGC rows + domain hits.
 
 Pins the contract that ``build_report_payload`` weaves asset roster rows
 and asset domain-hit rows into the panels that previously skipped them:
 domain composition, domain × GO slim matrix, GCF distribution, and the
-source distribution (asset NRBs collapse into a single 'Assets' bucket).
+source distribution (asset iBGCs collapse into a single 'Assets' bucket).
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from discovery.models import (
     DashboardBgc,
     DashboardContig,
     DashboardDetector,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 from discovery.services.report import build_report_payload
 
 
-def _make_persistent_nrb_with_domain():
-    """One persisted NRB with a single BgcDomain row carrying a known slim."""
+def _make_persistent_ibgc_with_domain():
+    """One persisted iBGC with a single BgcDomain row carrying a known slim."""
     src = AssemblySource.objects.create(name="GTDB")
     assembly = DashboardAssembly.objects.create(
         assembly_accession="A1",
@@ -49,7 +49,7 @@ def _make_persistent_nrb_with_domain():
         tool_name_code="ANT",
         version_sort_key=710,
     )
-    nrb = NonRedundantBGC.objects.create(
+    ibgc = IntegratedBGC.objects.create(
         contig=contig,
         start_position=1_000,
         end_position=15_000,
@@ -69,7 +69,7 @@ def _make_persistent_nrb_with_domain():
         end_position=15_000,
         classification_path="Polyketide",
         detector=detector,
-        non_redundant_bgc=nrb,
+        integrated_bgc=ibgc,
     )
     BgcDomain.objects.create(
         bgc=bgc,
@@ -81,21 +81,21 @@ def _make_persistent_nrb_with_domain():
         end_position=100,
         go_slim=["Signal transducer activity"],
     )
-    return nrb
+    return ibgc
 
 
 @pytest.mark.django_db
 def test_assets_feed_domain_gcf_and_source_panels():
-    """Persisted NRB sharing one Pfam with an asset NRB; both must appear in
+    """Persisted iBGC sharing one Pfam with an asset iBGC; both must appear in
     the domain composition tiers, GO slim matrix, GCF distribution, and the
     source distribution (asset under 'Assets')."""
-    nrb = _make_persistent_nrb_with_domain()
+    ibgc = _make_persistent_ibgc_with_domain()
 
     asset_id = -1
     asset_rows = [
         {
             "id": asset_id,
-            "label": "NRB-A1",
+            "label": "iBGC-A1",
             "classification_path": "RiPP",
             "size_kb": 12.0,
             "n_source_bgcs": 1,
@@ -116,10 +116,10 @@ def test_assets_feed_domain_gcf_and_source_panels():
         }
     ]
     domain_hits = [
-        # Shared with the persisted NRB → should sit in the same composition
+        # Shared with the persisted iBGC → should sit in the same composition
         # row and drive a non-zero "Signal transducer activity" matrix cell.
         {
-            "nrb_id": asset_id,
+            "ibgc_id": asset_id,
             "domain_acc": "PF00001",
             "domain_name": "Pf001",
             "domain_description": "GPCR-like",
@@ -127,7 +127,7 @@ def test_assets_feed_domain_gcf_and_source_panels():
         },
         # Asset-only domain → should still show in the composition table.
         {
-            "nrb_id": asset_id,
+            "ibgc_id": asset_id,
             "domain_acc": "PF00009",
             "domain_name": "Pf009",
             "domain_description": "Asset-only",
@@ -136,8 +136,8 @@ def test_assets_feed_domain_gcf_and_source_panels():
     ]
 
     payload = build_report_payload(
-        [nrb.id, asset_id],
-        extra_nrb_rows=asset_rows,
+        [ibgc.id, asset_id],
+        extra_ibgc_rows=asset_rows,
         extra_domain_rows=domain_hits,
     )
 
@@ -148,8 +148,8 @@ def test_assets_feed_domain_gcf_and_source_panels():
     shared_row = next(
         r for r in payload["domain_composition"]["rows"] if r["domain_acc"] == "PF00001"
     )
-    # Shared Pfam hit by both NRBs (1 persisted + 1 asset of 2 total).
-    assert shared_row["nrb_count"] == 2
+    # Shared Pfam hit by both iBGCs (1 persisted + 1 asset of 2 total).
+    assert shared_row["ibgc_count"] == 2
 
     # ── Domain × GO slim matrix ───────────────────────────────────────────
     matrix = payload["domain_goslim_matrix"]
@@ -162,24 +162,24 @@ def test_assets_feed_domain_gcf_and_source_panels():
 
     # ── GCF distribution ──────────────────────────────────────────────────
     gcf_paths = {row["classification_path"] for row in payload["gcf_distribution"]}
-    assert "Polyketide" in gcf_paths  # from persisted NRB
+    assert "Polyketide" in gcf_paths  # from persisted iBGC
     assert "RiPP" in gcf_paths        # from asset's KNN-projected classification
 
     # ── Source distribution ───────────────────────────────────────────────
     source_buckets = {row["name"]: row["count"] for row in payload["source_distribution"]}
-    assert source_buckets.get("GTDB") == 1   # persisted NRB's collection
-    assert source_buckets.get("Assets") == 1  # single bucket for asset NRBs
+    assert source_buckets.get("GTDB") == 1   # persisted iBGC's collection
+    assert source_buckets.get("Assets") == 1  # single bucket for asset iBGCs
 
 
 @pytest.mark.django_db
 def test_unclassified_asset_goes_into_unclassified_bucket():
-    """An asset NRB whose KNN projection didn't yield a leaf path must still
+    """An asset iBGC whose KNN projection didn't yield a leaf path must still
     appear in the GCF distribution, falling into '(unclassified)'."""
-    nrb = _make_persistent_nrb_with_domain()
+    ibgc = _make_persistent_ibgc_with_domain()
     asset_rows = [
         {
             "id": -2,
-            "label": "NRB-A2",
+            "label": "iBGC-A2",
             "classification_path": "",  # no projection
             "size_kb": 5.0,
             "n_source_bgcs": 1,
@@ -199,11 +199,11 @@ def test_unclassified_asset_goes_into_unclassified_bucket():
         }
     ]
     payload = build_report_payload(
-        [nrb.id, -2],
-        extra_nrb_rows=asset_rows,
+        [ibgc.id, -2],
+        extra_ibgc_rows=asset_rows,
         extra_domain_rows=[],
     )
-    gcf_buckets = {row["classification_path"]: row["nrb_count"] for row in payload["gcf_distribution"]}
+    gcf_buckets = {row["classification_path"]: row["ibgc_count"] for row in payload["gcf_distribution"]}
     assert gcf_buckets.get("(unclassified)") == 1
     source_buckets = {row["name"]: row["count"] for row in payload["source_distribution"]}
     assert source_buckets.get("Assets") == 1

@@ -2,7 +2,7 @@
 
 A user uploads a ``tar.gz`` containing the same TSV layout that the
 persistent ingestion loader accepts (``assemblies.tsv``, ``bgcs.tsv``, …),
-the platform builds virtual NRBs from it, projects them onto the latest
+the platform builds virtual iBGCs from it, projects them onto the latest
 ``ClusteringRun``'s composite-Dice space (KNN inheritance for
 ``gene_cluster_family``, weighted-avg UMAP coords, novelty + domain
 novelty), and caches the result in Redis under an ``asset:{token}:*`` key

@@ -1,6 +1,6 @@
 """Roll back to a prior ClusteringRun by replaying its snapshot.
 
-Each ``import_clustering_results`` call snapshots the per-NRB classification
+Each ``import_clustering_results`` call snapshots the per-iBGC classification
 columns *before* it overwrites them. This command undoes that overwrite by
 restoring the columns from a chosen run's snapshot.
 """
@@ -15,7 +15,7 @@ from django.utils import timezone
 
 log = logging.getLogger(__name__)
 
-NRB_RESTORE_FIELDS = (
+IBGC_RESTORE_FIELDS = (
     "umap_x",
     "umap_y",
     "umap_projected",
@@ -29,7 +29,7 @@ NRB_RESTORE_FIELDS = (
 
 class Command(BaseCommand):
     help = (
-        "Restore NonRedundantBGC per-row columns from a ClusteringRun's "
+        "Restore IntegratedBGC per-row columns from a ClusteringRun's "
         "import-time snapshot and re-point classification_run."
     )
 
@@ -44,7 +44,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from discovery.models import ClusteringRun, NonRedundantBGCClusteringSnapshot
+        from discovery.models import ClusteringRun, IntegratedBGCClusteringSnapshot
 
         sha_arg = options["sha"]
         match = ClusteringRun.objects.filter(sha256__startswith=sha_arg)
@@ -57,7 +57,7 @@ class Command(BaseCommand):
             )
         target = match.first()
 
-        n_snaps = NonRedundantBGCClusteringSnapshot.objects.filter(
+        n_snaps = IntegratedBGCClusteringSnapshot.objects.filter(
             clustering_run=target,
         ).count()
         if n_snaps == 0:
@@ -76,39 +76,39 @@ class Command(BaseCommand):
         restored = self._apply(target)
         self.stdout.write(
             self.style.SUCCESS(
-                f"Restored {restored} NRBs to ClusteringRun pk={target.pk}.",
+                f"Restored {restored} iBGCs to ClusteringRun pk={target.pk}.",
             ),
         )
 
     @transaction.atomic
     def _apply(self, target) -> int:
         from discovery.models import (
-            NonRedundantBGC,
-            NonRedundantBGCClusteringSnapshot,
+            IntegratedBGC,
+            IntegratedBGCClusteringSnapshot,
         )
 
         snaps = list(
-            NonRedundantBGCClusteringSnapshot.objects.filter(clustering_run=target)
+            IntegratedBGCClusteringSnapshot.objects.filter(clustering_run=target)
         )
-        snap_by_id = {s.nrb_id: s for s in snaps}
+        snap_by_id = {s.ibgc_id: s for s in snaps}
         now = timezone.now()
 
-        nrbs = list(NonRedundantBGC.objects.filter(id__in=list(snap_by_id.keys())))
-        for nrb in nrbs:
-            s = snap_by_id[nrb.id]
-            nrb.umap_x = s.umap_x
-            nrb.umap_y = s.umap_y
-            nrb.umap_projected = s.umap_projected
-            nrb.gene_cluster_family = s.gene_cluster_family or ""
-            nrb.novelty_score = s.novelty_score
-            nrb.domain_novelty = s.domain_novelty
-            nrb.classification_run = target
-            nrb.classified_at = now
-        NonRedundantBGC.objects.bulk_update(
-            nrbs, list(NRB_RESTORE_FIELDS), batch_size=5_000,
+        ibgcs = list(IntegratedBGC.objects.filter(id__in=list(snap_by_id.keys())))
+        for ibgc in ibgcs:
+            s = snap_by_id[ibgc.id]
+            ibgc.umap_x = s.umap_x
+            ibgc.umap_y = s.umap_y
+            ibgc.umap_projected = s.umap_projected
+            ibgc.gene_cluster_family = s.gene_cluster_family or ""
+            ibgc.novelty_score = s.novelty_score
+            ibgc.domain_novelty = s.domain_novelty
+            ibgc.classification_run = target
+            ibgc.classified_at = now
+        IntegratedBGC.objects.bulk_update(
+            ibgcs, list(IBGC_RESTORE_FIELDS), batch_size=5_000,
         )
         log.info(
-            "set_active_clustering_run: restored %d NRBs to run pk=%s",
-            len(nrbs), target.pk,
+            "set_active_clustering_run: restored %d iBGCs to run pk=%s",
+            len(ibgcs), target.pk,
         )
-        return len(nrbs)
+        return len(ibgcs)

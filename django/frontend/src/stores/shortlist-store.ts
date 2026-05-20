@@ -11,7 +11,7 @@ interface ShortlistItem {
 }
 
 interface ShortlistState {
-  // ── BGC / NRB shortlist (primary unit in v2) ────────────────────────────
+  // ── BGC / iBGC shortlist (primary unit in v2) ────────────────────────────
   bgcs: ShortlistItem[];
 
   addBgc: (item: ShortlistItem) => boolean;

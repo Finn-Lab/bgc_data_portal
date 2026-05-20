@@ -1,19 +1,19 @@
-"""Tests for build_nrb_domain_matrix.
+"""Tests for build_ibgc_domain_matrix.
 
 Verifies:
-  * Domain matrix is derived from NRBs (not source DashboardBgcs directly).
+  * Domain matrix is derived from iBGCs (not source DashboardBgcs directly).
   * sources= filter is case-insensitive at the boundary and excludes
     non-selected ref_db rows.
   * The matrix dedupes (domain_acc, cds.start_position) across source BGCs of
-    a merged NRB so the same domain at the same position counts once.
+    a merged iBGC so the same domain at the same position counts once.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from discovery.models import BgcDomain, DashboardBgc, NonRedundantBGC
-from discovery.services.clustering.membership import build_nrb_domain_matrix
+from discovery.models import BgcDomain, DashboardBgc, IntegratedBGC
+from discovery.services.clustering.membership import build_ibgc_domain_matrix
 from tests.factories.discovery_models import DashboardContigFactory
 
 
@@ -31,17 +31,17 @@ def _bgc(contig, *, start, end, is_partial=False):
     )
 
 
-def _nrb(contig, *, source_bgcs, start, end, tools):
-    nrb = NonRedundantBGC.objects.create(
+def _ibgc(contig, *, source_bgcs, start, end, tools):
+    ibgc = IntegratedBGC.objects.create(
         contig=contig,
         start_position=start,
         end_position=end,
         source_tools=sorted(tools),
     )
     DashboardBgc.objects.filter(id__in=[b.id for b in source_bgcs]).update(
-        non_redundant_bgc=nrb, classification_source="merged",
+        integrated_bgc=ibgc, classification_source="merged",
     )
-    return nrb
+    return ibgc
 
 
 def _domain(bgc, *, acc, ref_db, name="dummy", start=1, end=100):
@@ -54,23 +54,23 @@ def _domain(bgc, *, acc, ref_db, name="dummy", start=1, end=100):
 def test_sources_filter_is_case_insensitive_and_excludes_tigrfam():
     contig = DashboardContigFactory()
     bgc = _bgc(contig, start=1, end=10_000)
-    _nrb(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
+    _ibgc(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
 
     _domain(bgc, acc="PF00001", ref_db="PFAM")
     _domain(bgc, acc="NF12345", ref_db="NCBIFAM")
     _domain(bgc, acc="TIGR00100", ref_db="TIGRFAM")
 
-    M, row_ids, domain_accs = build_nrb_domain_matrix(sources=("PFAM", "NCBIFAM","TIGRFAM"))
+    M, row_ids, domain_accs = build_ibgc_domain_matrix(sources=("PFAM", "NCBIFAM","TIGRFAM"))
 
     assert M.shape == (1, 2)
     assert set(domain_accs.tolist()) == {"PF00001", "NF12345"}
 
 
-def test_dedup_across_source_bgcs_of_merged_nrb():
+def test_dedup_across_source_bgcs_of_merged_ibgc():
     contig = DashboardContigFactory()
     bgc_a = _bgc(contig, start=1, end=5_000)
     bgc_b = _bgc(contig, start=4_000, end=10_000)
-    nrb = _nrb(
+    ibgc = _ibgc(
         contig, source_bgcs=[bgc_a, bgc_b],
         start=1, end=10_000, tools=["GECCO", "SanntiS"],
     )
@@ -80,12 +80,12 @@ def test_dedup_across_source_bgcs_of_merged_nrb():
     _domain(bgc_b, acc="PF00001", ref_db="PFAM")
     _domain(bgc_b, acc="PF00002", ref_db="PFAM")
 
-    M, row_ids, domain_accs = build_nrb_domain_matrix(sources=("PFAM",))
+    M, row_ids, domain_accs = build_ibgc_domain_matrix(sources=("PFAM",))
 
-    assert list(row_ids) == [nrb.id]
+    assert list(row_ids) == [ibgc.id]
     # Two distinct domains: PF00001 and PF00002.
     assert sorted(domain_accs.tolist()) == ["PF00001", "PF00002"]
-    # nnz == 2 (one per (nrb, domain)).
+    # nnz == 2 (one per (ibgc, domain)).
     assert M.nnz == 2
 
 
@@ -97,27 +97,27 @@ def test_sources_filter_matches_mixed_case_stored_ref_db():
     """
     contig = DashboardContigFactory()
     bgc = _bgc(contig, start=1, end=10_000)
-    _nrb(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
+    _ibgc(contig, source_bgcs=[bgc], start=1, end=10_000, tools=["GECCO"])
 
     _domain(bgc, acc="PF00001", ref_db="Pfam")
     _domain(bgc, acc="NF12345", ref_db="NCBIfam")
     _domain(bgc, acc="TIGR00100", ref_db="TIGRfam")
 
-    M, _, accs = build_nrb_domain_matrix(sources=("PFAM", "NCBIFAM", "TIGRFAM"))
+    M, _, accs = build_ibgc_domain_matrix(sources=("PFAM", "NCBIFAM", "TIGRFAM"))
 
     assert M.shape == (1, 3)
     assert set(accs.tolist()) == {"PF00001", "NF12345", "TIGR00100"}
 
 
-def test_only_nrb_rows_appear_partials_skipped():
+def test_only_ibgc_rows_appear_partials_skipped():
     contig = DashboardContigFactory()
     bgc_merged = _bgc(contig, start=1, end=5_000)
     bgc_partial = _bgc(contig, start=20_000, end=25_000, is_partial=True)
-    _nrb(contig, source_bgcs=[bgc_merged], start=1, end=5_000, tools=["GECCO"])
+    _ibgc(contig, source_bgcs=[bgc_merged], start=1, end=5_000, tools=["GECCO"])
 
     _domain(bgc_merged, acc="PF00001", ref_db="PFAM")
     _domain(bgc_partial, acc="PF00099", ref_db="PFAM")
 
-    M, row_ids, domain_accs = build_nrb_domain_matrix(sources=("PFAM",))
+    M, row_ids, domain_accs = build_ibgc_domain_matrix(sources=("PFAM",))
     assert M.shape[0] == 1
     assert "PF00099" not in domain_accs.tolist()

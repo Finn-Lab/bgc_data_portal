@@ -1,6 +1,6 @@
 """On-demand composite-Dice similarity backed by the small signature matrices.
 
-Both ``/query/similar-nrb/`` and ``/query/nrb-architecture/`` now run the same
+Both ``/query/similar-ibgc/`` and ``/query/ibgc-architecture/`` now run the same
 single sparse-vector-matmul kernel against the persisted ``M_domains`` /
 ``M_pairs`` for the active ``ClusteringRun``. We never load (or compute) the
 full N×N similarity matrix on the K8s side.
@@ -28,29 +28,29 @@ from django.core.cache import cache
 log = logging.getLogger(__name__)
 
 
-CACHE_KEY_PREFIX_NRB = "sim:nrb"
+CACHE_KEY_PREFIX_IBGC = "sim:ibgc"
 CACHE_KEY_PREFIX_ARCH = "sim:arch"
 CACHE_TTL_SECONDS = 60 * 60 * 24  # 24h
 
 
 @dataclass
 class ScoringCache:
-    """In-memory primary-NRB signature cache for the active ClusteringRun."""
+    """In-memory primary-iBGC signature cache for the active ClusteringRun."""
 
     sha256: str
     M_domains: object       # scipy.sparse.csr_matrix
     M_pairs: object
     domain_accs: object     # numpy object array
     pair_vocab: object
-    nrb_ids: object         # numpy int64 array
+    ibgc_ids: object         # numpy int64 array
     row_sums_domains: object
     row_sums_pairs: object
     weight_domain: float
     weight_adjacency: float
     _id_to_row: dict[int, int]
 
-    def row_index_for(self, nrb_id: int) -> int | None:
-        return self._id_to_row.get(int(nrb_id))
+    def row_index_for(self, ibgc_id: int) -> int | None:
+        return self._id_to_row.get(int(ibgc_id))
 
     # Dict-style access so legacy consumers (architecture_search) work without
     # change. The dataclass is the source of truth; the keys mirror the on-disk
@@ -64,8 +64,8 @@ class ScoringCache:
             return self.domain_accs
         if key == "pair_vocab":
             return self.pair_vocab
-        if key == "nrb_ids":
-            return self.nrb_ids
+        if key == "ibgc_ids":
+            return self.ibgc_ids
         raise KeyError(key)
 
 
@@ -110,7 +110,7 @@ def _load_cache(run) -> ScoringCache:
     M_pairs = sp.load_npz(cache_dir / "M_pairs.npz")
     domain_accs = np.load(cache_dir / "domain_accs.npy", allow_pickle=True)
     pair_vocab = np.load(cache_dir / "pair_vocab.npy", allow_pickle=True)
-    nrb_ids = np.load(cache_dir / "nrb_ids.npy", allow_pickle=True)
+    ibgc_ids = np.load(cache_dir / "ibgc_ids.npy", allow_pickle=True)
     row_sums_domains = np.asarray(M_domains.sum(axis=1)).reshape(-1).astype(np.float32)
     row_sums_pairs = np.asarray(M_pairs.sum(axis=1)).reshape(-1).astype(np.float32)
 
@@ -121,10 +121,10 @@ def _load_cache(run) -> ScoringCache:
     else:
         wd, wa = float(weights[0]) / total, float(weights[1]) / total
 
-    id_to_row = {int(x): i for i, x in enumerate(nrb_ids.tolist())}
+    id_to_row = {int(x): i for i, x in enumerate(ibgc_ids.tolist())}
     log.info(
         "similarity_on_demand: loaded cache sha=%s n_rows=%d (D=%d, P=%d)",
-        run.sha256[:12], len(nrb_ids), M_domains.shape[1], M_pairs.shape[1],
+        run.sha256[:12], len(ibgc_ids), M_domains.shape[1], M_pairs.shape[1],
     )
     return ScoringCache(
         sha256=run.sha256,
@@ -132,7 +132,7 @@ def _load_cache(run) -> ScoringCache:
         M_pairs=M_pairs.tocsr(),
         domain_accs=domain_accs,
         pair_vocab=pair_vocab,
-        nrb_ids=nrb_ids,
+        ibgc_ids=ibgc_ids,
         row_sums_domains=row_sums_domains,
         row_sums_pairs=row_sums_pairs,
         weight_domain=wd,
@@ -236,8 +236,8 @@ def cache_similarity_query(
     return result
 
 
-def cache_key_find_similar(*, sha256: str, nrb_id: int, k: int) -> str:
-    return f"{CACHE_KEY_PREFIX_NRB}:{sha256[:12]}:{int(nrb_id)}:{int(k)}"
+def cache_key_find_similar(*, sha256: str, ibgc_id: int, k: int) -> str:
+    return f"{CACHE_KEY_PREFIX_IBGC}:{sha256[:12]}:{int(ibgc_id)}:{int(k)}"
 
 
 def cache_key_architecture(

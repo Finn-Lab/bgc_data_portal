@@ -1,6 +1,6 @@
-"""Build the NRB × adjacent-domain-pair binary matrix.
+"""Build the iBGC × adjacent-domain-pair binary matrix.
 
-For each :class:`discovery.models.NonRedundantBGC` (or extra
+For each :class:`discovery.models.IntegratedBGC` (or extra
 :class:`discovery.models.DashboardBgc` for reclassification), domains are:
 
 1. **Filtered first** by ``ref_db`` against the supplied ``sources`` set
@@ -9,7 +9,7 @@ For each :class:`discovery.models.NonRedundantBGC` (or extra
 2. **Filtered second** to drop ``cds IS NULL`` rows (no genomic anchor → can't
    sit in a meaningful adjacency).
 3. **Sorted** by ``(cds.start_position, BgcDomain.start_position)`` — joined
-   across all source DashboardBgcs that fed the NRB. Duplicate
+   across all source DashboardBgcs that fed the iBGC. Duplicate
    ``(cds_start, domain_acc)`` rows collapse to a single position.
 4. **Pair-extracted** via a sliding window of size 2 over the ordered
    domain_acc list. Each pair is canonicalized as a sorted tuple so the same
@@ -39,19 +39,19 @@ log = logging.getLogger(__name__)
 CHUNK = 200_000
 
 
-def build_nrb_adjacency_pair_matrix(
+def build_ibgc_adjacency_pair_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
-    nrb_ids_subset: Sequence[int] | None = None,
+    ibgc_ids_subset: Sequence[int] | None = None,
     pair_vocab_subset: Sequence[tuple[str, str]] | None = None,
     extra_bgc_ids: Sequence[int] | None = None,
 ) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
-    """Build the NRB × adjacent-pair binary matrix.
+    """Build the iBGC × adjacent-pair binary matrix.
 
     Returns
     -------
     M : sparse CSR uint8 (n_rows × n_pairs)
-    row_ids : np.ndarray[int64] — positive NRB ids, optionally followed by
+    row_ids : np.ndarray[int64] — positive iBGC ids, optionally followed by
               negative ``-DashboardBgc.id`` entries from ``extra_bgc_ids``.
     pair_vocab : np.ndarray[object] of ``(acc_a, acc_b)`` tuples
                  (canonicalized sorted).
@@ -78,16 +78,16 @@ def build_nrb_adjacency_pair_matrix(
         .filter(
             ref_db_upper__in=upper_sources,
             cds__isnull=False,
-            bgc__non_redundant_bgc__isnull=False,
+            bgc__integrated_bgc__isnull=False,
         )
     )
-    if nrb_ids_subset is not None:
+    if ibgc_ids_subset is not None:
         qs = qs.filter(
-            bgc__non_redundant_bgc_id__in=_bigint_array_in(nrb_ids_subset)
+            bgc__integrated_bgc_id__in=_bigint_array_in(ibgc_ids_subset)
         )
 
     rows_qs = qs.values_list(
-        "bgc__non_redundant_bgc_id",
+        "bgc__integrated_bgc_id",
         "cds__start_position",
         "start_position",
         "domain_acc",
@@ -100,7 +100,7 @@ def build_nrb_adjacency_pair_matrix(
         seq_rows[int(row_id)].append((int(cds_start or 0), int(dom_start or 0), acc))
         n += 1
         if n % 1_000_000 == 0:
-            log.info("build_nrb_adjacency_pair_matrix: streamed %d rows", n)
+            log.info("build_ibgc_adjacency_pair_matrix: streamed %d rows", n)
 
     if extra_bgc_ids:
         extra_qs = (
@@ -129,7 +129,7 @@ def build_nrb_adjacency_pair_matrix(
                 pair_vocab[canonical] = len(pair_vocab)
 
     for row_id, entries in seq_rows.items():
-        # Order by (cds_start, dom_start) — joined across source BGCs of an NRB.
+        # Order by (cds_start, dom_start) — joined across source BGCs of an iBGC.
         ordered = sorted(set(entries))
         accs = [acc for _, _, acc in ordered]
         if len(accs) < 2:
@@ -183,7 +183,7 @@ def build_nrb_adjacency_pair_matrix(
         pair_labels[idx] = pair
 
     log.info(
-        "build_nrb_adjacency_pair_matrix: %d rows × %d pairs, nnz=%d (sources=%s)",
+        "build_ibgc_adjacency_pair_matrix: %d rows × %d pairs, nnz=%d (sources=%s)",
         M.shape[0], M.shape[1], M.nnz, upper_sources,
     )
     return (

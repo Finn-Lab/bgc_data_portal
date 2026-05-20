@@ -16,7 +16,7 @@ export interface AssetUploadAccepted {
 export interface AssetSummary {
   token: string;
   uploaded_at: string;
-  n_nrbs: number;
+  n_ibgcs: number;
   n_bgcs: number;
   assembly_accession: string;
   organism: string | null;

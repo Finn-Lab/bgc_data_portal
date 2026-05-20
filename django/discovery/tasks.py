@@ -115,21 +115,21 @@ CLUSTERING_TTL = 86_400  # 24 hours
 _VALID_AA = set("ACDEFGHIKLMNPQRSTVWY")
 
 
-# ── Non-Redundant BGC table builder ───────────────────────────────────────────
+# ── Integrated BGC table builder ───────────────────────────────────────────
 
 
 @shared_task(
-    name="discovery.tasks.build_non_redundant_bgcs",
+    name="discovery.tasks.build_integrated_bgcs",
     bind=True,
     acks_late=True,
 )
-def build_non_redundant_bgcs_task(self) -> dict:
-    """Rebuild the NonRedundantBGC table from latest-version BGC predictions."""
+def build_integrated_bgcs_task(self) -> dict:
+    """Rebuild the IntegratedBGC table from latest-version BGC predictions."""
     task_id = self.request.id
-    search_key = "non_redundant_bgcs"
+    search_key = "integrated_bgcs"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
-    from discovery.services.clustering.non_redundant import build_non_redundant_bgcs
+    from discovery.services.clustering.integrated import build_integrated_bgcs
 
     def _progress(phase: str, processed: int, total: int) -> None:
         set_job_cache(
@@ -139,14 +139,14 @@ def build_non_redundant_bgcs_task(self) -> dict:
             timeout=CLUSTERING_TTL,
         )
 
-    result = build_non_redundant_bgcs(progress_cb=_progress)
+    result = build_integrated_bgcs(progress_cb=_progress)
     set_job_cache(
         search_key=search_key,
         results={**result, "phase": "complete"},
         task_id=task_id,
         timeout=CLUSTERING_TTL,
     )
-    log.info("build_non_redundant_bgcs complete (task %s): %s", task_id, result)
+    log.info("build_integrated_bgcs complete (task %s): %s", task_id, result)
     return result
 
 
@@ -165,16 +165,16 @@ def run_bgc_clustering_task(
     apply: bool = False,
     auto_reclassify: bool = True,
     reclassify_scope: str = "all_non_primary",
-    score_nrbs: bool = True,
+    score_ibgcs: bool = True,
 ) -> dict:
-    """Domain+adjacency hierarchical-CPM-Leiden clustering over NRBs.
+    """Domain+adjacency hierarchical-CPM-Leiden clustering over iBGCs.
 
     Runs the orchestrator in ``services.clustering.pipeline``; if ``apply``
-    is True, writes leaf paths + umap coords to NonRedundantBGC and
+    is True, writes leaf paths + umap coords to IntegratedBGC and
     back-propagates to source DashboardBgc rows, upserts DashboardGCF rows,
     and emits MIBiG validation artifacts under
     ``settings.CLUSTERING_ARTIFACTS_DIR / <run.sha256[:12]>/``. Optionally
-    chains a reclassify task to assign partial / late BGCs and a NRB
+    chains a reclassify task to assign partial / late BGCs and a iBGC
     projection task that fills umap / leaf path / novelty for partials.
     """
     task_id = self.request.id
@@ -202,7 +202,7 @@ def run_bgc_clustering_task(
         leiden_resolutions=resolutions,
         seed=seed,
         apply=apply,
-        score_nrbs=score_nrbs,
+        score_ibgcs=score_ibgcs,
     )
 
     if apply and auto_reclassify and "run_pk" in result:
@@ -212,17 +212,17 @@ def run_bgc_clustering_task(
             "knn_k": result.get("knn_k") or knn_k or 5,
         }
         # Chain projection after reclassify when scoring is on, so partial
-        # NRBs get coordinates + leaf paths populated immediately. Using a
+        # iBGCs get coordinates + leaf paths populated immediately. Using a
         # link signature keeps the projection task from racing reclassify.
-        if score_nrbs:
-            project_sig = project_partial_nrbs_task.si(
+        if score_ibgcs:
+            project_sig = project_partial_ibgcs_task.si(
                 clustering_run_pk=result["run_pk"],
                 knn_k=result.get("knn_k") or knn_k or 5,
             ).set(queue="scores")
             async_result = reclassify_bgcs_task.apply_async(
                 kwargs=reclassify_kwargs, queue="scores", link=project_sig,
             )
-            result["project_partial_nrbs_chained"] = True
+            result["project_partial_ibgcs_chained"] = True
         else:
             async_result = reclassify_bgcs_task.apply_async(
                 kwargs=reclassify_kwargs, queue="scores",
@@ -287,31 +287,31 @@ def reclassify_bgcs_task(
     return result
 
 
-# ── Partial-NRB projection (umap coords + scores for non-primary NRBs) ───────
+# ── Partial-iBGC projection (umap coords + scores for non-primary iBGCs) ───────
 
 
 @shared_task(
-    name="discovery.tasks.project_partial_nrbs", bind=True, acks_late=True,
+    name="discovery.tasks.project_partial_ibgcs", bind=True, acks_late=True,
 )
-def project_partial_nrbs_task(
+def project_partial_ibgcs_task(
     self,
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
     min_total_similarity: float = 0.1,
 ) -> dict:
-    """Project partial / non-primary NRBs onto a ClusteringRun's UMAP.
+    """Project partial / non-primary iBGCs onto a ClusteringRun's UMAP.
 
     Writes ``umap_x`` / ``umap_y`` (similarity-weighted average of top-K
     primary neighbours), ``gene_cluster_family``, ``novelty_score``, and
-    ``domain_novelty`` on every NonRedundantBGC whose ``classification_run``
+    ``domain_novelty`` on every IntegratedBGC whose ``classification_run``
     differs from the target run. Marks ``umap_projected = True``.
     """
     task_id = self.request.id
     search_key = f"bgc_project_partial:{clustering_run_pk}"
     set_job_cache(search_key=search_key, task_id=task_id, timeout=CLUSTERING_TTL)
 
-    from discovery.services.clustering.nrb_scoring import project_partial_nrbs
+    from discovery.services.clustering.ibgc_scoring import project_partial_ibgcs
 
     def _progress(payload: dict) -> None:
         set_job_cache(
@@ -321,7 +321,7 @@ def project_partial_nrbs_task(
             timeout=CLUSTERING_TTL,
         )
 
-    result = project_partial_nrbs(
+    result = project_partial_ibgcs(
         clustering_run_pk=clustering_run_pk,
         knn_k=knn_k,
         min_total_similarity=min_total_similarity,
@@ -334,7 +334,7 @@ def project_partial_nrbs_task(
         timeout=CLUSTERING_TTL,
     )
     log.info(
-        "project_partial_nrbs complete (task %s): %s", task_id, result
+        "project_partial_ibgcs complete (task %s): %s", task_id, result
     )
     return result
 
@@ -383,7 +383,7 @@ def sequence_similarity_search(
     except IndexNotBuiltError:
         # Re-raise so Celery marks the task FAILURE — otherwise the API
         # returns an empty SUCCESS payload and the dashboard renders
-        # "Query returned 0 NRB(s)", which is indistinguishable from a
+        # "Query returned 0 iBGC(s)", which is indistinguishable from a
         # legitimate no-hit run. Surfacing the failure lets the frontend
         # show a "search service unavailable" toast and prompts the
         # operator to run ``make build-protein-index``.
@@ -408,7 +408,7 @@ def sequence_similarity_search(
 
     # For each BGC, keep the metrics + protein_id of its highest-bitscore
     # matched protein. The protein_id flows out so the roster can show
-    # "which protein in the NRB scored the best hit".
+    # "which protein in the iBGC scored the best hit".
     bgc_best: dict[int, tuple["ProteinHitMetrics", str]] = {}
     for bgc_id, sha256, protein_id in cds_qs:
         m = sha256_metrics[sha256]
@@ -477,7 +477,7 @@ def update_discovery_stats_task(self) -> bool:
 
 @shared_task(name="discovery.tasks.process_asset_upload", bind=True, acks_late=True)
 def process_asset_upload_task(self, token: str) -> dict:
-    """Validate, parse, build virtual NRBs and project an uploaded asset.
+    """Validate, parse, build virtual iBGCs and project an uploaded asset.
 
     The upload bytes are read from Redis (``asset:{token}:upload``) — the API
     handler parks them there because the worker runs in a separate pod with

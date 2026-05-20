@@ -1,18 +1,18 @@
-"""Tests for the NonRedundantBGC builder.
+"""Tests for the IntegratedBGC builder.
 
 Verifies the merge rules:
-  * Validated BGCs (is_validated=True) are admitted as standalone NRBs
+  * Validated BGCs (is_validated=True) are admitted as standalone iBGCs
     regardless of tool or is_partial; they are never merged, tagged, or
     absorbed.
   * GECCO + SanntiS predictions overlapping on the same contig collapse
-    transitively into one NRB, regardless of is_partial.
-  * A chain NRB picks up 'antiSMASH' in source_tools when any non-validated
+    transitively into one iBGC, regardless of is_partial.
+  * A chain iBGC picks up 'antiSMASH' in source_tools when any non-validated
     antiSMASH BGC overlaps it — without ever widening the chain interval.
-  * antiSMASH calls (any is_partial) that overlap any already-built NRB are
-    absorbed (no NRB row created; source DashboardBgc.non_redundant_bgc
+  * antiSMASH calls (any is_partial) that overlap any already-built iBGC are
+    absorbed (no iBGC row created; source DashboardBgc.integrated_bgc
     stays NULL).
   * Standalone antiSMASH calls (no overlap with merge predictors) become
-    their own NRB.
+    their own iBGC.
   * Non-latest detector versions are excluded via latest_version_bgcs().
 """
 
@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import pytest
 
-from discovery.models import DashboardBgc, DashboardDetector, NonRedundantBGC
-from discovery.services.clustering.non_redundant import build_non_redundant_bgcs
+from discovery.models import DashboardBgc, DashboardDetector, IntegratedBGC
+from discovery.services.clustering.integrated import build_integrated_bgcs
 from tests.factories.discovery_models import DashboardContigFactory
 
 
@@ -62,21 +62,21 @@ def test_overlapping_gecco_and_sanntis_merge_transitively():
     b = _bgc(contig=contig, detector=sanntis, start=4_000, end=8_000)
     c = _bgc(contig=contig, detector=gecco, start=7_000, end=12_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.start_position == 1_000
-    assert nrb.end_position == 12_000
-    assert nrb.source_tools == ["GECCO", "SanntiS"]
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.start_position == 1_000
+    assert ibgc.end_position == 12_000
+    assert ibgc.source_tools == ["GECCO", "SanntiS"]
     for bgc_id in (a.id, b.id, c.id):
         bgc = DashboardBgc.objects.get(pk=bgc_id)
-        assert bgc.non_redundant_bgc_id == nrb.id
+        assert bgc.integrated_bgc_id == ibgc.id
         assert bgc.classification_source == "merged"
 
 
 def test_partial_sanntis_merges_into_chain_with_non_partial_gecco():
     """Under the partial-agnostic merge rule, a partial SanntiS overlapping a
-    non-partial GECCO collapses into one chain NRB spanning both intervals."""
+    non-partial GECCO collapses into one chain iBGC spanning both intervals."""
     contig = DashboardContigFactory()
     gecco = _detector("GECCO", "0.9.8", 100)
     sanntis = _detector("SanntiS", "0.1.0", 100)
@@ -86,18 +86,18 @@ def test_partial_sanntis_merges_into_chain_with_non_partial_gecco():
     )
     full = _bgc(contig=contig, detector=gecco, start=4_000, end=8_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.start_position == 1_000
-    assert nrb.end_position == 8_000
-    assert nrb.source_tools == ["GECCO", "SanntiS"]
-    assert DashboardBgc.objects.get(pk=partial.id).non_redundant_bgc_id == nrb.id
-    assert DashboardBgc.objects.get(pk=full.id).non_redundant_bgc_id == nrb.id
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.start_position == 1_000
+    assert ibgc.end_position == 8_000
+    assert ibgc.source_tools == ["GECCO", "SanntiS"]
+    assert DashboardBgc.objects.get(pk=partial.id).integrated_bgc_id == ibgc.id
+    assert DashboardBgc.objects.get(pk=full.id).integrated_bgc_id == ibgc.id
 
 
-def test_partial_sanntis_alone_becomes_singleton_chain_nrb():
-    """A partial SanntiS BGC alone on a contig still produces a chain NRB of
+def test_partial_sanntis_alone_becomes_singleton_chain_ibgc():
+    """A partial SanntiS BGC alone on a contig still produces a chain iBGC of
     size 1 (won't be clusterable, but registered)."""
     contig = DashboardContigFactory()
     sanntis = _detector("SanntiS", "0.1.0", 100)
@@ -105,14 +105,14 @@ def test_partial_sanntis_alone_becomes_singleton_chain_nrb():
         contig=contig, detector=sanntis, start=1_000, end=5_000, is_partial=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["SanntiS"]
-    assert nrb.start_position == 1_000
-    assert nrb.end_position == 5_000
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["SanntiS"]
+    assert ibgc.start_position == 1_000
+    assert ibgc.end_position == 5_000
     bgc_after = DashboardBgc.objects.get(pk=partial.id)
-    assert bgc_after.non_redundant_bgc_id == nrb.id
+    assert bgc_after.integrated_bgc_id == ibgc.id
     assert bgc_after.classification_source == "merged"
 
 
@@ -124,24 +124,24 @@ def test_non_partial_antismash_overlapping_chain_is_absorbed_and_tagged():
     g = _bgc(contig=contig, detector=gecco, start=1_000, end=5_000)
     a = _bgc(contig=contig, detector=antismash, start=2_000, end=4_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_absorbed_antismash"] == 1
-    nrb = NonRedundantBGC.objects.get()
+    ibgc = IntegratedBGC.objects.get()
     # antiSMASH overlap → tag the chain's source_tools; boundaries unchanged.
-    assert nrb.source_tools == ["GECCO", "antiSMASH"]
-    assert nrb.start_position == 1_000
-    assert nrb.end_position == 5_000
+    assert ibgc.source_tools == ["GECCO", "antiSMASH"]
+    assert ibgc.start_position == 1_000
+    assert ibgc.end_position == 5_000
 
     g_after = DashboardBgc.objects.get(pk=g.id)
     a_after = DashboardBgc.objects.get(pk=a.id)
-    assert g_after.non_redundant_bgc_id == nrb.id
-    assert a_after.non_redundant_bgc_id is None
+    assert g_after.integrated_bgc_id == ibgc.id
+    assert a_after.integrated_bgc_id is None
 
 
 def test_partial_antismash_overlapping_chain_is_absorbed_and_tagged():
-    """Regression for NRB-4822: partial antiSMASH used to bypass absorption
-    and emerge as its own standalone NRB. It must now be absorbed exactly like
+    """Regression for iBGC-4822: partial antiSMASH used to bypass absorption
+    and emerge as its own standalone iBGC. It must now be absorbed exactly like
     a non-partial antiSMASH overlap."""
     contig = DashboardContigFactory()
     sanntis = _detector("SanntiS", "0.1.0", 100)
@@ -154,16 +154,16 @@ def test_partial_antismash_overlapping_chain_is_absorbed_and_tagged():
         is_partial=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_absorbed_antismash"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["SanntiS", "antiSMASH"]
-    assert nrb.start_position == 420_188
-    assert nrb.end_position == 432_236  # antiSMASH does NOT widen the chain.
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["SanntiS", "antiSMASH"]
+    assert ibgc.start_position == 420_188
+    assert ibgc.end_position == 432_236  # antiSMASH does NOT widen the chain.
 
-    assert DashboardBgc.objects.get(pk=s.id).non_redundant_bgc_id == nrb.id
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id is None
+    assert DashboardBgc.objects.get(pk=s.id).integrated_bgc_id == ibgc.id
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id is None
 
 
 def test_antismash_does_not_widen_chain_when_extending_beyond_boundaries():
@@ -175,41 +175,41 @@ def test_antismash_does_not_widen_chain_when_extending_beyond_boundaries():
     # antiSMASH bookends the SanntiS chain on both sides.
     a = _bgc(contig=contig, detector=antismash, start=5_000, end=20_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.start_position == 10_000
-    assert nrb.end_position == 15_000
-    assert nrb.source_tools == ["SanntiS", "antiSMASH"]
-    assert DashboardBgc.objects.get(pk=s.id).non_redundant_bgc_id == nrb.id
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id is None
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.start_position == 10_000
+    assert ibgc.end_position == 15_000
+    assert ibgc.source_tools == ["SanntiS", "antiSMASH"]
+    assert DashboardBgc.objects.get(pk=s.id).integrated_bgc_id == ibgc.id
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id is None
 
 
-def test_standalone_non_partial_antismash_becomes_own_nrb():
+def test_standalone_non_partial_antismash_becomes_own_ibgc():
     contig = DashboardContigFactory()
     antismash = _detector("antiSMASH", "7.1.0", 200)
     a = _bgc(contig=contig, detector=antismash, start=1_000, end=4_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["antiSMASH"]
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id == nrb.id
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["antiSMASH"]
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id == ibgc.id
 
 
-def test_standalone_partial_antismash_becomes_own_nrb_when_no_overlap():
+def test_standalone_partial_antismash_becomes_own_ibgc_when_no_overlap():
     contig = DashboardContigFactory()
     antismash = _detector("antiSMASH", "7.1.0", 200)
     a = _bgc(
         contig=contig, detector=antismash, start=1_000, end=4_000, is_partial=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_absorbed_antismash"] == 0
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["antiSMASH"]
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id == nrb.id
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["antiSMASH"]
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id == ibgc.id
 
 
 def test_two_disjoint_chains_each_tagged_by_overlapping_antismash():
@@ -223,20 +223,20 @@ def test_two_disjoint_chains_each_tagged_by_overlapping_antismash():
     s2 = _bgc(contig=contig, detector=sanntis, start=10_000, end=13_000)
     a = _bgc(contig=contig, detector=antismash, start=2_000, end=12_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 2
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 2
     assert result["n_absorbed_antismash"] == 1
 
-    nrb_left = NonRedundantBGC.objects.get(start_position=1_000)
-    nrb_right = NonRedundantBGC.objects.get(start_position=10_000)
-    assert nrb_left.source_tools == ["SanntiS", "antiSMASH"]
-    assert nrb_right.source_tools == ["SanntiS", "antiSMASH"]
-    assert DashboardBgc.objects.get(pk=s1.id).non_redundant_bgc_id == nrb_left.id
-    assert DashboardBgc.objects.get(pk=s2.id).non_redundant_bgc_id == nrb_right.id
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id is None
+    ibgc_left = IntegratedBGC.objects.get(start_position=1_000)
+    ibgc_right = IntegratedBGC.objects.get(start_position=10_000)
+    assert ibgc_left.source_tools == ["SanntiS", "antiSMASH"]
+    assert ibgc_right.source_tools == ["SanntiS", "antiSMASH"]
+    assert DashboardBgc.objects.get(pk=s1.id).integrated_bgc_id == ibgc_left.id
+    assert DashboardBgc.objects.get(pk=s2.id).integrated_bgc_id == ibgc_right.id
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id is None
 
 
-def test_validated_partial_is_admitted_as_standalone_nrb():
+def test_validated_partial_is_admitted_as_standalone_ibgc():
     contig = DashboardContigFactory()
     gecco = _detector("GECCO", "0.9.8", 100)
     v = _bgc(
@@ -244,12 +244,12 @@ def test_validated_partial_is_admitted_as_standalone_nrb():
         is_partial=True, is_validated=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_validated_standalone"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["GECCO"]
-    assert DashboardBgc.objects.get(pk=v.id).non_redundant_bgc_id == nrb.id
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["GECCO"]
+    assert DashboardBgc.objects.get(pk=v.id).integrated_bgc_id == ibgc.id
 
 
 def test_validated_mibig_tool_is_admitted_outside_whitelist():
@@ -260,18 +260,18 @@ def test_validated_mibig_tool_is_admitted_outside_whitelist():
         is_partial=True, is_validated=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_validated_standalone"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["mibig"]
-    assert DashboardBgc.objects.get(pk=v.id).non_redundant_bgc_id == nrb.id
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["mibig"]
+    assert DashboardBgc.objects.get(pk=v.id).integrated_bgc_id == ibgc.id
 
 
 def test_validated_bgc_overlapping_gecco_sanntis_does_not_merge():
     """Validated BGCs are ground truth and stay standalone even when a
     non-validated SanntiS/GECCO chain overlaps them. The chain still emits
-    its own NRB; the two overlap on the contig but are separate NRBs."""
+    its own iBGC; the two overlap on the contig but are separate iBGCs."""
     contig = DashboardContigFactory()
     gecco = _detector("GECCO", "0.9.8", 100)
     sanntis = _detector("SanntiS", "0.1.0", 100)
@@ -284,22 +284,22 @@ def test_validated_bgc_overlapping_gecco_sanntis_does_not_merge():
         is_validated=True,
     )
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 2
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 2
     assert result["n_validated_standalone"] == 1
 
-    validated_nrb = NonRedundantBGC.objects.get(source_tools=["mibig"])
-    merged_nrb = NonRedundantBGC.objects.get(source_tools=["GECCO", "SanntiS"])
+    validated_ibgc = IntegratedBGC.objects.get(source_tools=["mibig"])
+    merged_ibgc = IntegratedBGC.objects.get(source_tools=["GECCO", "SanntiS"])
 
-    assert DashboardBgc.objects.get(pk=v.id).non_redundant_bgc_id == validated_nrb.id
-    assert DashboardBgc.objects.get(pk=g.id).non_redundant_bgc_id == merged_nrb.id
-    assert DashboardBgc.objects.get(pk=s.id).non_redundant_bgc_id == merged_nrb.id
+    assert DashboardBgc.objects.get(pk=v.id).integrated_bgc_id == validated_ibgc.id
+    assert DashboardBgc.objects.get(pk=g.id).integrated_bgc_id == merged_ibgc.id
+    assert DashboardBgc.objects.get(pk=s.id).integrated_bgc_id == merged_ibgc.id
 
 
-def test_non_validated_antismash_overlapping_validated_nrb_is_absorbed_without_tagging():
-    """Non-validated antiSMASH overlapping a validated NRB is absorbed (FK
-    NULL). The validated NRB's source_tools is **not** touched — only chain
-    NRBs get the antiSMASH tag."""
+def test_non_validated_antismash_overlapping_validated_ibgc_is_absorbed_without_tagging():
+    """Non-validated antiSMASH overlapping a validated iBGC is absorbed (FK
+    NULL). The validated iBGC's source_tools is **not** touched — only chain
+    iBGCs get the antiSMASH tag."""
     contig = DashboardContigFactory()
     mibig = _detector("mibig", "4.0", 50)
     antismash = _detector("antiSMASH", "7.1.0", 200)
@@ -310,14 +310,14 @@ def test_non_validated_antismash_overlapping_validated_nrb_is_absorbed_without_t
     )
     a = _bgc(contig=contig, detector=antismash, start=2_000, end=4_000)
 
-    result = build_non_redundant_bgcs()
-    assert result["n_nrbs"] == 1
+    result = build_integrated_bgcs()
+    assert result["n_ibgcs"] == 1
     assert result["n_absorbed_antismash"] == 1
     assert result["n_validated_standalone"] == 1
-    nrb = NonRedundantBGC.objects.get()
-    assert nrb.source_tools == ["mibig"]
-    assert DashboardBgc.objects.get(pk=v.id).non_redundant_bgc_id == nrb.id
-    assert DashboardBgc.objects.get(pk=a.id).non_redundant_bgc_id is None
+    ibgc = IntegratedBGC.objects.get()
+    assert ibgc.source_tools == ["mibig"]
+    assert DashboardBgc.objects.get(pk=v.id).integrated_bgc_id == ibgc.id
+    assert DashboardBgc.objects.get(pk=a.id).integrated_bgc_id is None
 
 
 def test_only_latest_detector_version_contributes():
@@ -328,8 +328,8 @@ def test_only_latest_detector_version_contributes():
     a_old = _bgc(contig=contig, detector=older, start=1_000, end=5_000)
     a_new = _bgc(contig=contig, detector=newer, start=1_000, end=5_000)
 
-    result = build_non_redundant_bgcs()
-    # Only the latest-version row enters; one NRB created.
-    assert result["n_nrbs"] == 1
-    assert DashboardBgc.objects.get(pk=a_new.id).non_redundant_bgc_id is not None
-    assert DashboardBgc.objects.get(pk=a_old.id).non_redundant_bgc_id is None
+    result = build_integrated_bgcs()
+    # Only the latest-version row enters; one iBGC created.
+    assert result["n_ibgcs"] == 1
+    assert DashboardBgc.objects.get(pk=a_new.id).integrated_bgc_id is not None
+    assert DashboardBgc.objects.get(pk=a_old.id).integrated_bgc_id is None

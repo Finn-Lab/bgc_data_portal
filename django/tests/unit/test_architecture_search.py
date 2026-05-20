@@ -16,10 +16,10 @@ from discovery.services.clustering.architecture_search import (
 )
 
 
-def _build_cache(rows_domains, rows_pairs, nrb_ids):
+def _build_cache(rows_domains, rows_pairs, ibgc_ids):
     """Construct a minimal scoring-cache dict matching ``load_scoring_cache``.
 
-    ``rows_domains`` is a list of (set of accessions) per NRB row.
+    ``rows_domains`` is a list of (set of accessions) per iBGC row.
     ``rows_pairs`` is a list of (set of canonical sorted (a,b) tuples) per row.
     """
     domain_accs = sorted({a for s in rows_domains for a in s})
@@ -45,7 +45,7 @@ def _build_cache(rows_domains, rows_pairs, nrb_ids):
     return {
         "M_domains": M_dom,
         "M_pairs": M_pair,
-        "nrb_ids": np.asarray(nrb_ids, dtype=np.int64),
+        "ibgc_ids": np.asarray(ibgc_ids, dtype=np.int64),
         "domain_accs": np.asarray(domain_accs, dtype=object),
         "pair_vocab": np.asarray(pair_vocab, dtype=object),
         # Unused by architecture_search but the cache loader supplies them.
@@ -67,13 +67,13 @@ def test_perfect_match_scores_one_at_weight_one():
     cache = _build_cache(
         rows_domains=[{"A", "B", "C"}, {"A", "B"}],
         rows_pairs=[{("A", "B"), ("B", "C")}, {("A", "B")}],
-        nrb_ids=[10, 20],
+        ibgc_ids=[10, 20],
     )
     out = architecture_search(
         ["A", "B", "C"], weight=1.0, k=10, cache=cache,
     )
     # weight=1.0 → pure domain Dice. Row 0 is identical → Dice = 1.
-    assert out["nrb_ids"][0] == 10
+    assert out["ibgc_ids"][0] == 10
     assert out["scores"][0] == 1.0
 
 
@@ -81,13 +81,13 @@ def test_weight_zero_uses_adjacency_only():
     cache = _build_cache(
         rows_domains=[{"A", "B"}, {"A", "B", "C", "D"}],
         rows_pairs=[{("A", "B")}, {("C", "D")}],
-        nrb_ids=[10, 20],
+        ibgc_ids=[10, 20],
     )
-    # Query produces pair (A,B); the second NRB shares no pair so it scores 0.
+    # Query produces pair (A,B); the second iBGC shares no pair so it scores 0.
     out = architecture_search(
         ["A", "B"], weight=0.0, k=10, cache=cache,
     )
-    score_by_id = dict(zip(out["nrb_ids"], out["scores"]))
+    score_by_id = dict(zip(out["ibgc_ids"], out["scores"]))
     assert score_by_id[10] > 0.0
     assert score_by_id[20] == 0.0
 
@@ -96,7 +96,7 @@ def test_unmatched_accessions_are_reported_not_thrown():
     cache = _build_cache(
         rows_domains=[{"A", "B"}],
         rows_pairs=[{("A", "B")}],
-        nrb_ids=[10],
+        ibgc_ids=[10],
     )
     out = architecture_search(
         ["A", "ZZZ", "B"], weight=0.5, k=10, cache=cache,
@@ -111,7 +111,7 @@ def test_single_domain_input_contributes_zero_adjacency():
     cache = _build_cache(
         rows_domains=[{"A", "B"}, {"A"}],
         rows_pairs=[{("A", "B")}, set()],
-        nrb_ids=[10, 20],
+        ibgc_ids=[10, 20],
     )
     out = architecture_search(
         ["A"], weight=0.5, k=10, cache=cache,
@@ -126,18 +126,18 @@ def test_topk_caps_results():
     cache = _build_cache(
         rows_domains=[{"A", "B"}] * 3,
         rows_pairs=[{("A", "B")}] * 3,
-        nrb_ids=[10, 20, 30],
+        ibgc_ids=[10, 20, 30],
     )
     out = architecture_search(
         ["A", "B"], weight=0.5, k=2, cache=cache,
     )
-    assert len(out["nrb_ids"]) == 2
+    assert len(out["ibgc_ids"]) == 2
 
 
 def test_empty_input_returns_empty_payload():
     cache = _build_cache(
-        rows_domains=[{"A"}], rows_pairs=[set()], nrb_ids=[1],
+        rows_domains=[{"A"}], rows_pairs=[set()], ibgc_ids=[1],
     )
     out = architecture_search([], weight=0.5, k=10, cache=cache)
-    assert out["nrb_ids"] == []
+    assert out["ibgc_ids"] == []
     assert out["unmatched"] == []

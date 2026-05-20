@@ -4,7 +4,7 @@ import { FileArchive, FileJson, FileSpreadsheet } from "lucide-react";
 interface Props {
   /** Stable identifier for the report (used in download filename). */
   token: string;
-  /** Optional human label, e.g. number of NRBs. */
+  /** Optional human label, e.g. number of iBGCs. */
   label?: string;
 }
 

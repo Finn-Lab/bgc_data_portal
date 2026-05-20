@@ -1,14 +1,14 @@
-"""Build the NRB × domain-accession membership matrix.
+"""Build the iBGC × domain-accession membership matrix.
 
-Each row is a :class:`discovery.models.NonRedundantBGC`; each column is a
+Each row is a :class:`discovery.models.IntegratedBGC`; each column is a
 unique domain accession (e.g. ``PF00001``). The matrix is binary: a 1 means
-the NRB carries that domain at least once across any of its source
+the iBGC carries that domain at least once across any of its source
 DashboardBgc rows. Domains are first filtered by ``ref_db`` source
 (case-insensitive at the API boundary — ``ref_db`` is stored upper-case),
-then deduplicated by ``(nrb_id, domain_acc, cds.start_position)`` so the
+then deduplicated by ``(ibgc_id, domain_acc, cds.start_position)`` so the
 same accession appearing on multiple CDS positions counts once *per
 position* but the binary projection collapses to a single column entry per
-NRB.
+iBGC.
 
 Heavy imports (numpy, scipy.sparse) are deferred inside the function body
 so this module can be imported on the web container without ML deps.
@@ -41,7 +41,7 @@ def _bigint_array_in(ids: Sequence[int]):
 
     Why: PostgreSQL's wire protocol caps bind parameters at 65 535 (uint16).
     The ORM's default ``__in=[...]`` expansion sends one param per id, so any
-    NRB / BGC id list larger than that raises ``OperationalError("number of
+    iBGC / BGC id list larger than that raises ``OperationalError("number of
     parameters must be between 0 and 65535")``. Wrapping in ``ANY(%s::bigint[])``
     keeps the whole list as one param.
     """
@@ -50,21 +50,21 @@ def _bigint_array_in(ids: Sequence[int]):
     return RawSQL("SELECT unnest(%s::bigint[])", [list(ids)])
 
 
-def build_nrb_domain_matrix(
+def build_ibgc_domain_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
-    nrb_ids_subset: Sequence[int] | None = None,
+    ibgc_ids_subset: Sequence[int] | None = None,
     domain_accs_subset: Sequence[str] | None = None,
     extra_bgc_ids: Sequence[int] | None = None,
 ) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
-    """Build the NRB × domain-accession binary matrix.
+    """Build the iBGC × domain-accession binary matrix.
 
     Parameters
     ----------
     sources:
         ``ref_db`` values to keep. Normalized to upper-case at the boundary.
-    nrb_ids_subset:
-        Optional explicit list of ``NonRedundantBGC.id`` values to include.
+    ibgc_ids_subset:
+        Optional explicit list of ``IntegratedBGC.id`` values to include.
         Used by the reclassifier path to project rows onto the primary run's
         vocabulary.
     domain_accs_subset:
@@ -72,15 +72,15 @@ def build_nrb_domain_matrix(
         are dropped; ordering is preserved.
     extra_bgc_ids:
         Optional list of *raw* ``DashboardBgc.id`` values to include as
-        additional rows (i.e. virtual NRBs sized as a single source row).
+        additional rows (i.e. virtual iBGCs sized as a single source row).
         Used by the reclassifier so partial BGCs can be stacked under the
         same column layout. Rows from this list are keyed by negative
-        ``bgc_id`` to avoid collision with real NRB ids.
+        ``bgc_id`` to avoid collision with real iBGC ids.
 
     Returns
     -------
     M : sparse CSR uint8 (n_rows × n_domain_accs)
-    row_ids : np.ndarray[int64] — row label per row; positive = NRB id,
+    row_ids : np.ndarray[int64] — row label per row; positive = iBGC id,
               negative = ``-DashboardBgc.id`` for ``extra_bgc_ids`` rows.
     domain_accs : np.ndarray[object] — column label per column.
     """
@@ -102,15 +102,15 @@ def build_nrb_domain_matrix(
         .annotate(ref_db_upper=Upper("ref_db"))
         .filter(
             ref_db_upper__in=upper_sources,
-            bgc__non_redundant_bgc__isnull=False,
+            bgc__integrated_bgc__isnull=False,
         )
     )
-    if nrb_ids_subset is not None:
+    if ibgc_ids_subset is not None:
         qs = qs.filter(
-            bgc__non_redundant_bgc_id__in=_bigint_array_in(nrb_ids_subset)
+            bgc__integrated_bgc_id__in=_bigint_array_in(ibgc_ids_subset)
         )
-    nrb_qs = qs.values_list(
-        "bgc__non_redundant_bgc_id",
+    ibgc_qs = qs.values_list(
+        "bgc__integrated_bgc_id",
         "domain_acc",
         "cds__start_position",
     )
@@ -118,13 +118,13 @@ def build_nrb_domain_matrix(
     # Set keyed on row identity, accession, and on-protein anchor for dedup.
     pair_set: set[tuple[int, str, int]] = set()
     n = 0
-    for row_id, acc, cds_start in nrb_qs.iterator(chunk_size=CHUNK):
+    for row_id, acc, cds_start in ibgc_qs.iterator(chunk_size=CHUNK):
         if not acc:
             continue
         pair_set.add((int(row_id), acc, int(cds_start or 0)))
         n += 1
         if n % 1_000_000 == 0:
-            log.info("build_nrb_domain_matrix: streamed %d nrb-domain rows", n)
+            log.info("build_ibgc_domain_matrix: streamed %d ibgc-domain rows", n)
 
     # Extra single-DashboardBgc rows (e.g. partials being reclassified).
     if extra_bgc_ids:
@@ -173,7 +173,7 @@ def build_nrb_domain_matrix(
         dtype=np.uint8,
     )
     log.info(
-        "build_nrb_domain_matrix: %d rows × %d domains, nnz=%d (sources=%s)",
+        "build_ibgc_domain_matrix: %d rows × %d domains, nnz=%d (sources=%s)",
         M.shape[0], M.shape[1], M.nnz, upper_sources,
     )
     return (

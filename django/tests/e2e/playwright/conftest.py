@@ -33,7 +33,7 @@ def e2e_base_url(pytestconfig) -> str:
 
 @pytest.fixture(scope="session")
 def e2e_v2_base_url(pytestconfig) -> str:
-    """Base URL for the v2 NRB-first dashboard.
+    """Base URL for the v2 iBGC-first dashboard.
 
     Defaults to ``http://localhost:8000`` since staging may still be running
     the legacy UI; pass ``--e2e-v2-base-url`` (or set ``E2E_V2_BASE_URL``)

@@ -2,8 +2,8 @@
 
 The clustering pipeline runs Dice over two complementary feature matrices:
 
-* ``M_domains`` — NRB × domain accession binary matrix
-* ``M_pairs``   — NRB × adjacent-domain-pair binary matrix
+* ``M_domains`` — iBGC × domain accession binary matrix
+* ``M_pairs``   — iBGC × adjacent-domain-pair binary matrix
 
 Both share the same row ordering, so the composite similarity (see
 ``bgc_similarity.compute_composite_similarity``) is a weighted sum of two

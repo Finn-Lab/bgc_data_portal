@@ -1,8 +1,8 @@
 /**
  * Deprecated — the embedding-based similar-BGC endpoint was retired in the
- * v2 redesign. The new "Find similar NRBs" action lives in
- * `src/hooks/use-similar-nrb-query.ts` and uses composite-Dice similarity
- * over NonRedundantBGC ids.
+ * v2 redesign. The new "Find similar iBGCs" action lives in
+ * `src/hooks/use-similar-ibgc-query.ts` and uses composite-Dice similarity
+ * over IntegratedBGC ids.
  *
  * This shim returns an empty result so legacy components (`QueryActions`,
  * `QueryResultsRoster`) keep building until P2.2 replaces them.

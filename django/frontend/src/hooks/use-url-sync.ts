@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useModeStore } from "@/stores/mode-store";
 import { useFilterStore } from "@/stores/filter-store";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
@@ -13,11 +12,6 @@ export function useUrlSync() {
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-
-    const mode = searchParams.get("mode");
-    if (mode === "explore" || mode === "query" || mode === "assess") {
-      useModeStore.getState().setMode(mode);
-    }
 
     const sourceNamesParam = searchParams.get("source_names");
     if (sourceNamesParam) {
@@ -52,12 +46,7 @@ export function useUrlSync() {
     // Auto-run query when redirected from landing page keyword search
     const autoRun = searchParams.get("auto_run");
     if (autoRun === "true") {
-      const currentMode = useModeStore.getState().mode;
-      if (currentMode === "query") {
-        useQueryStore.getState().setDomainQueryTriggered(true);
-      } else {
-        useFilterStore.getState().runExploreQuery();
-      }
+      useQueryStore.getState().setDomainQueryTriggered(true);
       // Remove auto_run from URL so refreshing doesn't re-trigger
       setSearchParams(
         (prev) => {
@@ -73,7 +62,6 @@ export function useUrlSync() {
   // Write store changes to URL
   useEffect(() => {
     const unsubscribers = [
-      useModeStore.subscribe((state) => updateUrl("mode", state.mode)),
       useFilterStore.subscribe((state) => {
         updateUrl("source_names", state.sourceNames.join(","));
         updateUrl("detector_tools", state.detectorTools.join(","));
@@ -99,13 +87,8 @@ export function useUrlSync() {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          if (value && value !== "query") {
-            next.set(key, value);
-          } else if (key !== "mode") {
-            next.delete(key);
-          } else if (value === "query") {
-            next.delete(key);
-          }
+          if (value) next.set(key, value);
+          else next.delete(key);
           return next;
         },
         { replace: true }

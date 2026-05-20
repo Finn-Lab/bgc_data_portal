@@ -1,4 +1,4 @@
-"""E2E spec covering the v2 NRB-first Discovery dashboard.
+"""E2E spec covering the v2 iBGC-first Discovery dashboard.
 
 Exercises the redesigned surface end-to-end:
 
@@ -6,7 +6,7 @@ Exercises the redesigned surface end-to-end:
     results card + reference/compare detail slots + protein info panel
   - tab switching between BGC roster / Variables map / UMAP
   - left-click on a roster row populates the Compare slot
-  - right-click on a roster row → context menu → "Set as reference NRB" pins
+  - right-click on a roster row → context menu → "Set as reference iBGC" pins
     the row in the Reference slot
   - "Add to shortlist" context-menu item increments the header shortlist badge
   - clicking "Generate Report" mints a token and opens ``/report?token=…`` in
@@ -31,7 +31,7 @@ def test_v2_dashboard_shell_renders(page, e2e_v2_base_url):
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
 
-    page.wait_for_selector('[data-testid="nrb-dashboard"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-dashboard"]', timeout=30_000)
     page.wait_for_selector('[data-testid="results-card-slot"]')
     page.wait_for_selector('[data-testid="reference-detail-slot"]')
     page.wait_for_selector('[data-testid="compare-detail-slot"]')
@@ -52,7 +52,7 @@ def test_v2_results_tabs_switch(page, e2e_v2_base_url):
     page.wait_for_selector('[data-testid="results-tabs"]')
 
     # Roster is the default tab.
-    page.wait_for_selector('[data-testid="nrb-roster"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
 
     # Switch to Variables map.
     page.locator('[data-testid="results-tab-variables"]').click()
@@ -66,7 +66,7 @@ def test_v2_results_tabs_switch(page, e2e_v2_base_url):
 
     # Back to roster.
     page.locator('[data-testid="results-tab-roster"]').click()
-    page.wait_for_selector('[data-testid="nrb-roster"]')
+    page.wait_for_selector('[data-testid="ibgc-roster"]')
 
 
 @pytest.mark.e2e
@@ -74,42 +74,42 @@ def test_v2_compare_slot_left_click(page, e2e_v2_base_url):
     """Left-clicking a roster row loads it into the Compare slot."""
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-roster"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
 
-    rows = page.locator('[data-testid="nrb-roster-row"]')
+    rows = page.locator('[data-testid="ibgc-roster-row"]')
     if rows.count() == 0:
-        pytest.skip("No NRBs in the dataset — skipping compare-slot test")
+        pytest.skip("No iBGCs in the dataset — skipping compare-slot test")
 
     first_row = rows.first
-    nrb_id = first_row.get_attribute("data-nrb-id")
-    assert nrb_id, "Expected data-nrb-id on roster row"
+    ibgc_id = first_row.get_attribute("data-ibgc-id")
+    assert ibgc_id, "Expected data-ibgc-id on roster row"
 
     first_row.click()
-    # Compare slot should render the NRB label "NRB-<id>" within ~5s.
+    # Compare slot should render the iBGC label "iBGC-<id>" within ~5s.
     compare_slot = page.locator('[data-testid="compare-detail-slot"]')
-    compare_slot.locator(f"text=NRB-{nrb_id}").wait_for(timeout=10_000)
+    compare_slot.locator(f"text=iBGC-{ibgc_id}").wait_for(timeout=10_000)
 
 
 @pytest.mark.e2e
 def test_v2_set_reference_via_context_menu(page, e2e_v2_base_url):
-    """Right-click → "Set as reference NRB" pins the row in the Reference slot."""
+    """Right-click → "Set as reference iBGC" pins the row in the Reference slot."""
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-roster"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
 
-    rows = page.locator('[data-testid="nrb-roster-row"]')
+    rows = page.locator('[data-testid="ibgc-roster-row"]')
     if rows.count() == 0:
-        pytest.skip("No NRBs in the dataset — skipping reference-pin test")
+        pytest.skip("No iBGCs in the dataset — skipping reference-pin test")
 
     first_row = rows.first
-    nrb_id = first_row.get_attribute("data-nrb-id")
+    ibgc_id = first_row.get_attribute("data-ibgc-id")
 
     first_row.click(button="right")
     item = page.get_by_role("menuitem", name=re.compile("Set as reference", re.I))
     item.click()
 
     ref_slot = page.locator('[data-testid="reference-detail-slot"]')
-    ref_slot.locator(f"text=NRB-{nrb_id}").wait_for(timeout=10_000)
+    ref_slot.locator(f"text=iBGC-{ibgc_id}").wait_for(timeout=10_000)
 
 
 @pytest.mark.e2e
@@ -117,11 +117,11 @@ def test_v2_shortlist_add_and_count(page, e2e_v2_base_url):
     """Adding via the context menu bumps the header shortlist badge count."""
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-roster"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
 
-    rows = page.locator('[data-testid="nrb-roster-row"]')
+    rows = page.locator('[data-testid="ibgc-roster-row"]')
     if rows.count() == 0:
-        pytest.skip("No NRBs in the dataset — skipping shortlist test")
+        pytest.skip("No iBGCs in the dataset — skipping shortlist test")
 
     badge = page.locator('[data-testid="shortlist-count"]')
     start = int(badge.inner_text().strip())
@@ -151,7 +151,7 @@ def test_v2_architecture_tab_runs_query(page, e2e_v2_base_url):
     """
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-dashboard"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-dashboard"]', timeout=30_000)
 
     # Open the Domains chip (it lives in the filter strip).
     domains_chip = page.get_by_role(
@@ -191,13 +191,13 @@ def test_v2_generate_report_opens_tab_and_renders(page, e2e_v2_base_url, context
     """Generate Report mints a token and opens the Report page in a new tab."""
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-roster"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-roster"]', timeout=30_000)
 
-    rows = page.locator('[data-testid="nrb-roster-row"]')
+    rows = page.locator('[data-testid="ibgc-roster-row"]')
     if rows.count() == 0:
-        pytest.skip("No NRBs in the dataset — skipping report test")
+        pytest.skip("No iBGCs in the dataset — skipping report test")
 
-    # Add the first NRB to the shortlist.
+    # Add the first iBGC to the shortlist.
     rows.first.click(button="right")
     page.get_by_role(
         "menuitem", name=re.compile("Add to shortlist", re.I)
@@ -252,7 +252,7 @@ def test_v2_load_asset_journey(page, e2e_v2_base_url):
 
     page.set_default_timeout(60_000)
     page.goto(e2e_v2_base_url + "/", wait_until="domcontentloaded")
-    page.wait_for_selector('[data-testid="nrb-dashboard"]', timeout=30_000)
+    page.wait_for_selector('[data-testid="ibgc-dashboard"]', timeout=30_000)
 
     # Click "Load Asset" and pick the fixture tarball.
     load_btn = page.locator('[data-testid="load-asset-button"]')

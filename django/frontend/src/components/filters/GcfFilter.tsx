@@ -13,7 +13,7 @@ import { useFilterStore } from "@/stores/filter-store";
 import { FilterChip } from "./FilterChip";
 
 // Subtree-match GCF filter. The selected ``family_path`` is forwarded to the
-// backend as ``leaf_path_prefix`` so the NRB query matches the picked node
+// backend as ``leaf_path_prefix`` so the iBGC query matches the picked node
 // AND all its descendants in the cluster ltree.
 export function GcfFilter() {
   const [search, setSearch] = useState("");

@@ -25,15 +25,15 @@ export function useReport(token: string | null) {
  * cached entry server-side.
  */
 export interface ReportSnapshotVariables {
-  nrbIds: number[];
+  ibgcIds: number[];
   assetToken?: string | null;
 }
 
 export function useReportSnapshot() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ nrbIds, assetToken }: ReportSnapshotVariables) =>
-      postReportSnapshot(nrbIds, assetToken),
+    mutationFn: ({ ibgcIds, assetToken }: ReportSnapshotVariables) =>
+      postReportSnapshot(ibgcIds, assetToken),
     onSuccess: (resp) => {
       qc.invalidateQueries({ queryKey: ["report", resp.token] });
     },

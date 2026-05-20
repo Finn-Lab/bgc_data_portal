@@ -3,7 +3,6 @@ import Plot from "react-plotly.js";
 import { useBgcScatter } from "@/hooks/use-bgc-scatter";
 import { useSelectionStore } from "@/stores/selection-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useModeStore } from "@/stores/mode-store";
 import { useQueryStore } from "@/stores/query-store";
 import type { BgcScatterPoint } from "@/api/types";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -61,7 +60,7 @@ interface BgcScatterProps {
 
 export function BgcScatter({ assemblyIdsOverride, bgcIdsOverride, highlightBgcId, markerSymbol }: BgcScatterProps = {}) {
   const [showValidated, setShowValidated] = useState(true);
-  const mode = useModeStore((s) => s.mode);
+  const mode = "query";
   const activeAssemblyId = useSelectionStore((s) => s.activeAssemblyId);
   const activeBgcId = useSelectionStore((s) => s.activeBgcId);
   const setActiveBgcId = useSelectionStore((s) => s.setActiveBgcId);

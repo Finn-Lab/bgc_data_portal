@@ -43,13 +43,13 @@ from discovery.models import (
     DashboardAssembly,
     DashboardNaturalProduct,
     DiscoveryStats,
-    NonRedundantBGC,
+    IntegratedBGC,
     PrecomputedStats,
 )
 from discovery.services.architecture import (
     bgc_architecture,
     collapse_to_interpro_rows,
-    nrb_architecture,
+    ibgc_architecture,
 )
 from discovery.services.stats import compute_bgc_stats, compute_assembly_stats
 from discovery.api_schemas import (
@@ -82,24 +82,24 @@ from discovery.api_schemas import (
     DiscoveryStatsResponse,
     NaturalProductSummary,
     NpClassLevel,
-    NrbCountResponse,
-    NrbDetail,
-    NrbMemberBgc,
-    NrbRosterItem,
-    NrbScatterPoint,
-    NrbUmapPoint,
+    IbgcCountResponse,
+    IbgcDetail,
+    IbgcMemberBgc,
+    IbgcRosterItem,
+    IbgcScatterPoint,
+    IbgcUmapPoint,
     GcfOption,
     PaginatedDomainResponse,
     PaginatedGcfResponse,
-    PaginatedNrbRosterResponse,
+    PaginatedIbgcRosterResponse,
     PaginatedSourceResponse,
     PaginatedDetectorResponse,
     ReportPayload,
     ReportSnapshotRequest,
     ReportSnapshotResponse,
-    NrbArchitectureQueryRequest,
-    NrbArchitectureResponse,
-    SimilarNrbRequest,
+    IbgcArchitectureQueryRequest,
+    IbgcArchitectureResponse,
+    SimilarIbgcRequest,
     SourceOption,
     DetectorOption,
     PaginatedAssemblyAggregationResponse,
@@ -654,7 +654,7 @@ def bgc_detail(request, bgc_id: int):
         raise HttpError(404, "BGC not found")
 
     # Positional domain architecture pooled per BGC (PFAM + NCBIFAM hits,
-    # ordered by CDS start then domain start). Shared with the NRB-level
+    # ordered by CDS start then domain start). Shared with the iBGC-level
     # rollup so the surfaced sequence matches what the clustering pipeline
     # scored.
     domain_arch = [
@@ -866,7 +866,7 @@ def bgc_region(request, bgc_id: int):
     """Return CDS, domain, and cluster data for the BGC genomic region.
 
     Served entirely from discovery models (DashboardCds, BgcDomain).
-    Negative ``bgc_id`` resolves to an asset NRB's region payload via the
+    Negative ``bgc_id`` resolves to an asset iBGC's region payload via the
     ``X-Asset-Token`` header — keeps the path schema stable while still
     routing through the ephemeral cache.
     """
@@ -1005,10 +1005,10 @@ def bgc_scatter(
     return points
 
 
-# ── NRB (Non-Redundant BGC) endpoints ────────────────────────────────────────
+# ── iBGC (Integrated BGC) endpoints ────────────────────────────────────────
 
 
-_NRB_AXES = {
+_IBGC_AXES = {
     "size_kb",  # length / 1000
     "n_cds",
     "novelty_score",
@@ -1017,40 +1017,40 @@ _NRB_AXES = {
 }
 
 # Soft cap applied uniformly across the dashboard's "show me all matching
-# NRBs" surfaces: /nrbs/umap/ (map points), /nrbs/scatter/ (Variables map
+# iBGCs" surfaces: /ibgcs/umap/ (map points), /ibgcs/scatter/ (Variables map
 # points), and the client-side top-K clip on scored query results. The
-# roster paginates and is *not* capped here. ``/nrbs/count/`` surfaces this
+# roster paginates and is *not* capped here. ``/ibgcs/count/`` surfaces this
 # value so the UI can warn before firing the heavier requests.
 DASHBOARD_RESULT_CAP = 5_000
 
 
-def _nrb_label(nrb_id: int) -> str:
-    return f"NRB-{nrb_id}"
+def _ibgc_label(ibgc_id: int) -> str:
+    return f"iBGC-{ibgc_id}"
 
 
-def _pick_representative_bgc_id(nrb_id: int) -> Optional[int]:
-    """Lowest-id source DashboardBgc for an NRB (deterministic)."""
+def _pick_representative_bgc_id(ibgc_id: int) -> Optional[int]:
+    """Lowest-id source DashboardBgc for an iBGC (deterministic)."""
     return (
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id=nrb_id)
+        .filter(integrated_bgc_id=ibgc_id)
         .order_by("id")
         .values_list("id", flat=True)
         .first()
     )
 
 
-def _nrb_is_partial(nrb: NonRedundantBGC) -> bool:
-    """An NRB is "partial" when it didn't go through the primary clustering
+def _ibgc_is_partial(ibgc: IntegratedBGC) -> bool:
+    """An iBGC is "partial" when it didn't go through the primary clustering
     pass — either no clustering run touched it, or it was projected from a
     KNN average of its primary neighbours (``umap_projected=True``)."""
-    return bool(nrb.umap_projected) or nrb.classification_run_id is None
+    return bool(ibgc.umap_projected) or ibgc.classification_run_id is None
 
 
-# ── Asset-NRB injection helpers ───────────────────────────────────────────
+# ── Asset-iBGC injection helpers ───────────────────────────────────────────
 #
 # Uploaded assets are stored in Redis under ``asset:{token}:*`` and never hit
 # the DB. Negative ids mark them everywhere — the dispatcher in this module
-# routes ``nrb_id < 0`` to the cache instead of the ORM. Asset NRBs bypass
+# routes ``ibgc_id < 0`` to the cache instead of the ORM. Asset iBGCs bypass
 # every filter ("always shown in results") per the locked product decision.
 
 
@@ -1059,11 +1059,11 @@ def _get_asset_roster_rows(asset_token: Optional[str]) -> list[dict]:
         return []
     from discovery.services.asset_upload import cache as asset_cache
 
-    return list(asset_cache.read_nrb_list(asset_token) or [])
+    return list(asset_cache.read_ibgc_list(asset_token) or [])
 
 
-def _asset_row_to_roster_item(row: dict) -> NrbRosterItem:
-    return NrbRosterItem(
+def _asset_row_to_roster_item(row: dict) -> IbgcRosterItem:
+    return IbgcRosterItem(
         id=int(row["id"]),
         label=row.get("label", ""),
         classification_path=row.get("classification_path", "") or "",
@@ -1088,10 +1088,10 @@ def _asset_row_to_roster_item(row: dict) -> NrbRosterItem:
     )
 
 
-def _asset_row_to_umap_point(row: dict) -> Optional[NrbUmapPoint]:
+def _asset_row_to_umap_point(row: dict) -> Optional[IbgcUmapPoint]:
     if row.get("umap_x") is None or row.get("umap_y") is None:
         return None
-    return NrbUmapPoint(
+    return IbgcUmapPoint(
         id=int(row["id"]),
         label=row.get("label", ""),
         umap_x=float(row["umap_x"]),
@@ -1108,7 +1108,7 @@ def _asset_row_to_umap_point(row: dict) -> Optional[NrbUmapPoint]:
 
 def _asset_row_to_scatter_point(
     row: dict, x_axis: str, y_axis: str
-) -> Optional[NrbScatterPoint]:
+) -> Optional[IbgcScatterPoint]:
     # Asset rows expose the same numeric columns the DB rows do (novelty_score,
     # domain_novelty, size_kb). For non-existent axes we drop the point so the
     # surface stays consistent with the DB-row behaviour.
@@ -1121,7 +1121,7 @@ def _asset_row_to_scatter_point(
     y_val = axis_value.get(y_axis)
     if x_val is None or y_val is None:
         return None
-    return NrbScatterPoint(
+    return IbgcScatterPoint(
         id=int(row["id"]),
         x=float(x_val),
         y=float(y_val),
@@ -1136,8 +1136,8 @@ def _asset_row_to_scatter_point(
     )
 
 
-def _nrb_to_roster_item(
-    nrb: NonRedundantBGC,
+def _ibgc_to_roster_item(
+    ibgc: IntegratedBGC,
     *,
     parent_assembly: Optional[DashboardAssembly] = None,
     n_source_bgcs: int = 0,
@@ -1148,20 +1148,20 @@ def _nrb_to_roster_item(
     best_hit_protein_id: Optional[str] = None,
     best_pident: Optional[float] = None,
     best_qcoverage: Optional[float] = None,
-) -> NrbRosterItem:
-    return NrbRosterItem(
-        id=nrb.id,
-        label=_nrb_label(nrb.id),
-        classification_path=nrb.gene_cluster_family or "",
-        size_kb=round((nrb.end_position - nrb.start_position) / 1000.0, 3),
+) -> IbgcRosterItem:
+    return IbgcRosterItem(
+        id=ibgc.id,
+        label=_ibgc_label(ibgc.id),
+        classification_path=ibgc.gene_cluster_family or "",
+        size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
         n_source_bgcs=n_source_bgcs,
-        source_tools=list(nrb.source_tools or []),
-        novelty_score=nrb.novelty_score,
-        domain_novelty=nrb.domain_novelty,
-        is_partial=_nrb_is_partial(nrb),
+        source_tools=list(ibgc.source_tools or []),
+        novelty_score=ibgc.novelty_score,
+        domain_novelty=ibgc.domain_novelty,
+        is_partial=_ibgc_is_partial(ibgc),
         is_validated=is_validated,
         is_type_strain=is_type_strain,
-        umap_projected=nrb.umap_projected,
+        umap_projected=ibgc.umap_projected,
         parent_assembly_id=parent_assembly.id if parent_assembly else None,
         parent_assembly_accession=(
             parent_assembly.assembly_accession if parent_assembly else None
@@ -1181,17 +1181,17 @@ def _nrb_to_roster_item(
 _MEMBER_FACTS_CHUNK = 500
 
 
-def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
-    """Return per-NRB aggregates: ``n_source_bgcs``, ``is_validated``,
+def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
+    """Return per-iBGC aggregates: ``n_source_bgcs``, ``is_validated``,
     ``is_type_strain``, ``parent_assembly``, ``contig_accession``.
 
     ``is_type_strain`` is ORed across every member BGC's parent assembly so
-    an NRB is flagged whenever *any* of its source BGCs sits on a
+    an iBGC is flagged whenever *any* of its source BGCs sits on a
     type-strain assembly. Mirrors the ``is_validated`` accumulator.
 
     The DashboardBgc lookup is chunked so the generated SQL stays under the
     DEBUG-mode SQL formatter's token limit on large id lists (umap / scatter
-    can request several thousand NRBs in one call).
+    can request several thousand iBGCs in one call).
     """
     facts: dict[int, dict] = {
         nid: {
@@ -1201,16 +1201,16 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
             "parent_assembly": None,
             "contig_accession": None,
         }
-        for nid in nrb_ids
+        for nid in ibgc_ids
     }
-    for i in range(0, len(nrb_ids), _MEMBER_FACTS_CHUNK):
-        chunk = nrb_ids[i: i + _MEMBER_FACTS_CHUNK]
+    for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
+        chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
         rows = (
             DashboardBgc.objects
-            .filter(non_redundant_bgc_id__in=chunk)
+            .filter(integrated_bgc_id__in=chunk)
             .select_related("assembly", "contig")
             .values(
-                "non_redundant_bgc_id", "is_validated",
+                "integrated_bgc_id", "is_validated",
                 "assembly_id", "assembly__assembly_accession",
                 "assembly__organism_name",
                 "assembly__is_type_strain",
@@ -1218,7 +1218,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
             )
         )
         for r in rows:
-            nid = r["non_redundant_bgc_id"]
+            nid = r["integrated_bgc_id"]
             f = facts.get(nid)
             if not f:
                 continue
@@ -1238,7 +1238,7 @@ def _nrb_member_facts(nrb_ids: list[int]) -> dict[int, dict]:
     return facts
 
 
-def _apply_nrb_filters(
+def _apply_ibgc_filters(
     qs,
     *,
     include_partials: bool = True,
@@ -1249,7 +1249,7 @@ def _apply_nrb_filters(
     max_novelty: Optional[float] = None,
     min_domain_novelty: Optional[float] = None,
     max_domain_novelty: Optional[float] = None,
-    detector_tools: Optional[str] = None,  # CSV; "any of" on NRB.source_tools JSON
+    detector_tools: Optional[str] = None,  # CSV; "any of" on iBGC.source_tools JSON
     source_tools: Optional[str] = None,    # Deprecated alias for detector_tools
     source_names: Optional[str] = None,    # CSV of AssemblySource.name
     assembly_type: Optional[str] = None,   # AssemblyType label (metagenome/genome/region)
@@ -1262,16 +1262,16 @@ def _apply_nrb_filters(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    nrb_ids: Optional[list[int]] = None,
+    ibgc_ids: Optional[list[int]] = None,
 ):
-    """Apply NRB-level filters to a ``NonRedundantBGC`` queryset.
+    """Apply iBGC-level filters to a ``IntegratedBGC`` queryset.
 
-    Used by ``/nrbs/roster/``, ``/nrbs/umap/``, ``/nrbs/scatter/`` and the
-    NRB-collapsed query endpoints (``/query/nrb-domain/``,
-    ``/query/nrb-sequence/status/``) so the same filter surface is
-    available regardless of how the initial NRB id set was produced.
+    Used by ``/ibgcs/roster/``, ``/ibgcs/umap/``, ``/ibgcs/scatter/`` and the
+    iBGC-collapsed query endpoints (``/query/ibgc-domain/``,
+    ``/query/ibgc-sequence/status/``) so the same filter surface is
+    available regardless of how the initial iBGC id set was produced.
 
-    ``detector_tools`` filters on the NRB's ``source_tools`` JSON column
+    ``detector_tools`` filters on the iBGC's ``source_tools`` JSON column
     (which stores the contributing detection tools, e.g. ``antiSMASH``,
     ``MIBiG``, ``GECCO``, ``SanntiS``). ``source_tools`` is kept as a
     deprecated alias so old callers continue to work.
@@ -1281,10 +1281,10 @@ def _apply_nrb_filters(
     ``bgc_accession``; through ``source_bgcs → cds_list → chemont`` for
     ``chemont_ids``. All such filters apply ``.distinct()``.
     """
-    if nrb_ids is not None:
-        qs = qs.filter(id__in=nrb_ids)
+    if ibgc_ids is not None:
+        qs = qs.filter(id__in=ibgc_ids)
     if not include_partials:
-        # Primary NRBs only: row was clustered directly (not projected) and
+        # Primary iBGCs only: row was clustered directly (not projected) and
         # has a classification run.
         qs = qs.filter(classification_run_id__isnull=False, umap_projected=False)
     if validated_only:
@@ -1301,13 +1301,13 @@ def _apply_nrb_filters(
         qs = qs.filter(domain_novelty__gte=min_domain_novelty)
     if max_domain_novelty is not None:
         qs = qs.filter(domain_novelty__lte=max_domain_novelty)
-    # ── Detector tools (NRB.source_tools JSON, "any of") ───────────────────
+    # ── Detector tools (iBGC.source_tools JSON, "any of") ───────────────────
     detector_csv = detector_tools or source_tools
     if detector_csv:
         tools = [t.strip() for t in detector_csv.split(",") if t.strip()]
         if tools:
             # JSONField "any of" — Postgres ?| operator: at least one tool
-            # in `tools` is present in the NRB's source_tools array.
+            # in `tools` is present in the iBGC's source_tools array.
             tool_q = Q()
             for t in tools:
                 tool_q |= Q(source_tools__contains=[t])
@@ -1327,7 +1327,7 @@ def _apply_nrb_filters(
                 source_bgcs__assembly__assembly_type=type_map[key]
             ).distinct()
     if leaf_path_prefix:
-        # leaf_path_prefix targets the cluster-family ltree on the NRB
+        # leaf_path_prefix targets the cluster-family ltree on the iBGC
         # itself (e.g. "cluster.0042"); see ``ClusteringRun`` outputs.
         qs = qs.filter(
             Q(gene_cluster_family__istartswith=leaf_path_prefix + ".")
@@ -1336,7 +1336,7 @@ def _apply_nrb_filters(
     if bgc_class:
         # ``bgc_class`` is the chemical class (e.g. "Polyketide") served
         # by /filters/bgc-classes/ and stored on each source BGC's
-        # ``classification_path`` ltree — NOT on the NRB's
+        # ``classification_path`` ltree — NOT on the iBGC's
         # ``gene_cluster_family`` (which is the cluster path). Join
         # through ``source_bgcs`` so the filter actually matches.
         qs = qs.filter(
@@ -1407,8 +1407,8 @@ def _apply_nrb_filters(
     return qs
 
 
-@discovery_router.get("/nrbs/count/", response=NrbCountResponse)
-def nrb_count(
+@discovery_router.get("/ibgcs/count/", response=IbgcCountResponse)
+def ibgc_count(
     request,
     include_partials: bool = True,
     validated_only: bool = False,
@@ -1431,25 +1431,25 @@ def nrb_count(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    nrb_ids: Optional[str] = None,
+    ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
-    """Cheap COUNT over the NRB filter surface.
+    """Cheap COUNT over the iBGC filter surface.
 
-    The v2 dashboard hits this before firing /nrbs/roster/, /nrbs/umap/ and
-    /nrbs/scatter/ so it can (a) gate the empty-state CTA when no scope is
+    The v2 dashboard hits this before firing /ibgcs/roster/, /ibgcs/umap/ and
+    /ibgcs/scatter/ so it can (a) gate the empty-state CTA when no scope is
     set and (b) warn the user when the result will be sampled by the maps
     (count > ``DASHBOARD_RESULT_CAP``).
     """
     parsed_ids: Optional[list[int]] = None
-    if nrb_ids:
+    if ibgc_ids:
         parsed_ids = [
-            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_nrb_filters(
-        NonRedundantBGC.objects.all(),
-        nrb_ids=parsed_ids,
+    qs = _apply_ibgc_filters(
+        IntegratedBGC.objects.all(),
+        ibgc_ids=parsed_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         min_length_kb=min_length_kb,
@@ -1475,15 +1475,15 @@ def nrb_count(
     total = qs.count()
     asset_rows = _get_asset_roster_rows(asset_token)
     total += len(asset_rows)
-    return NrbCountResponse(
+    return IbgcCountResponse(
         exact_count=total,
         cap=DASHBOARD_RESULT_CAP,
         will_sample=total > DASHBOARD_RESULT_CAP,
     )
 
 
-@discovery_router.get("/nrbs/roster/", response=PaginatedNrbRosterResponse)
-def nrb_roster(
+@discovery_router.get("/ibgcs/roster/", response=PaginatedIbgcRosterResponse)
+def ibgc_roster(
     request,
     sort_by: str = "novelty_score",
     order: str = "desc",
@@ -1510,25 +1510,25 @@ def nrb_roster(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    nrb_ids: Optional[str] = None,
+    ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
-    """Paginated, filterable NRB roster (v2 Discovery primary unit).
+    """Paginated, filterable iBGC roster (v2 Discovery primary unit).
 
-    ``nrb_ids`` is an optional comma-separated id allow-list so the dashboard
+    ``ibgc_ids`` is an optional comma-separated id allow-list so the dashboard
     can refilter to a Run Query result set without re-issuing the query.
-    ``asset_token`` pre-pends ephemeral asset NRBs (negative ids) ahead of
+    ``asset_token`` pre-pends ephemeral asset iBGCs (negative ids) ahead of
     the DB rows on page 1; they bypass filters and always render.
     """
     parsed_ids: Optional[list[int]] = None
-    if nrb_ids:
+    if ibgc_ids:
         parsed_ids = [
-            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_nrb_filters(
-        NonRedundantBGC.objects.all(),
-        nrb_ids=parsed_ids,
+    qs = _apply_ibgc_filters(
+        IntegratedBGC.objects.all(),
+        ibgc_ids=parsed_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         min_length_kb=min_length_kb,
@@ -1553,11 +1553,11 @@ def nrb_roster(
     )
 
     # Special-case: ``sort_by=similarity`` honours the caller-supplied order
-    # of ``nrb_ids`` (the dashboard passes them in similarity-descending order
-    # after Find Similar NRBs). Postgres ``array_position`` returns the 1-based
+    # of ``ibgc_ids`` (the dashboard passes them in similarity-descending order
+    # after Find Similar iBGCs). Postgres ``array_position`` returns the 1-based
     # index of each row's id in the input array, so ORDER BY that index gives
     # us the exact rank we want. ``order=asc`` reverses the list to flip the
-    # sense. Falls back to novelty_score when nrb_ids is missing.
+    # sense. Falls back to novelty_score when ibgc_ids is missing.
     if sort_by == "similarity" and parsed_ids:
         from django.db.models import IntegerField
         from django.db.models.expressions import RawSQL
@@ -1565,10 +1565,10 @@ def nrb_roster(
         # The roster queryset may join discovery_bgc / discovery_assembly when
         # a chip filter is active, so qualify the id column to avoid an
         # ``ambiguous column "id"`` error from Postgres.
-        nrb_id_col = f"{NonRedundantBGC._meta.db_table}.id"
+        ibgc_id_col = f"{IntegratedBGC._meta.db_table}.id"
         qs = qs.annotate(
             _sim_pos=RawSQL(
-                f"array_position(%s::int[], {nrb_id_col})",
+                f"array_position(%s::int[], {ibgc_id_col})",
                 [ordered_ids],
                 output_field=IntegerField(),
             )
@@ -1600,7 +1600,7 @@ def nrb_roster(
 
     # Asset rows always sit at the very top — they bypass filters and the
     # roster's sort, so they only land in the slice covering global offset 0.
-    asset_slice: list[NrbRosterItem] = []
+    asset_slice: list[IbgcRosterItem] = []
     db_offset = offset
     db_limit = ps
     if offset < len(asset_items):
@@ -1614,19 +1614,19 @@ def nrb_roster(
         list(qs[db_offset : db_offset + db_limit]) if db_limit > 0 else []
     )
 
-    facts = _nrb_member_facts([nrb.id for nrb in page_qs])
+    facts = _ibgc_member_facts([ibgc.id for ibgc in page_qs])
     db_items = [
-        _nrb_to_roster_item(
-            nrb,
-            parent_assembly=facts[nrb.id]["parent_assembly"],
-            n_source_bgcs=facts[nrb.id]["n_source_bgcs"],
-            is_validated=facts[nrb.id]["is_validated"],
-            is_type_strain=facts[nrb.id]["is_type_strain"],
-            contig_accession=facts[nrb.id]["contig_accession"],
+        _ibgc_to_roster_item(
+            ibgc,
+            parent_assembly=facts[ibgc.id]["parent_assembly"],
+            n_source_bgcs=facts[ibgc.id]["n_source_bgcs"],
+            is_validated=facts[ibgc.id]["is_validated"],
+            is_type_strain=facts[ibgc.id]["is_type_strain"],
+            contig_accession=facts[ibgc.id]["contig_accession"],
         )
-        for nrb in page_qs
+        for ibgc in page_qs
     ]
-    return PaginatedNrbRosterResponse(
+    return PaginatedIbgcRosterResponse(
         items=asset_slice + db_items,
         pagination=PaginationMeta(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
@@ -1634,8 +1634,8 @@ def nrb_roster(
     )
 
 
-@discovery_router.get("/nrbs/umap/", response=list[NrbUmapPoint])
-def nrb_umap(
+@discovery_router.get("/ibgcs/umap/", response=list[IbgcUmapPoint])
+def ibgc_umap(
     request,
     include_partials: bool = True,
     max_points: int = DASHBOARD_RESULT_CAP,
@@ -1652,28 +1652,28 @@ def nrb_umap(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    nrb_ids: Optional[str] = None,
+    ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
-    """All NRB UMAP coordinates. ``umap_projected`` marks partial-derived coords.
+    """All iBGC UMAP coordinates. ``umap_projected`` marks partial-derived coords.
 
-    Accepts the same filter surface as ``/nrbs/roster/`` so the v2 dashboard
+    Accepts the same filter surface as ``/ibgcs/roster/`` so the v2 dashboard
     can keep the UMAP map in lockstep with the roster after a Run Query.
     """
     parsed_ids: Optional[list[int]] = None
-    if nrb_ids:
+    if ibgc_ids:
         parsed_ids = [
-            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
     qs = (
-        NonRedundantBGC.objects
+        IntegratedBGC.objects
         .exclude(umap_x__isnull=True)
         .exclude(umap_y__isnull=True)
     )
-    qs = _apply_nrb_filters(
+    qs = _apply_ibgc_filters(
         qs,
-        nrb_ids=parsed_ids,
+        ibgc_ids=parsed_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         detector_tools=detector_tools,
@@ -1699,25 +1699,25 @@ def nrb_umap(
     if total > max_points:
         stride = total // max_points + 1
         qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
-    all_nrbs = list(qs.order_by("id"))
+    all_ibgcs = list(qs.order_by("id"))
 
-    facts = _nrb_member_facts([n.id for n in all_nrbs])
+    facts = _ibgc_member_facts([n.id for n in all_ibgcs])
     db_points = [
-        NrbUmapPoint(
-            id=nrb.id,
-            label=_nrb_label(nrb.id),
-            umap_x=nrb.umap_x,
-            umap_y=nrb.umap_y,
-            classification_path=nrb.gene_cluster_family or "",
-            novelty_score=nrb.novelty_score,
-            is_partial=_nrb_is_partial(nrb),
-            is_validated=facts[nrb.id]["is_validated"],
-            is_type_strain=facts[nrb.id]["is_type_strain"],
-            umap_projected=nrb.umap_projected,
+        IbgcUmapPoint(
+            id=ibgc.id,
+            label=_ibgc_label(ibgc.id),
+            umap_x=ibgc.umap_x,
+            umap_y=ibgc.umap_y,
+            classification_path=ibgc.gene_cluster_family or "",
+            novelty_score=ibgc.novelty_score,
+            is_partial=_ibgc_is_partial(ibgc),
+            is_validated=facts[ibgc.id]["is_validated"],
+            is_type_strain=facts[ibgc.id]["is_type_strain"],
+            umap_projected=ibgc.umap_projected,
         )
-        for nrb in all_nrbs
+        for ibgc in all_ibgcs
     ]
-    asset_points: list[NrbUmapPoint] = []
+    asset_points: list[IbgcUmapPoint] = []
     for row in _get_asset_roster_rows(asset_token):
         pt = _asset_row_to_umap_point(row)
         if pt is not None:
@@ -1725,8 +1725,8 @@ def nrb_umap(
     return asset_points + db_points
 
 
-@discovery_router.get("/nrbs/scatter/", response=list[NrbScatterPoint])
-def nrb_scatter(
+@discovery_router.get("/ibgcs/scatter/", response=list[IbgcScatterPoint])
+def ibgc_scatter(
     request,
     x_axis: str = "novelty_score",
     y_axis: str = "domain_novelty",
@@ -1745,23 +1745,23 @@ def nrb_scatter(
     organism: Optional[str] = None,
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
-    nrb_ids: Optional[str] = None,
+    ibgc_ids: Optional[str] = None,
     asset_token: Optional[str] = None,
 ):
-    if x_axis not in _NRB_AXES or y_axis not in _NRB_AXES:
+    if x_axis not in _IBGC_AXES or y_axis not in _IBGC_AXES:
         raise HttpError(
-            400, f"axes must be one of: {', '.join(sorted(_NRB_AXES))}"
+            400, f"axes must be one of: {', '.join(sorted(_IBGC_AXES))}"
         )
 
     parsed_ids: Optional[list[int]] = None
-    if nrb_ids:
+    if ibgc_ids:
         parsed_ids = [
-            int(x) for x in nrb_ids.split(",") if x.strip().isdigit()
+            int(x) for x in ibgc_ids.split(",") if x.strip().isdigit()
         ] or None
 
-    qs = _apply_nrb_filters(
-        NonRedundantBGC.objects.all(),
-        nrb_ids=parsed_ids,
+    qs = _apply_ibgc_filters(
+        IntegratedBGC.objects.all(),
+        ibgc_ids=parsed_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         detector_tools=detector_tools,
@@ -1779,19 +1779,19 @@ def nrb_scatter(
     )
 
     # similarity_score is not a stored column — only meaningful when supplied
-    # by a similar-NRB or domain query. For the bare scatter endpoint, treat
+    # by a similar-iBGC or domain query. For the bare scatter endpoint, treat
     # it as null and the UI will offer it only post-query.
     if x_axis == "similarity_score" or y_axis == "similarity_score":
         raise HttpError(
             400,
             "similarity_score axis requires a similarity-query context; "
-            "use the query response payload instead of /nrbs/scatter/",
+            "use the query response payload instead of /ibgcs/scatter/",
         )
 
     n_cds_subq = (
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id=OuterRef("id"))
-        .values("non_redundant_bgc_id")
+        .filter(integrated_bgc_id=OuterRef("id"))
+        .values("integrated_bgc_id")
         .annotate(c=Count("cds_list"))
         .values("c")
     )
@@ -1800,7 +1800,7 @@ def nrb_scatter(
         n_cds=Subquery(n_cds_subq[:1]),
     )
 
-    # Deterministic SQL-side stride (same approach as /nrbs/umap/) — keeps
+    # Deterministic SQL-side stride (same approach as /ibgcs/umap/) — keeps
     # the response reproducible across calls and avoids ``ORDER BY ?``,
     # which is a full table sort at multi-million-row scale.
     total = qs.count()
@@ -1808,30 +1808,30 @@ def nrb_scatter(
         stride = total // max_points + 1
         qs = qs.annotate(_bucket=F("id") % stride).filter(_bucket=0)
 
-    points: list[NrbScatterPoint] = []
-    nrb_list = list(qs)
-    facts = _nrb_member_facts([n.id for n in nrb_list])
-    for nrb in nrb_list:
-        x_val = getattr(nrb, x_axis, None)
-        y_val = getattr(nrb, y_axis, None)
+    points: list[IbgcScatterPoint] = []
+    ibgc_list = list(qs)
+    facts = _ibgc_member_facts([n.id for n in ibgc_list])
+    for ibgc in ibgc_list:
+        x_val = getattr(ibgc, x_axis, None)
+        y_val = getattr(ibgc, y_axis, None)
         if x_val is None or y_val is None:
             continue
         points.append(
-            NrbScatterPoint(
-                id=nrb.id,
+            IbgcScatterPoint(
+                id=ibgc.id,
                 x=float(x_val),
                 y=float(y_val),
-                classification_path=nrb.gene_cluster_family or "",
-                novelty_score=nrb.novelty_score,
-                domain_novelty=nrb.domain_novelty,
-                is_partial=not facts[nrb.id]["is_validated"]
-                           and nrb.classification_run_id is None,
-                is_validated=facts[nrb.id]["is_validated"],
-                is_type_strain=facts[nrb.id]["is_type_strain"],
-                umap_projected=nrb.umap_projected,
+                classification_path=ibgc.gene_cluster_family or "",
+                novelty_score=ibgc.novelty_score,
+                domain_novelty=ibgc.domain_novelty,
+                is_partial=not facts[ibgc.id]["is_validated"]
+                           and ibgc.classification_run_id is None,
+                is_validated=facts[ibgc.id]["is_validated"],
+                is_type_strain=facts[ibgc.id]["is_type_strain"],
+                umap_projected=ibgc.umap_projected,
             )
         )
-    asset_points: list[NrbScatterPoint] = []
+    asset_points: list[IbgcScatterPoint] = []
     for row in _get_asset_roster_rows(asset_token):
         pt = _asset_row_to_scatter_point(row, x_axis, y_axis)
         if pt is not None:
@@ -1840,37 +1840,37 @@ def nrb_scatter(
 
 
 # NOTE: this catch-all path-param route MUST come after every other
-# `/nrbs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
-# matches in declaration order, so an earlier `{nrb_id}` would swallow
+# `/ibgcs/<literal>/` route above (roster, umap, scatter, …) — Django Ninja
+# matches in declaration order, so an earlier `{ibgc_id}` would swallow
 # "umap" / "scatter" and 422 on int parsing.
 def _asset_token_header(request) -> Optional[str]:
     """Frontend passes the active asset token via ``X-Asset-Token`` so the
-    negative-id dispatcher can resolve asset NRBs out of Redis without
+    negative-id dispatcher can resolve asset iBGCs out of Redis without
     polluting the URL with a query param."""
     return request.headers.get("X-Asset-Token") or request.GET.get("asset_token")
 
 
-@discovery_router.get("/nrbs/{nrb_id}/", response=NrbDetail)
-def nrb_detail(request, nrb_id: int):
-    if nrb_id < 0:
+@discovery_router.get("/ibgcs/{ibgc_id}/", response=IbgcDetail)
+def ibgc_detail(request, ibgc_id: int):
+    if ibgc_id < 0:
         token = _asset_token_header(request)
         if not token:
-            raise HttpError(404, "Asset token required for asset NRB")
+            raise HttpError(404, "Asset token required for asset iBGC")
         from discovery.services.asset_upload import cache as asset_cache
 
-        payload = asset_cache.read_nrb_detail(token, nrb_id)
+        payload = asset_cache.read_ibgc_detail(token, ibgc_id)
         if payload is None:
-            raise HttpError(404, "Asset NRB not found or expired")
-        return NrbDetail(**payload)
+            raise HttpError(404, "Asset iBGC not found or expired")
+        return IbgcDetail(**payload)
 
     try:
-        nrb = NonRedundantBGC.objects.select_related("contig").get(id=nrb_id)
-    except NonRedundantBGC.DoesNotExist:
-        raise HttpError(404, "NRB not found")
+        ibgc = IntegratedBGC.objects.select_related("contig").get(id=ibgc_id)
+    except IntegratedBGC.DoesNotExist:
+        raise HttpError(404, "iBGC not found")
 
     member_qs = (
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id=nrb_id)
+        .filter(integrated_bgc_id=ibgc_id)
         .select_related("assembly", "assembly__source", "detector")
         .order_by("id")
     )
@@ -1894,10 +1894,10 @@ def nrb_detail(request, nrb_id: int):
                 url=asm.url or "",
             )
 
-    representative_id = _pick_representative_bgc_id(nrb_id)
+    representative_id = _pick_representative_bgc_id(ibgc_id)
 
     # Pooled positional domain architecture across all member BGCs of the
-    # NRB. Mirrors the ordering rule the adjacency builder uses so the
+    # iBGC. Mirrors the ordering rule the adjacency builder uses so the
     # surfaced sequence is exactly what the clustering pipeline scored.
     domain_arch = [
         DomainArchitectureItem(
@@ -1909,7 +1909,7 @@ def nrb_detail(request, nrb_id: int):
             score=None,
             url=r["url"] or "",
         )
-        for r in nrb_architecture([m.id for m in members])
+        for r in ibgc_architecture([m.id for m in members])
     ]
 
     # Natural products: union over members (each curated NP attaches to one BGC).
@@ -1927,14 +1927,14 @@ def nrb_detail(request, nrb_id: int):
             )
         )
 
-    # ChemOnt tree aggregated across all CDSs of all member BGCs of the NRB.
+    # ChemOnt tree aggregated across all CDSs of all member BGCs of the iBGC.
     chemont_rows = DashboardCdsChemOnt.objects.filter(
         cds__bgc_id__in=member_ids
     ).only("chemont_id", "chemont_name", "probability")
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
 
     member_items = [
-        NrbMemberBgc(
+        IbgcMemberBgc(
             id=m.id,
             accession=m.bgc_accession,
             detector_name=m.detector.tool if m.detector else None,
@@ -1945,23 +1945,23 @@ def nrb_detail(request, nrb_id: int):
         for m in members
     ]
 
-    return NrbDetail(
-        id=nrb.id,
-        label=_nrb_label(nrb.id),
-        classification_path=nrb.gene_cluster_family or "",
-        size_kb=round((nrb.end_position - nrb.start_position) / 1000.0, 3),
-        start_position=nrb.start_position,
-        end_position=nrb.end_position,
-        contig_accession=nrb.contig.accession if nrb.contig else None,
-        source_tools=list(nrb.source_tools or []),
-        novelty_score=nrb.novelty_score,
-        domain_novelty=nrb.domain_novelty,
-        is_partial=_nrb_is_partial(nrb),
+    return IbgcDetail(
+        id=ibgc.id,
+        label=_ibgc_label(ibgc.id),
+        classification_path=ibgc.gene_cluster_family or "",
+        size_kb=round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
+        start_position=ibgc.start_position,
+        end_position=ibgc.end_position,
+        contig_accession=ibgc.contig.accession if ibgc.contig else None,
+        source_tools=list(ibgc.source_tools or []),
+        novelty_score=ibgc.novelty_score,
+        domain_novelty=ibgc.domain_novelty,
+        is_partial=_ibgc_is_partial(ibgc),
         is_validated=is_validated,
         is_type_strain=is_type_strain,
-        umap_projected=nrb.umap_projected,
-        umap_x=nrb.umap_x,
-        umap_y=nrb.umap_y,
+        umap_projected=ibgc.umap_projected,
+        umap_x=ibgc.umap_x,
+        umap_y=ibgc.umap_y,
         parent_assembly=parent,
         representative_bgc_id=representative_id,
         member_bgcs=member_items,
@@ -1972,59 +1972,59 @@ def nrb_detail(request, nrb_id: int):
 
 
 @discovery_router.get(
-    "/nrbs/{nrb_id}/architecture/", response=NrbArchitectureResponse,
+    "/ibgcs/{ibgc_id}/architecture/", response=IbgcArchitectureResponse,
 )
-def nrb_architecture_endpoint(request, nrb_id: int):
-    """Pooled positional domain accessions for an NRB (clipboard payload).
+def ibgc_architecture_endpoint(request, ibgc_id: int):
+    """Pooled positional domain accessions for an iBGC (clipboard payload).
 
-    Lightweight wrapper around the same ordering rule that ``nrb_detail``
+    Lightweight wrapper around the same ordering rule that ``ibgc_detail``
     uses for ``domain_architecture``.
     """
-    if nrb_id < 0:
+    if ibgc_id < 0:
         token = _asset_token_header(request)
         if not token:
-            raise HttpError(404, "Asset token required for asset NRB")
+            raise HttpError(404, "Asset token required for asset iBGC")
         from discovery.services.asset_upload import cache as asset_cache
 
-        ordered_accs = asset_cache.read_architecture(token, nrb_id)
+        ordered_accs = asset_cache.read_architecture(token, ibgc_id)
         if ordered_accs is None:
-            raise HttpError(404, "Asset NRB not found or expired")
-        return NrbArchitectureResponse(
-            id=nrb_id,
-            label=f"NRB-A{abs(nrb_id)}",
+            raise HttpError(404, "Asset iBGC not found or expired")
+        return IbgcArchitectureResponse(
+            id=ibgc_id,
+            label=f"iBGC-A{abs(ibgc_id)}",
             ordered_accs=ordered_accs,
         )
 
     try:
-        nrb = NonRedundantBGC.objects.get(id=nrb_id)
-    except NonRedundantBGC.DoesNotExist:
-        raise HttpError(404, "NRB not found")
+        ibgc = IntegratedBGC.objects.get(id=ibgc_id)
+    except IntegratedBGC.DoesNotExist:
+        raise HttpError(404, "iBGC not found")
 
     member_ids = list(
         DashboardBgc.objects
-        .filter(non_redundant_bgc_id=nrb_id)
+        .filter(integrated_bgc_id=ibgc_id)
         .values_list("id", flat=True)
     )
-    ordered_accs = [r["domain_acc"] for r in nrb_architecture(member_ids)]
-    return NrbArchitectureResponse(
-        id=nrb.id,
-        label=_nrb_label(nrb.id),
+    ordered_accs = [r["domain_acc"] for r in ibgc_architecture(member_ids)]
+    return IbgcArchitectureResponse(
+        id=ibgc.id,
+        label=_ibgc_label(ibgc.id),
         ordered_accs=ordered_accs,
     )
 
 
 @discovery_router.post(
-    "/query/similar-nrb/", response=PaginatedNrbRosterResponse,
+    "/query/similar-ibgc/", response=PaginatedIbgcRosterResponse,
 )
-def similar_nrb_query(
+def similar_ibgc_query(
     request,
-    body: SimilarNrbRequest,
+    body: SimilarIbgcRequest,
     page: int = 1,
     page_size: int = 25,
 ):
-    """Top-K NRBs by composite-Dice similarity to ``body.nrb_id``.
+    """Top-K iBGCs by composite-Dice similarity to ``body.ibgc_id``.
 
-    Composite-Dice is computed on demand against the per-NRB signature
+    Composite-Dice is computed on demand against the per-iBGC signature
     matrices of the active ClusteringRun. The full N×N similarity matrix
     is no longer materialised; the result is cached in Redis for 24h keyed
     on the run's sha256 so a new clustering run invalidates the cache by
@@ -2043,12 +2043,12 @@ def similar_nrb_query(
     except FileNotFoundError as exc:
         raise HttpError(503, str(exc))
 
-    row_ix = scoring.row_index_for(body.nrb_id)
+    row_ix = scoring.row_index_for(body.ibgc_id)
     if row_ix is None:
         raise HttpError(
             400,
-            "Seed NRB is not a primary in the latest ClusteringRun — "
-            "similar-NRB requires a primary seed in v1.",
+            "Seed iBGC is not a primary in the latest ClusteringRun — "
+            "similar-iBGC requires a primary seed in v1.",
         )
 
     k = max(1, min(int(body.k), 500))
@@ -2061,17 +2061,17 @@ def similar_nrb_query(
         scores = score_against_all(q_dom, q_pair, scoring)
         scores[row_ix] = -np.inf  # exclude self
         rows, vals = top_k(scores, k)
-        ids = [int(scoring.nrb_ids[r]) for r in rows]
+        ids = [int(scoring.ibgc_ids[r]) for r in rows]
         return {"ids": ids, "scores": vals}
 
-    cache_key = cache_key_find_similar(sha256=scoring.sha256, nrb_id=body.nrb_id, k=k)
+    cache_key = cache_key_find_similar(sha256=scoring.sha256, ibgc_id=body.ibgc_id, k=k)
     cached = cache_similarity_query(cache_key=cache_key, compute=_compute)
     top_ids: list[int] = list(cached["ids"])
     top_sims: list[float] = [float(v) for v in cached["scores"]]
     sim_lookup = dict(zip(top_ids, top_sims))
 
     if not top_ids:
-        return PaginatedNrbRosterResponse(
+        return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
@@ -2080,11 +2080,11 @@ def similar_nrb_query(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_ids = top_ids[offset: offset + ps]
 
-    nrbs = {n.id: n for n in NonRedundantBGC.objects.filter(id__in=page_ids)}
-    facts = _nrb_member_facts(page_ids)
+    ibgcs = {n.id: n for n in IntegratedBGC.objects.filter(id__in=page_ids)}
+    facts = _ibgc_member_facts(page_ids)
     items = [
-        _nrb_to_roster_item(
-            nrbs[nid],
+        _ibgc_to_roster_item(
+            ibgcs[nid],
             parent_assembly=facts[nid]["parent_assembly"],
             n_source_bgcs=facts[nid]["n_source_bgcs"],
             is_validated=facts[nid]["is_validated"],
@@ -2093,9 +2093,9 @@ def similar_nrb_query(
             similarity_score=round(sim_lookup[nid], 4),
         )
         for nid in page_ids
-        if nid in nrbs
+        if nid in ibgcs
     ]
-    return PaginatedNrbRosterResponse(
+    return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
@@ -2104,18 +2104,18 @@ def similar_nrb_query(
 
 
 @discovery_router.post(
-    "/query/nrb-architecture/", response=PaginatedNrbRosterResponse,
+    "/query/ibgc-architecture/", response=PaginatedIbgcRosterResponse,
 )
-def nrb_architecture_query(
+def ibgc_architecture_query(
     request,
-    body: NrbArchitectureQueryRequest,
+    body: IbgcArchitectureQueryRequest,
     page: int = 1,
     page_size: int = 25,
 ):
-    """Top-K NRBs by composite-Dice to a user-supplied domain architecture.
+    """Top-K iBGCs by composite-Dice to a user-supplied domain architecture.
 
     Scores ``weight·Dice(domain set) + (1-weight)·Dice(adjacency pairs)``
-    against the cached primary-NRB matrices for the latest ClusteringRun.
+    against the cached primary-iBGC matrices for the latest ClusteringRun.
     Accessions outside the run's domain vocabulary are silently dropped.
     """
     from discovery.services.clustering.architecture_search import (
@@ -2143,7 +2143,7 @@ def nrb_architecture_query(
         result = architecture_search(
             accs, weight=body.weight, k=k, cache=scoring,
         )
-        return {"ids": result["nrb_ids"], "scores": result["scores"]}
+        return {"ids": result["ibgc_ids"], "scores": result["scores"]}
 
     cache_key = cache_key_architecture(
         sha256=scoring.sha256, accs_ordered=accs, weight=float(body.weight), k=k,
@@ -2163,11 +2163,11 @@ def nrb_architecture_query(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_ids = top_ids[offset: offset + ps]
 
-    nrbs = {n.id: n for n in NonRedundantBGC.objects.filter(id__in=page_ids)}
-    facts = _nrb_member_facts(page_ids)
+    ibgcs = {n.id: n for n in IntegratedBGC.objects.filter(id__in=page_ids)}
+    facts = _ibgc_member_facts(page_ids)
     items = [
-        _nrb_to_roster_item(
-            nrbs[nid],
+        _ibgc_to_roster_item(
+            ibgcs[nid],
             parent_assembly=facts[nid]["parent_assembly"],
             n_source_bgcs=facts[nid]["n_source_bgcs"],
             is_validated=facts[nid]["is_validated"],
@@ -2176,9 +2176,9 @@ def nrb_architecture_query(
             similarity_score=round(sim_lookup[nid], 4),
         )
         for nid in page_ids
-        if nid in nrbs
+        if nid in ibgcs
     ]
-    return PaginatedNrbRosterResponse(
+    return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
@@ -2205,11 +2205,11 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         build_report_payload,
     )
 
-    ids = sorted({int(i) for i in body.nrb_ids})
+    ids = sorted({int(i) for i in body.ibgc_ids})
     if not ids:
-        raise HttpError(400, "nrb_ids must be non-empty")
+        raise HttpError(400, "ibgc_ids must be non-empty")
     if len(ids) > MAX_SHORTLIST:
-        raise HttpError(400, f"shortlist limit is {MAX_SHORTLIST} NRBs")
+        raise HttpError(400, f"shortlist limit is {MAX_SHORTLIST} iBGCs")
 
     # Split positive (DB) from negative (asset) ids and hydrate the asset
     # rows from Redis if a token was supplied.
@@ -2220,30 +2220,30 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         if not body.asset_token:
             raise HttpError(
                 400,
-                "asset_token is required when asset NRB ids (negative) are shortlisted",
+                "asset_token is required when asset iBGC ids (negative) are shortlisted",
             )
         from discovery.services.asset_upload import cache as asset_cache
 
         cached_roster = {
-            int(r["id"]): r for r in (asset_cache.read_nrb_list(body.asset_token) or [])
+            int(r["id"]): r for r in (asset_cache.read_ibgc_list(body.asset_token) or [])
         }
         for nid in asset_ids:
             row = cached_roster.get(nid)
             if row is None:
                 raise HttpError(
                     404,
-                    f"Asset NRB {nid} not found in asset token {body.asset_token!r}",
+                    f"Asset iBGC {nid} not found in asset token {body.asset_token!r}",
                 )
             extra_rows.append(row)
 
         # Domain hits feed the report's domain composition + GO slim matrix
         # panels for the asset rows. Scope to the shortlisted asset ids so
-        # an upload with many NRBs doesn't drag the rest into the rollup.
+        # an upload with many iBGCs doesn't drag the rest into the rollup.
         shortlisted = set(asset_ids)
         extra_domain_rows = [
             r
             for r in (asset_cache.read_domain_hits(body.asset_token) or [])
-            if int(r.get("nrb_id", 0)) in shortlisted
+            if int(r.get("ibgc_id", 0)) in shortlisted
         ]
 
     # The token covers both ids and asset rows so cached snapshots don't
@@ -2259,19 +2259,19 @@ def report_snapshot(request, body: ReportSnapshotRequest):
         return ReportSnapshotResponse(
             token=token,
             expires_at=cached.get("expires_at", ""),
-            n_nrbs=cached.get("n_nrbs", len(ids)),
+            n_ibgcs=cached.get("n_ibgcs", len(ids)),
         )
 
     payload = build_report_payload(
         ids,
-        extra_nrb_rows=extra_rows,
+        extra_ibgc_rows=extra_rows,
         extra_domain_rows=extra_domain_rows,
     )
     cache.set(cache_key, payload, REPORT_TTL_SECONDS)
     return ReportSnapshotResponse(
         token=token,
         expires_at=payload["expires_at"],
-        n_nrbs=payload["n_nrbs"],
+        n_ibgcs=payload["n_ibgcs"],
     )
 
 
@@ -2343,14 +2343,14 @@ def report_export_json(request, token: str):
 def report_export_gbk_zip(request, token: str):
     """Download a zip of GBK files (one per source BGC) for the shortlist.
 
-    Each record carries BGC / NRB / Region features in addition to CDSs.
-    Files are grouped as ``NRB-{id}/{bgc_accession}.gbk``.
+    Each record carries BGC / iBGC / Region features in addition to CDSs.
+    Files are grouped as ``iBGC-{id}/{bgc_accession}.gbk``.
     """
     from discovery.services.gbk import build_shortlist_gbk_zip
 
     cached = _get_cached_report(token)
-    nrb_ids = [row["id"] for row in cached.get("nrb_rows", [])]
-    zip_bytes = build_shortlist_gbk_zip(nrb_ids)
+    ibgc_ids = [row["id"] for row in cached.get("ibgc_rows", [])]
+    zip_bytes = build_shortlist_gbk_zip(ibgc_ids)
     response = HttpResponse(zip_bytes, content_type="application/zip")
     response["Content-Disposition"] = (
         f'attachment; filename="report_{token}_gbk.zip"'
@@ -2466,10 +2466,10 @@ def domain_query(
     )
 
 
-# ── NRB-collapsed query endpoints ────────────────────────────────────────────
+# ── iBGC-collapsed query endpoints ────────────────────────────────────────────
 
 
-def _nrb_roster_page_response(
+def _ibgc_roster_page_response(
     qs,
     *,
     sort_by: str,
@@ -2480,16 +2480,16 @@ def _nrb_roster_page_response(
     best_hit_protein_lookup: Optional[dict[int, str]] = None,
     best_pident_lookup: Optional[dict[int, float]] = None,
     best_qcoverage_lookup: Optional[dict[int, float]] = None,
-) -> PaginatedNrbRosterResponse:
-    """Sort, paginate, and serialise a filtered ``NonRedundantBGC`` queryset.
+) -> PaginatedIbgcRosterResponse:
+    """Sort, paginate, and serialise a filtered ``IntegratedBGC`` queryset.
 
-    Shared between ``/nrbs/roster/``, ``/query/nrb-domain/``, and
-    ``/query/nrb-sequence/status/`` so result shape stays identical.
-    ``similarity_lookup`` is an optional ``{nrb_id: score}`` map that gets
-    stamped onto each ``NrbRosterItem.similarity_score`` (used by the
-    query endpoints; ``/nrbs/roster/`` leaves it null).
+    Shared between ``/ibgcs/roster/``, ``/query/ibgc-domain/``, and
+    ``/query/ibgc-sequence/status/`` so result shape stays identical.
+    ``similarity_lookup`` is an optional ``{ibgc_id: score}`` map that gets
+    stamped onto each ``IbgcRosterItem.similarity_score`` (used by the
+    query endpoints; ``/ibgcs/roster/`` leaves it null).
     ``best_hit_protein_lookup`` is filled only by the sequence-search
-    endpoint and carries the protein_id of the winning CDS per NRB.
+    endpoint and carries the protein_id of the winning CDS per iBGC.
     """
     sort_map = {
         "novelty_score": "novelty_score",
@@ -2510,9 +2510,9 @@ def _nrb_roster_page_response(
         total_count = len(rows)
         pg, ps, tp, offset = _paginate(page, page_size, total_count)
         page_rows = rows[offset: offset + ps]
-        facts = _nrb_member_facts([n.id for n in page_rows])
+        facts = _ibgc_member_facts([n.id for n in page_rows])
         items = [
-            _nrb_to_roster_item(
+            _ibgc_to_roster_item(
                 n,
                 parent_assembly=facts[n.id]["parent_assembly"],
                 n_source_bgcs=facts[n.id]["n_source_bgcs"],
@@ -2535,7 +2535,7 @@ def _nrb_roster_page_response(
             )
             for n in page_rows
         ]
-        return PaginatedNrbRosterResponse(
+        return PaginatedIbgcRosterResponse(
             items=items,
             pagination=PaginationMeta(
                 page=pg, page_size=ps, total_count=total_count, total_pages=tp,
@@ -2552,9 +2552,9 @@ def _nrb_roster_page_response(
     total_count = qs.count()
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_qs = list(qs[offset: offset + ps])
-    facts = _nrb_member_facts([n.id for n in page_qs])
+    facts = _ibgc_member_facts([n.id for n in page_qs])
     items = [
-        _nrb_to_roster_item(
+        _ibgc_to_roster_item(
             n,
             parent_assembly=facts[n.id]["parent_assembly"],
             n_source_bgcs=facts[n.id]["n_source_bgcs"],
@@ -2579,7 +2579,7 @@ def _nrb_roster_page_response(
         )
         for n in page_qs
     ]
-    return PaginatedNrbRosterResponse(
+    return PaginatedIbgcRosterResponse(
         items=items,
         pagination=PaginationMeta(
             page=pg, page_size=ps, total_count=total_count, total_pages=tp,
@@ -2588,9 +2588,9 @@ def _nrb_roster_page_response(
 
 
 @discovery_router.post(
-    "/query/nrb-domain/", response=PaginatedNrbRosterResponse, tags=["Query"],
+    "/query/ibgc-domain/", response=PaginatedIbgcRosterResponse, tags=["Query"],
 )
-def nrb_domain_query(
+def ibgc_domain_query(
     request,
     body: DomainQueryRequest,
     page: int = 1,
@@ -2619,47 +2619,47 @@ def nrb_domain_query(
     biome_lineage: Optional[str] = None,
     taxonomy_path: Optional[str] = None,
 ):
-    """NRB-collapsed domain query.
+    """iBGC-collapsed domain query.
 
     Resolves the domain conditions against ``BgcDomain`` rows, collapses to
-    distinct ``NonRedundantBGC`` ids (any source BGC of the NRB carrying a
-    required domain counts the NRB in; excluded domains drop the NRB if any
-    source BGC carries them). All NRB-level filters from ``/nrbs/roster/``
+    distinct ``IntegratedBGC`` ids (any source BGC of the iBGC carrying a
+    required domain counts the iBGC in; excluded domains drop the iBGC if any
+    source BGC carries them). All iBGC-level filters from ``/ibgcs/roster/``
     apply in the same shape.
     """
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
 
-    # Resolve the matching NRB id set via BgcDomain → DashboardBgc → NRB.
-    bgc_qs = DashboardBgc.objects.filter(non_redundant_bgc__isnull=False)
+    # Resolve the matching iBGC id set via BgcDomain → DashboardBgc → iBGC.
+    bgc_qs = DashboardBgc.objects.filter(integrated_bgc__isnull=False)
     if body.logic == "and" and required:
         for acc in required:
             bgc_qs = bgc_qs.filter(bgc_domains__domain_acc=acc)
     elif required:
         bgc_qs = bgc_qs.filter(bgc_domains__domain_acc__in=required)
-    nrb_ids = list(
-        bgc_qs.values_list("non_redundant_bgc_id", flat=True).distinct()
+    ibgc_ids = list(
+        bgc_qs.values_list("integrated_bgc_id", flat=True).distinct()
     )
-    if excluded and nrb_ids:
-        excluded_nrb_ids = set(
+    if excluded and ibgc_ids:
+        excluded_ibgc_ids = set(
             DashboardBgc.objects
-            .filter(non_redundant_bgc_id__in=nrb_ids, bgc_domains__domain_acc__in=excluded)
-            .values_list("non_redundant_bgc_id", flat=True)
+            .filter(integrated_bgc_id__in=ibgc_ids, bgc_domains__domain_acc__in=excluded)
+            .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
-        nrb_ids = [i for i in nrb_ids if i not in excluded_nrb_ids]
+        ibgc_ids = [i for i in ibgc_ids if i not in excluded_ibgc_ids]
 
-    if not nrb_ids:
-        return PaginatedNrbRosterResponse(
+    if not ibgc_ids:
+        return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
                 page=1, page_size=page_size, total_count=0, total_pages=0,
             ),
         )
 
-    qs = _apply_nrb_filters(
-        NonRedundantBGC.objects.all(),
-        nrb_ids=nrb_ids,
+    qs = _apply_ibgc_filters(
+        IntegratedBGC.objects.all(),
+        ibgc_ids=ibgc_ids,
         include_partials=include_partials,
         validated_only=validated_only,
         min_length_kb=min_length_kb,
@@ -2682,9 +2682,9 @@ def nrb_domain_query(
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
     )
-    # Domain match is binary → similarity_score = 1.0 for every NRB.
-    similarity_lookup = {nid: 1.0 for nid in nrb_ids}
-    return _nrb_roster_page_response(
+    # Domain match is binary → similarity_score = 1.0 for every iBGC.
+    similarity_lookup = {nid: 1.0 for nid in ibgc_ids}
+    return _ibgc_roster_page_response(
         qs,
         sort_by=sort_by,
         order=order,
@@ -2695,11 +2695,11 @@ def nrb_domain_query(
 
 
 @discovery_router.get(
-    "/query/nrb-sequence/status/{task_id}/",
-    response=PaginatedNrbRosterResponse,
+    "/query/ibgc-sequence/status/{task_id}/",
+    response=PaginatedIbgcRosterResponse,
     tags=["Query"],
 )
-def nrb_sequence_query_status(
+def ibgc_sequence_query_status(
     request,
     task_id: str,
     page: int = 1,
@@ -2729,10 +2729,10 @@ def nrb_sequence_query_status(
     taxonomy_path: Optional[str] = None,
 ):
     """Poll a ``sequence_similarity_search`` Celery task and return results
-    collapsed to NRB level.
+    collapsed to iBGC level.
 
     The task itself is the same one ``POST /query/sequence/`` dispatches —
-    only the result shape differs. Each NRB keeps the best-bitscore hit
+    only the result shape differs. Each iBGC keeps the best-bitscore hit
     among its source BGCs as ``similarity_score``. Tasks still PENDING raise
     503 so the client can poll on a fixed interval; FAILURE raises 500.
     """
@@ -2760,52 +2760,52 @@ def nrb_sequence_query_status(
         int(k): v for k, v in raw_result.items()
     }
     if not bgc_metrics:
-        return PaginatedNrbRosterResponse(
+        return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
                 page=1, page_size=page_size, total_count=0, total_pages=0,
             ),
         )
 
-    # Collapse BGC hits → NRB id with best bitscore. Also carry the
+    # Collapse BGC hits → iBGC id with best bitscore. Also carry the
     # ``protein_id`` of the winning CDS plus its aggregate alignment stats
     # (pident, qcov) so the Variables Map can plot those metrics.
-    bgc_to_nrb = dict(
+    bgc_to_ibgc = dict(
         DashboardBgc.objects.filter(id__in=bgc_metrics.keys())
-        .values_list("id", "non_redundant_bgc_id")
+        .values_list("id", "integrated_bgc_id")
     )
-    nrb_best: dict[int, float] = {}
-    nrb_best_protein: dict[int, str] = {}
-    nrb_best_pident: dict[int, float] = {}
-    nrb_best_qcov: dict[int, float] = {}
-    for bgc_id, nrb_id in bgc_to_nrb.items():
-        if nrb_id is None:
+    ibgc_best: dict[int, float] = {}
+    ibgc_best_protein: dict[int, str] = {}
+    ibgc_best_pident: dict[int, float] = {}
+    ibgc_best_qcov: dict[int, float] = {}
+    for bgc_id, ibgc_id in bgc_to_ibgc.items():
+        if ibgc_id is None:
             continue
         m = bgc_metrics[bgc_id]
         bs = float(m.get("bitscore", 0.0))
-        if bs > nrb_best.get(nrb_id, float("-inf")):
-            nrb_best[nrb_id] = bs
+        if bs > ibgc_best.get(ibgc_id, float("-inf")):
+            ibgc_best[ibgc_id] = bs
             pid = m.get("protein_id")
             if pid:
-                nrb_best_protein[nrb_id] = str(pid)
+                ibgc_best_protein[ibgc_id] = str(pid)
             pident = m.get("pident")
             if pident is not None:
-                nrb_best_pident[nrb_id] = float(pident)
+                ibgc_best_pident[ibgc_id] = float(pident)
             qcov = m.get("qcoverage")
             if qcov is not None:
-                nrb_best_qcov[nrb_id] = float(qcov)
+                ibgc_best_qcov[ibgc_id] = float(qcov)
 
-    if not nrb_best:
-        return PaginatedNrbRosterResponse(
+    if not ibgc_best:
+        return PaginatedIbgcRosterResponse(
             items=[],
             pagination=PaginationMeta(
                 page=1, page_size=page_size, total_count=0, total_pages=0,
             ),
         )
 
-    qs = _apply_nrb_filters(
-        NonRedundantBGC.objects.all(),
-        nrb_ids=list(nrb_best.keys()),
+    qs = _apply_ibgc_filters(
+        IntegratedBGC.objects.all(),
+        ibgc_ids=list(ibgc_best.keys()),
         include_partials=include_partials,
         validated_only=validated_only,
         min_length_kb=min_length_kb,
@@ -2828,16 +2828,16 @@ def nrb_sequence_query_status(
         biome_lineage=biome_lineage,
         taxonomy_path=taxonomy_path,
     )
-    return _nrb_roster_page_response(
+    return _ibgc_roster_page_response(
         qs,
         sort_by=sort_by,
         order=order,
         page=page,
         page_size=page_size,
-        similarity_lookup=nrb_best,
-        best_hit_protein_lookup=nrb_best_protein,
-        best_pident_lookup=nrb_best_pident,
-        best_qcoverage_lookup=nrb_best_qcov,
+        similarity_lookup=ibgc_best,
+        best_hit_protein_lookup=ibgc_best_protein,
+        best_pident_lookup=ibgc_best_pident,
+        best_qcoverage_lookup=ibgc_best_qcov,
     )
 
 
@@ -3424,9 +3424,9 @@ def gcf_list(
     page: int = 1,
     page_size: int = 50,
 ):
-    # Scope to the latest ClusteringRun — NonRedundantBGC.gene_cluster_family is
+    # Scope to the latest ClusteringRun — IntegratedBGC.gene_cluster_family is
     # rewritten on every successful run, so this is the only set whose paths
-    # match the live NRB rows that ``leaf_path_prefix`` filters against.
+    # match the live iBGC rows that ``leaf_path_prefix`` filters against.
     run = ClusteringRun.objects.order_by("-created_at").first()
     if run is None:
         return PaginatedGcfResponse(
@@ -3722,7 +3722,12 @@ def discovery_stats(request):
     latest = DiscoveryStats.objects.order_by("-created_at").first()
     if latest is None:
         return DiscoveryStatsResponse()
-    return DiscoveryStatsResponse(**latest.stats, updated_at=latest.updated_at)
+    known = {
+        k: v
+        for k, v in latest.stats.items()
+        if k in DiscoveryStatsResponse.model_fields
+    }
+    return DiscoveryStatsResponse(**known, updated_at=latest.updated_at)
 
 
 # ── Ephemeral asset upload ───────────────────────────────────────────────────

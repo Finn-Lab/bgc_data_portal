@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import Plot from "react-plotly.js";
 import { useDiscoveryStore } from "@/stores/discovery-store";
-import { NrbContextMenu } from "./NrbContextMenu";
+import { IbgcContextMenu } from "./IbgcContextMenu";
 
-interface NrbPoint {
+interface IbgcPoint {
   id: number;
   x: number;
   y: number;
@@ -11,7 +11,7 @@ interface NrbPoint {
   is_validated: boolean;
   is_type_strain: boolean;
   umap_projected: boolean;
-  /** Negative-id NRB sourced from an ephemeral asset upload — rendered
+  /** Negative-id iBGC sourced from an ephemeral asset upload — rendered
    *  with a distinct marker so the user spots their submitted data. */
   is_asset?: boolean;
   classification_path?: string | null;
@@ -22,7 +22,7 @@ interface NrbPoint {
 }
 
 interface Props {
-  points: NrbPoint[];
+  points: IbgcPoint[];
   xLabel: string;
   yLabel: string;
 }
@@ -32,22 +32,22 @@ interface Props {
  *
  *  - Left click → set compare slot
  *  - Right click on the focused point → opens the shared context menu via
- *    a 1×1 invisible overlay; this hands the chosen NRB id to the same
- *    `<NrbContextMenu>` used by the roster, so the menu behaviour is
+ *    a 1×1 invisible overlay; this hands the chosen iBGC id to the same
+ *    `<IbgcContextMenu>` used by the roster, so the menu behaviour is
  *    identical across tabs.
  *  - Hover tooltips show id + label + scores
  *
  *  Plotly events fire with the point's `customdata` so we route every
- *  click through the underlying NRB id.
+ *  click through the underlying iBGC id.
  */
-export function NrbScatterPlot({ points, xLabel, yLabel }: Props) {
-  const setCompareNrbId = useDiscoveryStore((s) => s.setCompareNrbId);
-  const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
-  const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
+export function IbgcScatterPlot({ points, xLabel, yLabel }: Props) {
+  const setCompareIbgcId = useDiscoveryStore((s) => s.setCompareIbgcId);
+  const referenceIbgcId = useDiscoveryStore((s) => s.referenceIbgcId);
+  const compareIbgcId = useDiscoveryStore((s) => s.compareIbgcId);
 
   const traces = useMemo(
-    () => buildTraces(points, referenceNrbId, compareNrbId),
-    [points, referenceNrbId, compareNrbId],
+    () => buildTraces(points, referenceIbgcId, compareIbgcId),
+    [points, referenceIbgcId, compareIbgcId],
   );
 
   if (points.length === 0) {
@@ -75,7 +75,7 @@ export function NrbScatterPlot({ points, xLabel, yLabel }: Props) {
         onClick={(e) => {
           const pt = e.points?.[0];
           if (pt && pt.customdata != null) {
-            setCompareNrbId(Number(pt.customdata));
+            setCompareIbgcId(Number(pt.customdata));
           }
         }}
         config={{
@@ -92,36 +92,36 @@ export function NrbScatterPlot({ points, xLabel, yLabel }: Props) {
       {/* Context menu can't be wired straight onto Plotly without a custom
           overlay; for now right-click reveals it via the focused point's
           metadata held on the compare slot. */}
-      <CtxMenuOverlay nrbId={compareNrbId} />
+      <CtxMenuOverlay ibgcId={compareIbgcId} />
     </div>
   );
 }
 
-function CtxMenuOverlay({ nrbId }: { nrbId: number | null }) {
-  if (nrbId == null) return null;
+function CtxMenuOverlay({ ibgcId }: { ibgcId: number | null }) {
+  if (ibgcId == null) return null;
   // A 0×0 invisible trigger that captures the right-click on the plot
-  // surface — the menu is wired through to the focused (left-clicked) NRB
+  // surface — the menu is wired through to the focused (left-clicked) iBGC
   // so the "right-click on the same point" gesture lands the menu on the
   // correct id. Users can still issue all menu actions from the roster row.
   return (
-    <NrbContextMenu nrbId={nrbId} nrbLabel={`NRB-${nrbId}`}>
+    <IbgcContextMenu ibgcId={ibgcId} ibgcLabel={`iBGC-${ibgcId}`}>
       <div className="pointer-events-none absolute inset-0" />
-    </NrbContextMenu>
+    </IbgcContextMenu>
   );
 }
 
 function buildTraces(
-  points: NrbPoint[],
-  referenceNrbId: number | null,
-  compareNrbId: number | null,
+  points: IbgcPoint[],
+  referenceIbgcId: number | null,
+  compareIbgcId: number | null,
 ) {
   // Four mutually-exclusive classes — asset > validated > type strain >
-  // other — so submitted NRBs always render on top with their distinctive
+  // other — so submitted iBGCs always render on top with their distinctive
   // marker regardless of their other flags.
-  const asset: NrbPoint[] = [];
-  const validated: NrbPoint[] = [];
-  const typeStrain: NrbPoint[] = [];
-  const other: NrbPoint[] = [];
+  const asset: IbgcPoint[] = [];
+  const validated: IbgcPoint[] = [];
+  const typeStrain: IbgcPoint[] = [];
+  const other: IbgcPoint[] = [];
 
   for (const p of points) {
     if (p.is_asset) asset.push(p);
@@ -130,8 +130,8 @@ function buildTraces(
     else other.push(p);
   }
 
-  const baseHover = (p: NrbPoint) =>
-    `<b>${p.label ?? `NRB-${p.id}`}</b>` +
+  const baseHover = (p: IbgcPoint) =>
+    `<b>${p.label ?? `iBGC-${p.id}`}</b>` +
     (p.classification_path
       ? `<br>${p.classification_path}`
       : "") +
@@ -147,7 +147,7 @@ function buildTraces(
     "<extra></extra>";
 
   const toTrace = (
-    arr: NrbPoint[],
+    arr: IbgcPoint[],
     name: string,
     color: string,
     marker: Partial<Record<string, unknown>>,
@@ -204,15 +204,15 @@ function buildTraces(
   // slots get distinct rings + legend entries so users can tell the pinned
   // reference apart from the left-click "compare" slot — same convention
   // across UMAP and Variables Map. The compare halo draws first so that when
-  // the same NRB is both reference and compare, the reference ring wins.
+  // the same iBGC is both reference and compare, the reference ring wins.
   const compareOnly = points.filter(
-    (p) => p.id === compareNrbId && p.id !== referenceNrbId,
+    (p) => p.id === compareIbgcId && p.id !== referenceIbgcId,
   );
   if (compareOnly.length) {
     traces.push({
       type: "scattergl",
       mode: "markers",
-      name: "Selected NRB",
+      name: "Selected iBGC",
       x: compareOnly.map((p) => p.x),
       y: compareOnly.map((p) => p.y),
       customdata: compareOnly.map((p) => p.id),
@@ -226,12 +226,12 @@ function buildTraces(
     });
   }
 
-  const reference = points.filter((p) => p.id === referenceNrbId);
+  const reference = points.filter((p) => p.id === referenceIbgcId);
   if (reference.length) {
     traces.push({
       type: "scattergl",
       mode: "markers",
-      name: "Reference NRB",
+      name: "Reference iBGC",
       x: reference.map((p) => p.x),
       y: reference.map((p) => p.y),
       customdata: reference.map((p) => p.id),

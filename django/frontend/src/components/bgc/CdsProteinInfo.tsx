@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -29,17 +28,11 @@ export function CdsProteinInfo({ cds, onClose }: CdsProteinInfoProps) {
 
   return (
     <div className="mt-3 rounded-md border bg-background p-3 text-xs animate-in fade-in-50 slide-in-from-top-2 duration-200">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h6 className="font-semibold text-sm">
-          Protein Information — {cds.protein_id}
-        </h6>
+      <div className="mb-2 flex justify-end">
         <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={onClose}>
           <X className="h-3.5 w-3.5" />
         </Button>
       </div>
-
-      <Separator className="mb-2" />
 
       {/* Summary grid */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 mb-3">

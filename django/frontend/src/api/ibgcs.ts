@@ -1,14 +1,14 @@
 import { apiGet, apiGetWithHeaders, apiPost } from "./client";
 import type {
-  NrbCountResponse,
-  NrbDetail,
-  NrbScatterAxis,
-  NrbScatterPoint,
-  NrbUmapPoint,
-  PaginatedNrbRosterResponse,
+  IbgcCountResponse,
+  IbgcDetail,
+  IbgcScatterAxis,
+  IbgcScatterPoint,
+  IbgcUmapPoint,
+  PaginatedIbgcRosterResponse,
 } from "./types";
 
-export interface NrbFilterParams {
+export interface IbgcFilterParams {
   include_partials?: boolean;
   validated_only?: boolean;
   min_length_kb?: number;
@@ -33,7 +33,7 @@ export interface NrbFilterParams {
   taxonomy_path?: string;
 }
 
-export interface NrbRosterParams extends NrbFilterParams {
+export interface IbgcRosterParams extends IbgcFilterParams {
   sort_by?:
     | "novelty_score"
     | "domain_novelty"
@@ -44,28 +44,28 @@ export interface NrbRosterParams extends NrbFilterParams {
   order?: "asc" | "desc";
   page?: number;
   page_size?: number;
-  /** Comma-separated NRB ids — restricts the roster to this allow-list. */
-  nrb_ids?: string;
+  /** Comma-separated iBGC ids — restricts the roster to this allow-list. */
+  ibgc_ids?: string;
 }
 
-export function fetchNrbRoster(params: NrbRosterParams = {}) {
-  return apiGet<PaginatedNrbRosterResponse>(
-    "/nrbs/roster/",
+export function fetchIbgcRoster(params: IbgcRosterParams = {}) {
+  return apiGet<PaginatedIbgcRosterResponse>(
+    "/ibgcs/roster/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-/** Cheap COUNT over the NRB filter surface. Fired before the heavier
+/** Cheap COUNT over the iBGC filter surface. Fired before the heavier
  *  roster/UMAP/scatter calls to drive the empty-state guard and the
  *  "Showing X of Y, sampled" banner. */
-export function fetchNrbCount(params: NrbFilterParams & { nrb_ids?: string } = {}) {
-  return apiGet<NrbCountResponse>(
-    "/nrbs/count/",
+export function fetchIbgcCount(params: IbgcFilterParams & { ibgc_ids?: string } = {}) {
+  return apiGet<IbgcCountResponse>(
+    "/ibgcs/count/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-// ── NRB-collapsed query endpoints ─────────────────────────────────────────
+// ── iBGC-collapsed query endpoints ─────────────────────────────────────────
 
 export interface DomainCondition {
   acc: string;
@@ -77,7 +77,7 @@ export interface DomainQueryRequest {
   logic: "and" | "or";
 }
 
-export interface NrbDomainQueryParams extends NrbFilterParams {
+export interface IbgcDomainQueryParams extends IbgcFilterParams {
   sort_by?:
     | "novelty_score"
     | "domain_novelty"
@@ -90,81 +90,81 @@ export interface NrbDomainQueryParams extends NrbFilterParams {
   page_size?: number;
 }
 
-export function postNrbDomainQuery(
+export function postIbgcDomainQuery(
   body: DomainQueryRequest,
-  params: NrbDomainQueryParams = {},
+  params: IbgcDomainQueryParams = {},
 ) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
   const path = qs.toString()
-    ? `/query/nrb-domain/?${qs.toString()}`
-    : "/query/nrb-domain/";
-  return apiPost<PaginatedNrbRosterResponse>(path, body);
+    ? `/query/ibgc-domain/?${qs.toString()}`
+    : "/query/ibgc-domain/";
+  return apiPost<PaginatedIbgcRosterResponse>(path, body);
 }
 
-export interface NrbSequenceStatusParams extends NrbDomainQueryParams {
+export interface IbgcSequenceStatusParams extends IbgcDomainQueryParams {
   // same shape as the domain-query params
 }
 
-export function fetchNrbSequenceQueryStatus(
+export function fetchIbgcSequenceQueryStatus(
   taskId: string,
-  params: NrbSequenceStatusParams = {},
+  params: IbgcSequenceStatusParams = {},
 ) {
-  return apiGet<PaginatedNrbRosterResponse>(
-    `/query/nrb-sequence/status/${taskId}/`,
+  return apiGet<PaginatedIbgcRosterResponse>(
+    `/query/ibgc-sequence/status/${taskId}/`,
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-export function fetchNrbDetail(nrbId: number, assetToken?: string | null) {
+export function fetchIbgcDetail(ibgcId: number, assetToken?: string | null) {
   // Negative ids belong to ephemeral asset uploads — the backend resolves
   // them through the ``X-Asset-Token`` header so the URL path stays clean.
-  if (nrbId < 0 && assetToken) {
-    return apiGetWithHeaders<NrbDetail>(
-      `/nrbs/${nrbId}/`,
+  if (ibgcId < 0 && assetToken) {
+    return apiGetWithHeaders<IbgcDetail>(
+      `/ibgcs/${ibgcId}/`,
       { "X-Asset-Token": assetToken },
     );
   }
-  return apiGet<NrbDetail>(`/nrbs/${nrbId}/`);
+  return apiGet<IbgcDetail>(`/ibgcs/${ibgcId}/`);
 }
 
-export interface NrbUmapParams extends NrbFilterParams {
+export interface IbgcUmapParams extends IbgcFilterParams {
   max_points?: number;
-  /** Comma-separated NRB ids — restricts the UMAP to this allow-list. */
-  nrb_ids?: string;
+  /** Comma-separated iBGC ids — restricts the UMAP to this allow-list. */
+  ibgc_ids?: string;
 }
 
-export function fetchNrbUmap(params: NrbUmapParams = {}) {
-  return apiGet<NrbUmapPoint[]>(
-    "/nrbs/umap/",
+export function fetchIbgcUmap(params: IbgcUmapParams = {}) {
+  return apiGet<IbgcUmapPoint[]>(
+    "/ibgcs/umap/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-export interface NrbScatterParams extends NrbFilterParams {
-  x_axis?: NrbScatterAxis;
-  y_axis?: NrbScatterAxis;
+export interface IbgcScatterParams extends IbgcFilterParams {
+  x_axis?: IbgcScatterAxis;
+  y_axis?: IbgcScatterAxis;
   max_points?: number;
-  /** Comma-separated NRB ids — restricts the scatter to this allow-list. */
-  nrb_ids?: string;
+  /** Comma-separated iBGC ids — restricts the scatter to this allow-list. */
+  ibgc_ids?: string;
 }
 
-export function fetchNrbScatter(params: NrbScatterParams = {}) {
-  return apiGet<NrbScatterPoint[]>(
-    "/nrbs/scatter/",
+export function fetchIbgcScatter(params: IbgcScatterParams = {}) {
+  return apiGet<IbgcScatterPoint[]>(
+    "/ibgcs/scatter/",
     params as Record<string, string | number | boolean | undefined>,
   );
 }
 
-export interface SimilarNrbRequest {
-  nrb_id: number;
+export interface SimilarIbgcRequest {
+  ibgc_id: number;
   k?: number;
 }
 
-export function postSimilarNrbQuery(
-  body: SimilarNrbRequest,
+export function postSimilarIbgcQuery(
+  body: SimilarIbgcRequest,
   page = 1,
   pageSize = 25,
 ) {
@@ -172,40 +172,40 @@ export function postSimilarNrbQuery(
     page: String(page),
     page_size: String(pageSize),
   });
-  return apiPost<PaginatedNrbRosterResponse>(
-    `/query/similar-nrb/?${qs.toString()}`,
+  return apiPost<PaginatedIbgcRosterResponse>(
+    `/query/similar-ibgc/?${qs.toString()}`,
     body,
   );
 }
 
-export interface NrbArchitectureResponse {
+export interface IbgcArchitectureResponse {
   id: number;
   label: string;
   ordered_accs: string[];
 }
 
 /** Pooled positional domain accessions for clipboard / copy actions. */
-export function fetchNrbArchitecture(
-  nrbId: number,
+export function fetchIbgcArchitecture(
+  ibgcId: number,
   assetToken?: string | null,
 ) {
-  if (nrbId < 0 && assetToken) {
-    return apiGetWithHeaders<NrbArchitectureResponse>(
-      `/nrbs/${nrbId}/architecture/`,
+  if (ibgcId < 0 && assetToken) {
+    return apiGetWithHeaders<IbgcArchitectureResponse>(
+      `/ibgcs/${ibgcId}/architecture/`,
       { "X-Asset-Token": assetToken },
     );
   }
-  return apiGet<NrbArchitectureResponse>(`/nrbs/${nrbId}/architecture/`);
+  return apiGet<IbgcArchitectureResponse>(`/ibgcs/${ibgcId}/architecture/`);
 }
 
-export interface NrbArchitectureQueryRequest {
+export interface IbgcArchitectureQueryRequest {
   architecture: string[];
   weight: number;
   k?: number;
 }
 
-export function postNrbArchitectureQuery(
-  body: NrbArchitectureQueryRequest,
+export function postIbgcArchitectureQuery(
+  body: IbgcArchitectureQueryRequest,
   page = 1,
   pageSize = 25,
 ) {
@@ -213,8 +213,8 @@ export function postNrbArchitectureQuery(
     page: String(page),
     page_size: String(pageSize),
   });
-  return apiPost<PaginatedNrbRosterResponse>(
-    `/query/nrb-architecture/?${qs.toString()}`,
+  return apiPost<PaginatedIbgcRosterResponse>(
+    `/query/ibgc-architecture/?${qs.toString()}`,
     body,
   );
 }

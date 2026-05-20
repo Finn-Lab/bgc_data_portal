@@ -1,7 +1,7 @@
 import { useDiscoveryStore } from "@/stores/discovery-store";
-import { CompactNrbDetail } from "./CompactNrbDetail";
+import { CompactIbgcDetail } from "./CompactIbgcDetail";
 
 export function CompareDetailSlot() {
-  const compareNrbId = useDiscoveryStore((s) => s.compareNrbId);
-  return <CompactNrbDetail nrbId={compareNrbId} variant="compare" />;
+  const compareIbgcId = useDiscoveryStore((s) => s.compareIbgcId);
+  return <CompactIbgcDetail ibgcId={compareIbgcId} variant="compare" />;
 }

@@ -1,17 +1,17 @@
 import { create } from "zustand";
 import type { AssetSummary } from "@/api/assets";
-import type { NrbScatterAxis, RegionCds } from "@/api/types";
+import type { IbgcScatterAxis, RegionCds } from "@/api/types";
 
 /**
  * Session state for the v2 Discovery dashboard.
  *
- * Persistence is intentionally OFF (per design decision): the reference NRB
+ * Persistence is intentionally OFF (per design decision): the reference iBGC
  * + compare slot reset on reload. URL state lives in route params, not here.
  */
 
 export type ResultsTab = "roster" | "variables" | "umap";
 
-/** Which advanced-query path produced the current ``resultNrbIds`` set.
+/** Which advanced-query path produced the current ``resultIbgcIds`` set.
  *  Lets the roster swap the "Sim." column for sequence-search-specific
  *  columns. ``null`` = no advanced query (filter-only run or fresh load). */
 export type SearchSource =
@@ -19,17 +19,17 @@ export type SearchSource =
   | "domain"
   | "domain_architecture"
   | "chemical"
-  | "similar_nrb"
+  | "similar_ibgc"
   | null;
 
 interface DiscoveryState {
-  // Reference NRB (top-right detail card, pinned across left-clicks).
-  referenceNrbId: number | null;
-  setReferenceNrbId: (id: number | null) => void;
+  // Reference iBGC (top-right detail card, pinned across left-clicks).
+  referenceIbgcId: number | null;
+  setReferenceIbgcId: (id: number | null) => void;
 
-  // Compare slot NRB (bottom-right detail card; updated on left-click).
-  compareNrbId: number | null;
-  setCompareNrbId: (id: number | null) => void;
+  // Compare slot iBGC (bottom-right detail card; updated on left-click).
+  compareIbgcId: number | null;
+  setCompareIbgcId: (id: number | null) => void;
 
   // Selected CDS feeds the Protein Information panel below the detail
   // stack. We carry the full ``RegionCds`` object so the panel can render
@@ -41,27 +41,27 @@ interface DiscoveryState {
   activeResultsTab: ResultsTab;
   setActiveResultsTab: (tab: ResultsTab) => void;
 
-  variablesAxisX: NrbScatterAxis;
-  variablesAxisY: NrbScatterAxis;
-  setVariablesAxes: (x: NrbScatterAxis, y: NrbScatterAxis) => void;
+  variablesAxisX: IbgcScatterAxis;
+  variablesAxisY: IbgcScatterAxis;
+  setVariablesAxes: (x: IbgcScatterAxis, y: IbgcScatterAxis) => void;
 
-  // Run Query result set — NRB id allow-list applied by the roster + maps
+  // Run Query result set — iBGC id allow-list applied by the roster + maps
   // when populated. Null = no active query, show everything.
-  resultNrbIds: number[] | null;
-  /** Optional NRB → similarity-score lookup populated by sequence/domain
+  resultIbgcIds: number[] | null;
+  /** Optional iBGC → similarity-score lookup populated by sequence/domain
    *  queries; used to colour scatter points by score. */
   resultSimilarityById: Record<number, number> | null;
-  /** Optional NRB → best-hit protein_id lookup populated by sequence
+  /** Optional iBGC → best-hit protein_id lookup populated by sequence
    *  protein search; overlaid onto roster rows since the standard
-   *  ``/nrbs/roster/`` endpoint does not carry per-query data. */
+   *  ``/ibgcs/roster/`` endpoint does not carry per-query data. */
   resultBestHitProteinById: Record<number, string> | null;
-  /** Percent identity (0–100) of the winning CDS per NRB; feeds the
+  /** Percent identity (0–100) of the winning CDS per iBGC; feeds the
    *  Variables Map "Identity" axis. */
   resultPidentById: Record<number, number> | null;
-  /** Query coverage (0–100) of the winning CDS per NRB; feeds the
+  /** Query coverage (0–100) of the winning CDS per iBGC; feeds the
    *  Variables Map "Query coverage" axis. */
   resultQcoverageById: Record<number, number> | null;
-  /** Which advanced-query path produced ``resultNrbIds``; toggles the
+  /** Which advanced-query path produced ``resultIbgcIds``; toggles the
    *  bitscore + best-hit-protein columns in the roster. */
   searchSource: SearchSource;
   setQueryResult: (
@@ -76,12 +76,12 @@ interface DiscoveryState {
   // Snapshot of filter-store values taken when the user last pressed Run
   // Query. The roster/maps key off this — toggling a chip without pressing
   // Run Query does NOT refetch.
-  appliedFilters: AppliedNrbFilters;
-  setAppliedFilters: (filters: AppliedNrbFilters) => void;
+  appliedFilters: AppliedIbgcFilters;
+  setAppliedFilters: (filters: AppliedIbgcFilters) => void;
 
   // Ephemeral asset (uploaded TGZ). Single-slot — a new upload replaces
   // the previous token on the server too via DELETE. Survives Run Query
-  // resets so the asset NRBs stay pinned to the dashboard.
+  // resets so the asset iBGCs stay pinned to the dashboard.
   assetToken: string | null;
   assetSummary: AssetSummary | null;
   setAsset: (token: string | null, summary?: AssetSummary | null) => void;
@@ -90,7 +90,7 @@ interface DiscoveryState {
   clearSelections: () => void;
 }
 
-export interface AppliedNrbFilters {
+export interface AppliedIbgcFilters {
   sourceNames: string[];
   detectorTools: string[];
   assemblyType: string;
@@ -105,7 +105,7 @@ export interface AppliedNrbFilters {
   organism: string;
 }
 
-export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
+export const EMPTY_APPLIED_FILTERS: AppliedIbgcFilters = {
   sourceNames: [],
   detectorTools: [],
   assemblyType: "",
@@ -121,9 +121,9 @@ export const EMPTY_APPLIED_FILTERS: AppliedNrbFilters = {
 };
 
 /** True when no filter chip is set in the applied snapshot.
- *  Combined with ``resultNrbIds == null`` it gates the dashboard's
+ *  Combined with ``resultIbgcIds == null`` it gates the dashboard's
  *  empty-state CTA so we never fire an unbounded fetch on landing. */
-export function isAppliedFiltersEmpty(applied: AppliedNrbFilters): boolean {
+export function isAppliedFiltersEmpty(applied: AppliedIbgcFilters): boolean {
   return (
     applied.sourceNames.length === 0 &&
     applied.detectorTools.length === 0 &&
@@ -141,16 +141,16 @@ export function isAppliedFiltersEmpty(applied: AppliedNrbFilters): boolean {
 }
 
 /**
- * Build the NRB API query-string surface from an applied-filter snapshot
+ * Build the iBGC API query-string surface from an applied-filter snapshot
  * plus the optional Run Query allow-list. Empty values are dropped so the
  * resulting object only carries active params (cleaner cache keys and URLs).
  *
- * Used by ``NrbRosterTable``, the UMAP hook and the Variables-Map scatter
+ * Used by ``IbgcRosterTable``, the UMAP hook and the Variables-Map scatter
  * hook so all three stay in lockstep with the same filter contract.
  */
 export function appliedFiltersToApiParams(
-  applied: AppliedNrbFilters,
-  resultNrbIds: number[] | null = null,
+  applied: AppliedIbgcFilters,
+  resultIbgcIds: number[] | null = null,
   assetToken: string | null = null,
 ): Record<string, string> {
   const params: Record<string, string> = {};
@@ -174,8 +174,8 @@ export function appliedFiltersToApiParams(
   }
   if (applied.assemblyIds) params.assembly_ids = applied.assemblyIds;
   if (applied.organism) params.organism = applied.organism;
-  if (resultNrbIds && resultNrbIds.length > 0) {
-    params.nrb_ids = resultNrbIds.join(",");
+  if (resultIbgcIds && resultIbgcIds.length > 0) {
+    params.ibgc_ids = resultIbgcIds.join(",");
   }
   if (assetToken) {
     params.asset_token = assetToken;
@@ -184,11 +184,11 @@ export function appliedFiltersToApiParams(
 }
 
 export const useDiscoveryStore = create<DiscoveryState>((set) => ({
-  referenceNrbId: null,
-  setReferenceNrbId: (id) => set({ referenceNrbId: id }),
+  referenceIbgcId: null,
+  setReferenceIbgcId: (id) => set({ referenceIbgcId: id }),
 
-  compareNrbId: null,
-  setCompareNrbId: (id) => set({ compareNrbId: id }),
+  compareIbgcId: null,
+  setCompareIbgcId: (id) => set({ compareIbgcId: id }),
 
   selectedCds: null,
   setSelectedCds: (cds) => set({ selectedCds: cds }),
@@ -200,7 +200,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
   variablesAxisY: "domain_novelty",
   setVariablesAxes: (x, y) => set({ variablesAxisX: x, variablesAxisY: y }),
 
-  resultNrbIds: null,
+  resultIbgcIds: null,
   resultSimilarityById: null,
   resultBestHitProteinById: null,
   resultPidentById: null,
@@ -215,14 +215,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
     qcoverage = null,
   ) =>
     set({
-      resultNrbIds: ids,
+      resultIbgcIds: ids,
       resultSimilarityById: similarity,
       resultBestHitProteinById: bestHitProtein,
       resultPidentById: pident,
       resultQcoverageById: qcoverage,
       searchSource: source,
       // A fresh query resets compare/protein selections.
-      compareNrbId: null,
+      compareIbgcId: null,
       selectedCds: null,
     }),
 
@@ -236,10 +236,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set) => ({
 
   clearSelections: () =>
     set({
-      referenceNrbId: null,
-      compareNrbId: null,
+      referenceIbgcId: null,
+      compareIbgcId: null,
       selectedCds: null,
-      resultNrbIds: null,
+      resultIbgcIds: null,
       resultSimilarityById: null,
       resultBestHitProteinById: null,
       resultPidentById: null,

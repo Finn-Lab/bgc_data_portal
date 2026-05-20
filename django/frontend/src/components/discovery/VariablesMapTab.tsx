@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNrbDetail, fetchNrbScatter } from "@/api/nrbs";
+import { fetchIbgcDetail, fetchIbgcScatter } from "@/api/ibgcs";
 import {
   appliedFiltersToApiParams,
   isAppliedFiltersEmpty,
   useDiscoveryStore,
 } from "@/stores/discovery-store";
-import type { NrbDetail, NrbScatterAxis, NrbScatterPoint } from "@/api/types";
+import type { IbgcDetail, IbgcScatterAxis, IbgcScatterPoint } from "@/api/types";
 import { EmptyScopeMessage } from "./EmptyScopeMessage";
 import {
   Select,
@@ -16,9 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
-import { NrbScatterPlot } from "./NrbScatterPlot";
+import { IbgcScatterPlot } from "./IbgcScatterPlot";
 
-const STABLE_AXES: { value: NrbScatterAxis; label: string }[] = [
+const STABLE_AXES: { value: IbgcScatterAxis; label: string }[] = [
   { value: "novelty_score", label: "Novelty" },
   { value: "domain_novelty", label: "Domain novelty" },
   { value: "size_kb", label: "Size (kb)" },
@@ -26,10 +26,10 @@ const STABLE_AXES: { value: NrbScatterAxis; label: string }[] = [
 ];
 
 /** Axes whose values come from the active-query store maps rather than
- *  the ``/nrbs/scatter/`` endpoint. The display label of
+ *  the ``/ibgcs/scatter/`` endpoint. The display label of
  *  ``similarity_score`` depends on which advanced-query path produced the
  *  result set — Dice for domain searches, bitscore for sequence searches. */
-const QUERY_AXES = new Set<NrbScatterAxis>([
+const QUERY_AXES = new Set<IbgcScatterAxis>([
   "similarity_score",
   "best_pident",
   "best_qcoverage",
@@ -37,7 +37,7 @@ const QUERY_AXES = new Set<NrbScatterAxis>([
 
 function axisOptionsFor(
   searchSource: string | null,
-): { value: NrbScatterAxis; label: string }[] {
+): { value: IbgcScatterAxis; label: string }[] {
   const opts = [...STABLE_AXES];
   // The similarity axis is always available — what it *means* depends on
   // the active search source.
@@ -61,7 +61,7 @@ export function VariablesMapTab() {
   const xAxis = useDiscoveryStore((s) => s.variablesAxisX);
   const yAxis = useDiscoveryStore((s) => s.variablesAxisY);
   const setAxes = useDiscoveryStore((s) => s.setVariablesAxes);
-  const resultNrbIds = useDiscoveryStore((s) => s.resultNrbIds);
+  const resultIbgcIds = useDiscoveryStore((s) => s.resultIbgcIds);
   const resultSimilarityById = useDiscoveryStore(
     (s) => s.resultSimilarityById,
   );
@@ -71,10 +71,10 @@ export function VariablesMapTab() {
   );
   const searchSource = useDiscoveryStore((s) => s.searchSource);
   const applied = useDiscoveryStore((s) => s.appliedFilters);
-  const referenceNrbId = useDiscoveryStore((s) => s.referenceNrbId);
+  const referenceIbgcId = useDiscoveryStore((s) => s.referenceIbgcId);
 
   const axisOptions = axisOptionsFor(searchSource);
-  const axisLabel = (axis: NrbScatterAxis): string =>
+  const axisLabel = (axis: IbgcScatterAxis): string =>
     axisOptions.find((o) => o.value === axis)?.label ?? axis;
 
   const xIsQuery = QUERY_AXES.has(xAxis);
@@ -87,32 +87,32 @@ export function VariablesMapTab() {
   const assetToken = useDiscoveryStore((s) => s.assetToken);
   const filterParams = appliedFiltersToApiParams(
     applied,
-    resultNrbIds,
+    resultIbgcIds,
     assetToken,
   );
   const hasActiveScope =
     !isAppliedFiltersEmpty(applied) ||
-    resultNrbIds !== null ||
+    resultIbgcIds !== null ||
     assetToken !== null;
 
-  // When at least one axis is stable, fetch ``/nrbs/scatter/`` for it. If
+  // When at least one axis is stable, fetch ``/ibgcs/scatter/`` for it. If
   // only one axis is stable, request it on both x and y so we get the
   // value back regardless of which slot it ends up in.
-  const scatterX: NrbScatterAxis = xIsQuery
+  const scatterX: IbgcScatterAxis = xIsQuery
     ? yIsQuery
       ? "novelty_score"
       : yAxis
     : xAxis;
-  const scatterY: NrbScatterAxis = yIsQuery
+  const scatterY: IbgcScatterAxis = yIsQuery
     ? xIsQuery
       ? "novelty_score"
       : xAxis
     : yAxis;
 
   const { data: scatterData, isLoading, isError, error } = useQuery({
-    queryKey: ["nrb-scatter", scatterX, scatterY, filterParams],
+    queryKey: ["ibgc-scatter", scatterX, scatterY, filterParams],
     queryFn: () =>
-      fetchNrbScatter({
+      fetchIbgcScatter({
         x_axis: scatterX,
         y_axis: scatterY,
         ...filterParams,
@@ -120,20 +120,20 @@ export function VariablesMapTab() {
     enabled: anyStableAxis && hasActiveScope,
   });
 
-  // ── Reference NRB detail ────────────────────────────────────────────
-  // The scatter endpoint drops NRBs with NULL axis values (e.g.
+  // ── Reference iBGC detail ────────────────────────────────────────────
+  // The scatter endpoint drops iBGCs with NULL axis values (e.g.
   // domain_novelty is NULL for singleton GCFs) and also honours the
-  // `nrb_ids` allow-list from the active query. Either of those can hide
+  // `ibgc_ids` allow-list from the active query. Either of those can hide
   // the pinned reference. We refetch its detail and inject it manually so
   // the reference halo is always rendered.
   const { data: refDetail } = useQuery({
     queryKey: [
-      "nrb-detail",
-      referenceNrbId,
-      referenceNrbId !== null && referenceNrbId < 0 ? assetToken : null,
+      "ibgc-detail",
+      referenceIbgcId,
+      referenceIbgcId !== null && referenceIbgcId < 0 ? assetToken : null,
     ],
-    queryFn: () => fetchNrbDetail(referenceNrbId as number, assetToken),
-    enabled: referenceNrbId !== null && hasActiveScope,
+    queryFn: () => fetchIbgcDetail(referenceIbgcId as number, assetToken),
+    enabled: referenceIbgcId !== null && hasActiveScope,
   });
 
   const points = useMemo(() => {
@@ -141,12 +141,12 @@ export function VariablesMapTab() {
 
     // Index scatter points by id and remember which slot held what so the
     // resolver below can pluck the right scalar back out.
-    const stableById = new Map<number, NrbScatterPoint>();
+    const stableById = new Map<number, IbgcScatterPoint>();
     if (scatterData) {
       for (const p of scatterData) stableById.set(p.id, p);
     }
 
-    function resolveAxis(axis: NrbScatterAxis, id: number): number | null {
+    function resolveAxis(axis: IbgcScatterAxis, id: number): number | null {
       if (axis === "similarity_score") {
         return resultSimilarityById?.[id] ?? null;
       }
@@ -165,7 +165,7 @@ export function VariablesMapTab() {
 
     // Candidate ids: active-query allow-list when present, otherwise the
     // full scatter response.
-    const candidateIds = resultNrbIds ?? Array.from(stableById.keys());
+    const candidateIds = resultIbgcIds ?? Array.from(stableById.keys());
 
     type PlotPoint = {
       id: number;
@@ -204,13 +204,13 @@ export function VariablesMapTab() {
       });
     }
 
-    // Inject the pinned reference NRB if it was dropped by the scatter
+    // Inject the pinned reference iBGC if it was dropped by the scatter
     // endpoint (NULL axis value or outside the query allow-list).
     if (
-      referenceNrbId != null &&
+      referenceIbgcId != null &&
       refDetail &&
-      refDetail.id === referenceNrbId &&
-      !base.some((p) => p.id === referenceNrbId)
+      refDetail.id === referenceIbgcId &&
+      !base.some((p) => p.id === referenceIbgcId)
     ) {
       const x = axisValueFromDetail(
         refDetail,
@@ -247,7 +247,7 @@ export function VariablesMapTab() {
     return base;
   }, [
     scatterData,
-    resultNrbIds,
+    resultIbgcIds,
     resultSimilarityById,
     resultPidentById,
     resultQcoverageById,
@@ -255,7 +255,7 @@ export function VariablesMapTab() {
     yAxis,
     scatterX,
     scatterY,
-    referenceNrbId,
+    referenceIbgcId,
     refDetail,
     queryAxesUnplottable,
   ]);
@@ -276,7 +276,7 @@ export function VariablesMapTab() {
         <span className="text-muted-foreground">X:</span>
         <Select
           value={xAxis}
-          onValueChange={(v) => setAxes(v as NrbScatterAxis, yAxis)}
+          onValueChange={(v) => setAxes(v as IbgcScatterAxis, yAxis)}
         >
           <SelectTrigger className="h-8 w-44">
             <SelectValue />
@@ -292,7 +292,7 @@ export function VariablesMapTab() {
         <span className="ml-3 text-muted-foreground">Y:</span>
         <Select
           value={yAxis}
-          onValueChange={(v) => setAxes(xAxis, v as NrbScatterAxis)}
+          onValueChange={(v) => setAxes(xAxis, v as IbgcScatterAxis)}
         >
           <SelectTrigger className="h-8 w-44">
             <SelectValue />
@@ -323,7 +323,7 @@ export function VariablesMapTab() {
             {(error as Error)?.message ?? "Failed to load scatter data"}
           </div>
         ) : (
-          <NrbScatterPlot
+          <IbgcScatterPlot
             points={points}
             xLabel={axisLabel(xAxis)}
             yLabel={axisLabel(yAxis)}
@@ -335,13 +335,13 @@ export function VariablesMapTab() {
 }
 
 function axisValueFromDetail(
-  d: NrbDetail,
-  axis: NrbScatterAxis,
+  d: IbgcDetail,
+  axis: IbgcScatterAxis,
   resultSimilarityById: Record<number, number> | null,
   resultPidentById: Record<number, number> | null,
   resultQcoverageById: Record<number, number> | null,
 ): number | null {
-  // NrbDetail does not carry `n_cds`; if that axis is selected and the
+  // IbgcDetail does not carry `n_cds`; if that axis is selected and the
   // reference is missing from the scatter response there is nothing
   // meaningful to inject — skip the halo rather than guess a coordinate.
   switch (axis) {

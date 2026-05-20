@@ -21,7 +21,7 @@ import { toast } from "sonner";
 /**
  * Chip in the filter strip that lets a user upload an ephemeral asset
  * (BGC TSVs packed as ``.tar.gz`` / ``.tgz``). Once projected the asset
- * NRBs appear at the top of the roster and on the maps under the
+ * iBGCs appear at the top of the roster and on the maps under the
  * ``SUBMITTED`` badge until the user clicks the X to evict.
  *
  * State machine:
@@ -93,12 +93,12 @@ export function LoadAssetChip() {
           setAsset(token, resp.summary);
           setState({ kind: "loaded", summary: resp.summary });
           // Asset roster/maps/count must re-fetch so the new rows surface.
-          queryClient.invalidateQueries({ queryKey: ["nrb-roster"] });
-          queryClient.invalidateQueries({ queryKey: ["nrb-umap"] });
-          queryClient.invalidateQueries({ queryKey: ["nrb-scatter"] });
-          queryClient.invalidateQueries({ queryKey: ["nrb-count"] });
+          queryClient.invalidateQueries({ queryKey: ["ibgc-roster"] });
+          queryClient.invalidateQueries({ queryKey: ["ibgc-umap"] });
+          queryClient.invalidateQueries({ queryKey: ["ibgc-scatter"] });
+          queryClient.invalidateQueries({ queryKey: ["ibgc-count"] });
           toast.success(
-            `Asset projected: ${resp.summary.n_nrbs} NRB(s)`,
+            `Asset projected: ${resp.summary.n_ibgcs} iBGC(s)`,
           );
           return;
         }
@@ -204,10 +204,10 @@ export function LoadAssetChip() {
     }
     setAsset(null, null);
     setState({ kind: "idle" });
-    queryClient.invalidateQueries({ queryKey: ["nrb-roster"] });
-    queryClient.invalidateQueries({ queryKey: ["nrb-umap"] });
-    queryClient.invalidateQueries({ queryKey: ["nrb-scatter"] });
-    queryClient.invalidateQueries({ queryKey: ["nrb-count"] });
+    queryClient.invalidateQueries({ queryKey: ["ibgc-roster"] });
+    queryClient.invalidateQueries({ queryKey: ["ibgc-umap"] });
+    queryClient.invalidateQueries({ queryKey: ["ibgc-scatter"] });
+    queryClient.invalidateQueries({ queryKey: ["ibgc-count"] });
   }, [assetToken, clearPolling, queryClient, setAsset]);
 
   return (
@@ -255,8 +255,8 @@ export function LoadAssetChip() {
                   {state.summary.assembly_accession}
                 </span>
                 <span className="text-muted-foreground">
-                  · {state.summary.n_nrbs} NRB
-                  {state.summary.n_nrbs === 1 ? "" : "s"}
+                  · {state.summary.n_ibgcs} iBGC
+                  {state.summary.n_ibgcs === 1 ? "" : "s"}
                 </span>
                 <button
                   onClick={onEvict}

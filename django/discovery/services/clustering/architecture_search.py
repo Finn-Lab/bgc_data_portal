@@ -2,7 +2,7 @@
 
 Builds a single binary query row against the latest ClusteringRun's cached
 ``M_domains`` and ``M_pairs`` vocabs, then scores it against every primary
-NRB without rebuilding the matrices:
+iBGC without rebuilding the matrices:
 
     score(r) = w · Dice(q_dom, M_domains[r]) + (1 - w) · Dice(q_pair, M_pairs[r])
 
@@ -124,7 +124,7 @@ def architecture_search(
     k: int,
     cache: dict,
 ) -> dict:
-    """Return top-K NRBs by composite-Dice to the supplied architecture.
+    """Return top-K iBGCs by composite-Dice to the supplied architecture.
 
     Parameters
     ----------
@@ -134,16 +134,16 @@ def architecture_search(
         Sørensen-Dice share in ``[0, 1]``; ``1 - weight`` is the adjacency
         Dice share. Values outside the range are clamped.
     k:
-        Maximum NRBs returned. Clamped to ``[1, 500]`` to mirror
-        ``/query/similar-nrb/``.
+        Maximum iBGCs returned. Clamped to ``[1, 500]`` to mirror
+        ``/query/similar-ibgc/``.
     cache:
-        Output of :func:`discovery.services.clustering.nrb_scoring.load_scoring_cache`.
+        Output of :func:`discovery.services.clustering.ibgc_scoring.load_scoring_cache`.
 
     Returns
     -------
     dict with:
-        * ``nrb_ids``: list[int] — top-K NRB ids (descending similarity)
-        * ``scores``: list[float] — composite scores aligned to ``nrb_ids``
+        * ``ibgc_ids``: list[int] — top-K iBGC ids (descending similarity)
+        * ``scores``: list[float] — composite scores aligned to ``ibgc_ids``
         * ``unmatched``: list[str] — input accessions not in the cache vocab
         * ``n_query_domains``: int — accessions that matched the vocab
         * ``n_query_pairs``: int — adjacency pairs that matched the vocab
@@ -152,7 +152,7 @@ def architecture_search(
 
     if not accs_ordered:
         return {
-            "nrb_ids": [],
+            "ibgc_ids": [],
             "scores": [],
             "unmatched": [],
             "n_query_domains": 0,
@@ -165,7 +165,7 @@ def architecture_search(
 
     M_dom = cache["M_domains"].tocsr()
     M_pair = cache["M_pairs"].tocsr()
-    nrb_ids = cache["nrb_ids"]
+    ibgc_ids = cache["ibgc_ids"]
     domain_accs = cache["domain_accs"]
     pair_vocab = cache["pair_vocab"]
 
@@ -202,7 +202,7 @@ def architecture_search(
     k_eff = min(k, n_rows)
     if k_eff == 0:
         return {
-            "nrb_ids": [],
+            "ibgc_ids": [],
             "scores": [],
             "unmatched": unmatched,
             "n_query_domains": n_q_dom,
@@ -211,7 +211,7 @@ def architecture_search(
     top_partition = np.argpartition(-score, k_eff - 1)[:k_eff]
     top_sorted = top_partition[np.argsort(-score[top_partition])]
 
-    out_ids = [int(nrb_ids[i]) for i in top_sorted.tolist()]
+    out_ids = [int(ibgc_ids[i]) for i in top_sorted.tolist()]
     out_scores = [float(score[i]) for i in top_sorted.tolist()]
 
     log.info(
@@ -220,7 +220,7 @@ def architecture_search(
     )
 
     return {
-        "nrb_ids": out_ids,
+        "ibgc_ids": out_ids,
         "scores": out_scores,
         "unmatched": unmatched,
         "n_query_domains": n_q_dom,

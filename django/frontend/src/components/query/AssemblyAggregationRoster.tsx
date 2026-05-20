@@ -1,6 +1,4 @@
 import { useAssemblyAggregation } from "@/hooks/use-assembly-aggregation";
-import { useSelectionStore } from "@/stores/selection-store";
-import { useModeStore } from "@/stores/mode-store";
 import { AssemblyContextMenu } from "@/components/assembly/AssemblyContextMenu";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +21,6 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  Microscope,
   Star,
 } from "lucide-react";
 
@@ -44,9 +41,6 @@ export function AssemblyAggregationRoster() {
     order,
     setOrder,
   } = useAssemblyAggregation();
-
-  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
-  const setMode = useModeStore((s) => s.setMode);
 
   if (!hasResults) {
     return (
@@ -129,21 +123,6 @@ export function AssemblyAggregationRoster() {
                   </TableCell>
                   <TableCell className="text-right font-mono text-xs">
                     {(assembly.complete_fraction * 100).toFixed(0)}%
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      title="Explore this assembly"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveAssemblyId(assembly.assembly_id);
-                        setMode("explore");
-                      }}
-                    >
-                      <Microscope className="h-3 w-3" />
-                    </Button>
                   </TableCell>
                 </TableRow>
               </AssemblyContextMenu>

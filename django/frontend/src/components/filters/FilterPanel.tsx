@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 import { SourceFilter } from "./SourceFilter";
 import { DetectorFilter } from "./DetectorFilter";
 import { AssemblyTypeFilter } from "./AssemblyTypeFilter";
@@ -15,26 +14,12 @@ import { SequenceFilter } from "./SequenceFilter";
 import { ChemicalStructureFilter } from "./ChemicalStructureFilter";
 import { LoadAssetChip } from "./LoadAssetChip";
 import { useFilterStore } from "@/stores/filter-store";
-import { useModeStore } from "@/stores/mode-store";
 
 export function FilterPanel() {
-  const mode = useModeStore((s) => s.mode);
-  const search = useFilterStore((s) => s.search);
-  const setSearch = useFilterStore((s) => s.setSearch);
   const clearFilters = useFilterStore((s) => s.clearFilters);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="relative">
-        <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search organisms…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="vf-form__input h-8 w-56 pl-7 text-xs"
-        />
-      </div>
-
       <SourceFilter />
       <DetectorFilter />
       <AssemblyTypeFilter />
@@ -43,15 +28,10 @@ export function FilterPanel() {
       <BgcClassFilter />
       <GcfFilter />
       <ChemOntClassFilter />
-
-      {mode === "query" && (
-        <>
-          <AccessionsFilter />
-          <DomainsFilter />
-          <SequenceFilter />
-          <ChemicalStructureFilter />
-        </>
-      )}
+      <AccessionsFilter />
+      <DomainsFilter />
+      <SequenceFilter />
+      <ChemicalStructureFilter />
 
       <LoadAssetChip />
 

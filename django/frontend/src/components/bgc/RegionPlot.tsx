@@ -328,7 +328,7 @@ export function RegionPlot({ data, onCdsClick, selectedCdsId }: RegionPlotProps)
                     )}
                     {cds.chemont_id && (
                       <p
-                        className="mt-1 border-t pt-1 text-foreground"
+                        className="mt-1 border-t pt-1 text-muted-foreground"
                         title={cds.chemont_id}
                       >
                         <span className="font-medium">ChemOnt:</span>{" "}

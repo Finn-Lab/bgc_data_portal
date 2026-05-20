@@ -5,7 +5,7 @@ import { Filter } from "lucide-react";
  * i.e. no filter chip is set and no Run Query result is loaded.
  *
  * The roster, UMAP map and Variables map all render this in lieu of
- * firing an unbounded fetch on landing, since at multi-million-NRB scale
+ * firing an unbounded fetch on landing, since at multi-million-iBGC scale
  * "show everything" is not a meaningful default.
  */
 export function EmptyScopeMessage({ surface }: { surface: string }) {

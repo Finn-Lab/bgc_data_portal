@@ -1,14 +1,14 @@
-"""Pooled positional domain architecture for BGCs and NRBs.
+"""Pooled positional domain architecture for BGCs and iBGCs.
 
 Single source of truth for the *ordered* domain sequence used by:
 
-* ``nrb_detail`` / ``bgc_detail`` (``domain_architecture`` field)
-* the new ``GET /nrbs/{id}/architecture/`` endpoint (clipboard payload)
+* ``ibgc_detail`` / ``bgc_detail`` (``domain_architecture`` field)
+* the new ``GET /ibgcs/{id}/architecture/`` endpoint (clipboard payload)
 * future consumers that need the same ordering rule the clustering
   pipeline saw (see :mod:`discovery.services.clustering.adjacency`).
 
 Ordering rule: ``(cds.start_position, BgcDomain.start_position, domain_acc)``
-across all source BGCs of the NRB, with duplicate ``(cds_start, dom_start,
+across all source BGCs of the iBGC, with duplicate ``(cds_start, dom_start,
 acc)`` tuples collapsed — each remaining entry corresponds to one distinct
 domain hit on a CDS. ``ref_db`` is filtered to PFAM/NCBIFAM by default
 (``DEFAULT_DOMAIN_SOURCES``) so the surfaced architecture matches the
@@ -182,14 +182,14 @@ def bgc_architecture(
     return _ordered_entries([bgc_id], sources)
 
 
-def nrb_architecture(
+def ibgc_architecture(
     member_bgc_ids: Sequence[int],
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
 ) -> list[dict]:
-    """Ordered architecture pooled across all member BGCs of an NRB.
+    """Ordered architecture pooled across all member BGCs of an iBGC.
 
     Matches the rule used by
-    :func:`discovery.services.clustering.adjacency.build_nrb_adjacency_pair_matrix`
+    :func:`discovery.services.clustering.adjacency.build_ibgc_adjacency_pair_matrix`
     so the rendered sequence is the one the clustering pipeline scored.
     """
     return _ordered_entries(member_bgc_ids, sources)

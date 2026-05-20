@@ -1,9 +1,9 @@
 import { useState } from "react";
 import {
-  postNrbDomainQuery,
-  postNrbArchitectureQuery,
-  fetchNrbSequenceQueryStatus,
-} from "@/api/nrbs";
+  postIbgcDomainQuery,
+  postIbgcArchitectureQuery,
+  fetchIbgcSequenceQueryStatus,
+} from "@/api/ibgcs";
 import { postSequenceQuery } from "@/api/queries";
 import { useQueryStore } from "@/stores/query-store";
 import { useDiscoveryStore } from "@/stores/discovery-store";
@@ -12,10 +12,10 @@ import { ApiError } from "@/api/client";
 import { toast } from "sonner";
 
 /**
- * Soft cap on how many NRBs we propagate from a scored query into the
+ * Soft cap on how many iBGCs we propagate from a scored query into the
  * dashboard's roster + maps. Mirrors the server-side
  * ``DASHBOARD_RESULT_CAP`` so the maps don't bother downsampling further.
- * When more than this many NRBs come back, we keep the top-N by score —
+ * When more than this many iBGCs come back, we keep the top-N by score —
  * that's what users actually care about for similarity-driven queries.
  */
 const QUERY_RESULT_CAP = 5_000;
@@ -26,13 +26,13 @@ const QUERY_RESULT_CAP = 5_000;
  * On every press it (a) snapshots the current filter-chip values into
  * ``discovery-store.appliedFilters`` — that's what the roster/maps key
  * off, so toggling chips alone does NOT refetch — and (b) resolves any
- * active advanced searches (domain conditions + sequence) into an NRB id
+ * active advanced searches (domain conditions + sequence) into an iBGC id
  * allow-list intersected with the filters.
  *
  * The chemical query path is not surfaced in v2 yet — it lives in P1.5b's
  * follow-up.
  */
-export function useRunNrbQuery() {
+export function useRunIbgcQuery() {
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
@@ -101,7 +101,7 @@ export function useRunNrbQuery() {
 
       // ── Domain branch ─────────────────────────────────────────────────
       if (booleanActive) {
-        const resp = await postNrbDomainQuery(
+        const resp = await postIbgcDomainQuery(
           {
             domains: domainConditions.map((c) => ({
               acc: c.acc,
@@ -122,7 +122,7 @@ export function useRunNrbQuery() {
 
       // ── Architecture branch (composite-Dice) ──────────────────────────
       if (archActive) {
-        const resp = await postNrbArchitectureQuery(
+        const resp = await postIbgcArchitectureQuery(
           {
             architecture: archAccs,
             weight: architectureWeight,
@@ -161,7 +161,7 @@ export function useRunNrbQuery() {
         for (const item of seqResp.items) {
           if (item.similarity_score != null) {
             // Domain similarity is 1.0; prefer keeping the sequence
-            // bitscore when both inputs hit the same NRB.
+            // bitscore when both inputs hit the same iBGC.
             similarities[item.id] = item.similarity_score;
           }
           if (item.best_hit_protein_id) {
@@ -189,10 +189,10 @@ export function useRunNrbQuery() {
       }
 
       // Top-K clip by score: similarity-driven queries (architecture,
-      // sequence, similar-NRB) only carry useful information for the
+      // sequence, similar-iBGC) only carry useful information for the
       // highest-scoring hits. Sort by score desc and clip to
       // ``QUERY_RESULT_CAP`` so the downstream roster + maps inherit the
-      // cap via the ``nrb_ids`` allow-list without the server having to
+      // cap via the ``ibgc_ids`` allow-list without the server having to
       // sample. Boolean-domain queries get similarity_score=1.0 for every
       // hit so the sort is a no-op — they're effectively unsorted, which
       // is fine since the cap rarely bites there.
@@ -209,7 +209,7 @@ export function useRunNrbQuery() {
       // set as "sequence" so the roster shows bitscore + best-hit
       // protein columns. Domain-only runs keep the standard similarity
       // column. Mixed runs prefer the sequence label since that path
-      // carries the more useful per-NRB metadata.
+      // carries the more useful per-iBGC metadata.
       const source:
         | "sequence"
         | "domain"
@@ -229,7 +229,7 @@ export function useRunNrbQuery() {
         source === "sequence" ? pident : null,
         source === "sequence" ? qcoverage : null,
       );
-      toast.success(`Query returned ${intersection.length} NRB(s)`);
+      toast.success(`Query returned ${intersection.length} iBGC(s)`);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         toast.info("Sequence search cancelled");
@@ -284,7 +284,7 @@ async function pollSequenceTask(
       throw new DOMException("Sequence search cancelled", "AbortError");
     }
     try {
-      const result = await fetchNrbSequenceQueryStatus(taskId);
+      const result = await fetchIbgcSequenceQueryStatus(taskId);
       dismissSlowToast();
       return result;
     } catch (e) {

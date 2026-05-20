@@ -2,8 +2,8 @@
 
 These mirror the column layout that ``services/ingestion/loader.py``
 accepts for the persistent DB pipeline, but are kept entirely in memory.
-The asset projection step (``project.py``) reads them, builds virtual NRBs
-using the same overlap-chain algorithm as ``non_redundant.py``, and
+The asset projection step (``project.py``) reads them, builds virtual iBGCs
+using the same overlap-chain algorithm as ``integrated.py``, and
 materialises Redis payloads — nothing here ever touches the ORM.
 """
 

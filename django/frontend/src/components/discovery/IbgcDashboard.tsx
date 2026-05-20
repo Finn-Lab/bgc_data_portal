@@ -14,17 +14,17 @@ import { ProteinInfoPanel } from "./ProteinInfoPanel";
  *   ┌───────────────────────────────────────────────────────────┐
  *   │  TopFiltersStrip  (DB stats · filters · [Run Query])       │
  *   ├──────────────┬────────────────────────────────────────────┤
- *   │              │  Reference NRB detail                       │
+ *   │              │  Reference iBGC detail                       │
  *   │   Results    ├────────────────────────────────────────────┤
- *   │   (Roster |  │  Compare NRB detail                         │
+ *   │   (Roster |  │  Compare iBGC detail                         │
  *   │   Variables ├────────────────────────────────────────────┤
  *   │    | UMAP)   │  Protein Information (collapsible)          │
  *   └──────────────┴────────────────────────────────────────────┘
  */
-export function NrbDashboard() {
+export function IbgcDashboard() {
   return (
     <div
-      data-testid="nrb-dashboard"
+      data-testid="ibgc-dashboard"
       className="flex flex-col"
       style={{ height: "calc(100vh - var(--vf-chrome-height, 90px))" }}
     >

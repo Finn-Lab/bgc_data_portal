@@ -18,7 +18,7 @@ interface BgcContextMenuProps {
 /**
  * Legacy `/legacy/*` context menu. "Find similar BGCs" (embedding) and
  * "Evaluate BGC" (Assessment) were retired in v2 (P1.4b). The new dashboard
- * uses ``components/discovery/NrbContextMenu`` instead.
+ * uses ``components/discovery/IbgcContextMenu`` instead.
  */
 export function BgcContextMenu({ children, bgcId, label }: BgcContextMenuProps) {
   const addBgc = useShortlistStore((s) => s.addBgc);

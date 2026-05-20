@@ -17,7 +17,7 @@ from discovery.models import (
     DashboardAssembly,
     DashboardCdsChemOnt,
     DashboardNaturalProduct,
-    DashboardRegion,
+    IntegratedBGC,
     PrecomputedStats,
 )
 
@@ -354,6 +354,6 @@ def generate_discovery_stats() -> dict:
             assembly_type=AssemblyType.METAGENOME
         ).count(),
         "validated_bgcs": DashboardBgc.objects.filter(is_validated=True).count(),
-        "regions": DashboardRegion.objects.count(),
+        "ibgcs": IntegratedBGC.objects.count(),
         "total_bgc_predictions": DashboardBgc.objects.count(),
     }

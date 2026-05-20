@@ -9,7 +9,7 @@ from .models import (
     DashboardNaturalProduct,
     DashboardBgcClass,
     DashboardDomain,
-    NonRedundantBGC,
+    IntegratedBGC,
     PrecomputedStats,
 )
 
@@ -55,18 +55,18 @@ class ClusteringRunAdmin(admin.ModelAdmin):
         "created_at",
         "knn_k",
         "n_levels",
-        "n_nrbs",
+        "n_ibgcs",
         "n_leaf_communities",
     )
     readonly_fields = (
-        "created_at", "sha256", "n_proteins", "n_nrbs",
+        "created_at", "sha256", "n_proteins", "n_ibgcs",
         "n_levels", "n_root_communities", "n_leaf_communities",
         "igraph_version", "leidenalg_version", "umap_version", "scipy_version",
     )
 
 
-@admin.register(NonRedundantBGC)
-class NonRedundantBGCAdmin(admin.ModelAdmin):
+@admin.register(IntegratedBGC)
+class IntegratedBGCAdmin(admin.ModelAdmin):
     list_display = (
         "id", "contig_id", "start_position", "end_position",
         "source_tools", "gene_cluster_family",

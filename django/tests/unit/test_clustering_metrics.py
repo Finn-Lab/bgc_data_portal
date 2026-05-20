@@ -77,7 +77,7 @@ def test_lone_adjacency_weight_recovers_pure_pair_dice():
 
 
 def test_composite_handles_empty_pair_row():
-    # Second BGC has no adjacent pairs (e.g. a 1-domain NRB).
+    # Second BGC has no adjacent pairs (e.g. a 1-domain iBGC).
     M_dom = _build_M([[0, 1, 2], [1]], n_cols=4)
     M_pair_data = scipy_sparse.csr_matrix(
         ([1], ([0], [0])), shape=(2, 1), dtype=np.uint8,

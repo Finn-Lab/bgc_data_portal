@@ -1,7 +1,7 @@
 """Pure-array tests for ``compute_novelty_array`` and ``compute_domain_novelty_array``.
 
 Exercises the math on small synthetic matrices without touching the DB.
-The DB-writing path (``score_primary_nrbs``) is covered by an integration
+The DB-writing path (``score_primary_ibgcs``) is covered by an integration
 test that runs the full pipeline; here we just lock the formulas in place.
 """
 
@@ -12,7 +12,7 @@ import pytest
 
 scipy_sparse = pytest.importorskip("scipy.sparse")
 
-from discovery.services.clustering.nrb_scoring import (  # noqa: E402
+from discovery.services.clustering.ibgc_scoring import (  # noqa: E402
     compute_domain_novelty_array,
     compute_novelty_array,
 )
@@ -58,7 +58,7 @@ def test_novelty_no_validated_columns_returns_nans():
 
 
 def test_novelty_uses_max_sim_to_validated_column():
-    # rows 0,1 are queries; column 2 is the only validated NRB.
+    # rows 0,1 are queries; column 2 is the only validated iBGC.
     sim = _sym_sim({(0, 2): 0.7, (1, 2): 0.2, (0, 1): 0.95}, n=3)
     out = compute_novelty_array(sim, validated_cols=[2])
     # novelty(0) = 1 - 0.7 = 0.3   (sim(0,1) is irrelevant; col 1 not validated)

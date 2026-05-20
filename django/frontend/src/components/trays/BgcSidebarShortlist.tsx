@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { useModeStore } from "@/stores/mode-store";
 import { exportBgcShortlist } from "@/api/exports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,8 +17,6 @@ export function BgcSidebarShortlist() {
   const bgcs = useShortlistStore((s) => s.bgcs);
   const removeBgc = useShortlistStore((s) => s.removeBgc);
   const clearBgcs = useShortlistStore((s) => s.clearBgcs);
-  const mode = useModeStore((s) => s.mode);
-  const isActive = mode === "query";
 
   const handleExport = async () => {
     if (bgcs.length === 0) {
@@ -36,12 +33,7 @@ export function BgcSidebarShortlist() {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div
-        className={cn(
-          "rounded-sm pl-2 transition-colors",
-          isActive ? "border-l-2 border-explore" : "border-l-2 border-transparent"
-        )}
-      >
+      <div className="rounded-sm pl-2 border-l-2 border-explore">
         <div className="flex items-center justify-between">
           <CollapsibleTrigger className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground">
             <ChevronDown

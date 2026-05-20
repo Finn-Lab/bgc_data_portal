@@ -1,15 +1,15 @@
 """Post-hoc KNN reclassification for non-primary BGCs.
 
 The primary clustering pass operates on the *clusterable* subset of
-``NonRedundantBGC`` rows — those with at least one non-partial or validated
+``IntegratedBGC`` rows — those with at least one non-partial or validated
 source BGC. This module assigns family paths to every other ``DashboardBgc``
 via the same composite Dice metric: compute similarity between each query
-BGC and every primary NRB of a given ``ClusteringRun``, take top-K, and
+BGC and every primary iBGC of a given ``ClusteringRun``, take top-K, and
 inherit the most common leaf family path weighted by similarity.
 
 Re-runnable independently — never reshapes the hierarchy and never modifies
-``DashboardBgc.non_redundant_bgc`` (partials keep the NRB row assigned by
-``build_non_redundant_bgcs``; this step only writes their family path).
+``DashboardBgc.integrated_bgc`` (partials keep the iBGC row assigned by
+``build_integrated_bgcs``; this step only writes their family path).
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def reclassify_bgcs(
     scope:
         Which DashboardBgcs to (re)classify — see ``SCOPE_*`` constants.
     knn_k:
-        Number of nearest primary NRBs whose leaf paths vote for the
+        Number of nearest primary iBGCs whose leaf paths vote for the
         assignment.
     min_total_similarity:
         Minimum sum of top-K similarities required to commit an assignment.
@@ -57,15 +57,15 @@ def reclassify_bgcs(
     from discovery.models import (
         ClusteringRun,
         DashboardBgc,
-        NonRedundantBGC,
+        IntegratedBGC,
     )
     from discovery.services.clustering.adjacency import (
-        build_nrb_adjacency_pair_matrix,
+        build_ibgc_adjacency_pair_matrix,
     )
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity,
     )
-    from discovery.services.clustering.membership import build_nrb_domain_matrix
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
 
     if scope not in ALLOWED_SCOPES:
         raise ValueError(f"scope must be one of {ALLOWED_SCOPES}, got {scope!r}")
@@ -77,13 +77,13 @@ def reclassify_bgcs(
     # ── 1. Determine query DashboardBgcs ─────────────────────────────────
     qs = DashboardBgc.objects.all()
     if scope == SCOPE_PARTIAL:
-        # Validated partials are admitted as primary NRBs upstream, so exclude
+        # Validated partials are admitted as primary iBGCs upstream, so exclude
         # them here to avoid clobbering classification_source='primary' with 'knn'.
         qs = qs.filter(is_partial=True, is_validated=False).exclude(
             classification_run_id=run.pk
         )
     elif scope == SCOPE_STALE:
-        qs = qs.filter(non_redundant_bgc__isnull=True, is_partial=False).exclude(
+        qs = qs.filter(integrated_bgc__isnull=True, is_partial=False).exclude(
             classification_run_id=run.pk
         )
     elif scope == SCOPE_ALL_NON_PRIMARY:
@@ -96,8 +96,8 @@ def reclassify_bgcs(
         log.info("reclassify_bgcs: no BGCs to classify (scope=%s)", scope)
         return _result(run.pk, scope, 0, 0, 0)
 
-    # ── 2. Primary NRB ids + their leaf paths from this run ──────────────
-    primary_qs = NonRedundantBGC.objects.filter(
+    # ── 2. Primary iBGC ids + their leaf paths from this run ──────────────
+    primary_qs = IntegratedBGC.objects.filter(
         classification_run_id=run.pk,
     ).exclude(gene_cluster_family="")
     primary_ids = list(primary_qs.values_list("id", flat=True))
@@ -105,19 +105,19 @@ def reclassify_bgcs(
 
     if not primary_ids:
         log.warning(
-            "reclassify_bgcs: ClusteringRun pk=%s has no primary NRBs", run.pk
+            "reclassify_bgcs: ClusteringRun pk=%s has no primary iBGCs", run.pk
         )
         return _result(run.pk, scope, 0, 0, len(query_bgc_ids))
 
     # ── 3. Build primary matrices once ───────────────────────────────────
-    M_dom_pri, pri_row_ids, dom_accs = build_nrb_domain_matrix(
-        sources=sources, nrb_ids_subset=primary_ids,
+    M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
+        sources=sources, ibgc_ids_subset=primary_ids,
     )
     if M_dom_pri.shape[0] == 0:
         return _result(run.pk, scope, 0, 0, len(query_bgc_ids))
 
-    M_pair_pri, pri_row_ids_adj, pair_vocab = build_nrb_adjacency_pair_matrix(
-        sources=sources, nrb_ids_subset=primary_ids,
+    M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
+        sources=sources, ibgc_ids_subset=primary_ids,
     )
     M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids, ncols_keep=True)
 
@@ -135,11 +135,11 @@ def reclassify_bgcs(
 
     for start in range(0, len(query_bgc_ids), chunk_size):
         chunk_ids = query_bgc_ids[start : start + chunk_size]
-        M_dom_q, q_row_ids_dom, _ = build_nrb_domain_matrix(
+        M_dom_q, q_row_ids_dom, _ = build_ibgc_domain_matrix(
             sources=sources,
             domain_accs_subset=dom_accs.tolist(),
             extra_bgc_ids=chunk_ids,
-            nrb_ids_subset=[],  # only the extra rows
+            ibgc_ids_subset=[],  # only the extra rows
         )
         # extra rows carry negative ids; primary rows carry positive ids.
         q_mask = q_row_ids_dom < 0
@@ -149,11 +149,11 @@ def reclassify_bgcs(
         M_dom_q = M_dom_q[q_mask]
         q_row_ids = q_row_ids_dom[q_mask]
 
-        M_pair_q, q_row_ids_pair, _ = build_nrb_adjacency_pair_matrix(
+        M_pair_q, q_row_ids_pair, _ = build_ibgc_adjacency_pair_matrix(
             sources=sources,
             pair_vocab_subset=pair_vocab.tolist(),
             extra_bgc_ids=chunk_ids,
-            nrb_ids_subset=[],
+            ibgc_ids_subset=[],
         )
         q_pair_mask = q_row_ids_pair < 0
         M_pair_q = M_pair_q[q_pair_mask] if q_pair_mask.any() else sp.csr_matrix(

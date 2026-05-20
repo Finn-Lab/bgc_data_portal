@@ -1,21 +1,21 @@
-"""Per-NRB scoring (novelty + domain novelty) over the composite-Dice matrix.
+"""Per-iBGC scoring (novelty + domain novelty) over the composite-Dice matrix.
 
 Designed to be called inline at the end of ``run_clustering_pipeline`` with
-the already-built primary-NRB matrices in memory, or independently from a
+the already-built primary-iBGC matrices in memory, or independently from a
 management command after rehydrating the cached matrices from disk
 (see ``services/clustering/pipeline.py``).
 
 Score definitions (locked in the v2 redesign):
 
 * ``novelty_score`` = ``1 − max(composite_dice_sim(this, v))`` for ``v`` in
-  the set of validated NRBs in the same clustering run. Validated NRBs are
-  scored against the other validated NRBs (their own self-similarity is
+  the set of validated iBGCs in the same clustering run. Validated iBGCs are
+  scored against the other validated iBGCs (their own self-similarity is
   zero on the diagonal, so this falls out naturally). When the run has no
-  validated NRBs the value is NULL.
+  validated iBGCs the value is NULL.
 
 * ``domain_novelty`` = ``|domains unique within leaf GCF| / |domains(this)|``
   where the leaf GCF is the row's ``family_path``. Singleton leaf GCFs and
-  NRBs whose source-domain count is zero yield NULL (rendered as "—" in
+  iBGCs whose source-domain count is zero yield NULL (rendered as "—" in
   the UI), to avoid the misleading 1.0 that the formula would otherwise
   return for a one-member community.
 """
@@ -40,7 +40,7 @@ log = logging.getLogger(__name__)
 SCORING_CACHE_SUBDIR = "scoring_cache"
 DOMAINS_FILE = "M_domains.npz"
 PAIRS_FILE = "M_pairs.npz"
-NRB_IDS_FILE = "nrb_ids.npy"
+IBGC_IDS_FILE = "ibgc_ids.npy"
 DOMAIN_ACCS_FILE = "domain_accs.npy"
 PAIR_VOCAB_FILE = "pair_vocab.npy"
 LEAF_PATHS_FILE = "leaf_paths.json"
@@ -51,12 +51,12 @@ def persist_scoring_cache(
     artifacts_dir: Path,
     M_domains: sp.csr_matrix,
     M_pairs: sp.csr_matrix,
-    nrb_ids: np.ndarray,
+    ibgc_ids: np.ndarray,
     domain_accs: np.ndarray,
     pair_vocab: np.ndarray,
     leaf_paths: list[str],
 ) -> Path:
-    """Write the small per-NRB signature matrices needed by on-demand similarity.
+    """Write the small per-iBGC signature matrices needed by on-demand similarity.
 
     The full N×N composite-Dice matrix is no longer persisted — both
     Find Similar and ARCH compute composite-Dice on demand against
@@ -71,7 +71,7 @@ def persist_scoring_cache(
     cache_dir.mkdir(parents=True, exist_ok=True)
     sp.save_npz(cache_dir / DOMAINS_FILE, M_domains)
     sp.save_npz(cache_dir / PAIRS_FILE, M_pairs)
-    np.save(cache_dir / NRB_IDS_FILE, np.asarray(nrb_ids))
+    np.save(cache_dir / IBGC_IDS_FILE, np.asarray(ibgc_ids))
     np.save(cache_dir / DOMAIN_ACCS_FILE, np.asarray(domain_accs, dtype=object))
     np.save(cache_dir / PAIR_VOCAB_FILE, np.asarray(pair_vocab, dtype=object))
     (cache_dir / LEAF_PATHS_FILE).write_text(json.dumps(list(leaf_paths)))
@@ -82,12 +82,12 @@ def persist_scoring_cache(
             legacy_sim.unlink()
         except OSError:  # pragma: no cover
             log.warning("Could not delete legacy sim.npz at %s", legacy_sim)
-    log.info("Wrote NRB scoring cache to %s", cache_dir)
+    log.info("Wrote iBGC scoring cache to %s", cache_dir)
     return cache_dir
 
 
 def load_scoring_cache(artifacts_dir: Path) -> dict:
-    """Return ``M_domains``, ``M_pairs``, ``nrb_ids``, ``domain_accs``,
+    """Return ``M_domains``, ``M_pairs``, ``ibgc_ids``, ``domain_accs``,
     ``pair_vocab``, ``leaf_paths``.
 
     ``sim`` is no longer materialised — callers should use
@@ -100,7 +100,7 @@ def load_scoring_cache(artifacts_dir: Path) -> dict:
     return {
         "M_domains": sp.load_npz(cache_dir / DOMAINS_FILE),
         "M_pairs": sp.load_npz(cache_dir / PAIRS_FILE),
-        "nrb_ids": np.load(cache_dir / NRB_IDS_FILE, allow_pickle=True),
+        "ibgc_ids": np.load(cache_dir / IBGC_IDS_FILE, allow_pickle=True),
         "domain_accs": np.load(cache_dir / DOMAIN_ACCS_FILE, allow_pickle=True),
         "pair_vocab": np.load(cache_dir / PAIR_VOCAB_FILE, allow_pickle=True),
         "leaf_paths": json.loads((cache_dir / LEAF_PATHS_FILE).read_text()),
@@ -114,8 +114,8 @@ def compute_novelty_array(
     """Return novelty per row: ``1 − max(sim_to_validated)``.
 
     Rows for which ``validated_cols`` is empty receive NaN (caller persists
-    as NULL). Self-similarity is zero on the diagonal so validated NRBs are
-    scored against the *other* validated NRBs naturally.
+    as NULL). Self-similarity is zero on the diagonal so validated iBGCs are
+    scored against the *other* validated iBGCs naturally.
     """
     n_rows = sim.shape[0]
     if not validated_cols:
@@ -163,92 +163,92 @@ def compute_domain_novelty_array(
     return out
 
 
-def score_primary_nrbs(
+def score_primary_ibgcs(
     *,
     sim: sp.csr_matrix,
     M_domains: sp.csr_matrix,
-    nrb_ids: np.ndarray,
+    ibgc_ids: np.ndarray,
     leaf_paths: list[str],
     run: ClusteringRun,
 ) -> dict:
-    """Write ``novelty_score`` and ``domain_novelty`` on the primary NRBs of ``run``.
+    """Write ``novelty_score`` and ``domain_novelty`` on the primary iBGCs of ``run``.
 
     Parameters
     ----------
     sim:
-        Symmetric composite-Dice similarity over the primary NRB set. Row /
-        column order matches ``nrb_ids``.
+        Symmetric composite-Dice similarity over the primary iBGC set. Row /
+        column order matches ``ibgc_ids``.
     M_domains:
-        Binary NRB × domain matrix used to count domain occurrences within
-        leaf-GCF groups. Row order matches ``nrb_ids``.
-    nrb_ids:
-        Ordering of NRB primary-key ids for rows of ``sim`` / ``M_domains``.
+        Binary iBGC × domain matrix used to count domain occurrences within
+        leaf-GCF groups. Row order matches ``ibgc_ids``.
+    ibgc_ids:
+        Ordering of iBGC primary-key ids for rows of ``sim`` / ``M_domains``.
     leaf_paths:
-        Per-row ``gene_cluster_family`` leaf path (length matches ``nrb_ids``).
+        Per-row ``gene_cluster_family`` leaf path (length matches ``ibgc_ids``).
     run:
-        The ``ClusteringRun`` whose primary NRBs are being scored.
+        The ``ClusteringRun`` whose primary iBGCs are being scored.
     """
-    from discovery.models import DashboardBgc, NonRedundantBGC
+    from discovery.models import DashboardBgc, IntegratedBGC
 
     n_rows = sim.shape[0]
     if n_rows == 0:
         return {"scored": 0, "validated_count": 0}
 
-    ids_list = [int(x) for x in nrb_ids.tolist()]
+    ids_list = [int(x) for x in ibgc_ids.tolist()]
     id_to_row = {nid: i for i, nid in enumerate(ids_list)}
 
-    validated_nrb_ids = set(
+    validated_ibgc_ids = set(
         DashboardBgc.objects.filter(
-            is_validated=True, non_redundant_bgc__isnull=False
-        ).values_list("non_redundant_bgc_id", flat=True)
+            is_validated=True, integrated_bgc__isnull=False
+        ).values_list("integrated_bgc_id", flat=True)
     )
     validated_cols = sorted(
-        id_to_row[nid] for nid in validated_nrb_ids if nid in id_to_row
+        id_to_row[nid] for nid in validated_ibgc_ids if nid in id_to_row
     )
     if not validated_cols:
         log.warning(
-            "score_primary_nrbs: no validated NRBs in run pk=%s — leaving "
-            "novelty_score NULL on all primary NRBs",
+            "score_primary_ibgcs: no validated iBGCs in run pk=%s — leaving "
+            "novelty_score NULL on all primary iBGCs",
             run.pk,
         )
 
     novelty = compute_novelty_array(sim, validated_cols)
     domain_novelty = compute_domain_novelty_array(M_domains, leaf_paths)
 
-    nrb_rows = list(NonRedundantBGC.objects.filter(id__in=ids_list))
-    for nrb in nrb_rows:
-        i = id_to_row[nrb.id]
+    ibgc_rows = list(IntegratedBGC.objects.filter(id__in=ids_list))
+    for ibgc in ibgc_rows:
+        i = id_to_row[ibgc.id]
         nv = float(novelty[i])
-        nrb.novelty_score = None if np.isnan(nv) else nv
+        ibgc.novelty_score = None if np.isnan(nv) else nv
         dn = float(domain_novelty[i])
-        nrb.domain_novelty = None if np.isnan(dn) else dn
-        nrb.umap_projected = False
+        ibgc.domain_novelty = None if np.isnan(dn) else dn
+        ibgc.umap_projected = False
 
-    NonRedundantBGC.objects.bulk_update(
-        nrb_rows,
+    IntegratedBGC.objects.bulk_update(
+        ibgc_rows,
         ["novelty_score", "domain_novelty", "umap_projected"],
         batch_size=5_000,
     )
 
     log.info(
-        "score_primary_nrbs: run=%s scored=%d validated=%d singletons_or_empty=%d",
+        "score_primary_ibgcs: run=%s scored=%d validated=%d singletons_or_empty=%d",
         run.pk,
-        len(nrb_rows),
+        len(ibgc_rows),
         len(validated_cols),
         int(np.isnan(domain_novelty).sum()),
     )
 
     return {
-        "scored": len(nrb_rows),
+        "scored": len(ibgc_rows),
         "validated_count": len(validated_cols),
         "domain_novelty_null": int(np.isnan(domain_novelty).sum()),
     }
 
 
-# ── Partial-NRB projection ───────────────────────────────────────────────
+# ── Partial-iBGC projection ───────────────────────────────────────────────
 
 
-def project_partial_nrbs(
+def project_partial_ibgcs(
     *,
     clustering_run_pk: int,
     knn_k: int = 5,
@@ -256,25 +256,25 @@ def project_partial_nrbs(
     chunk_size: int = 256,
     progress_cb=None,
 ) -> dict:
-    """Project NRBs that were not part of the primary clustering pass.
+    """Project iBGCs that were not part of the primary clustering pass.
 
-    For every ``NonRedundantBGC`` whose ``classification_run_id`` differs from
-    the run identified by ``clustering_run_pk`` (partial-only NRBs and stale
+    For every ``IntegratedBGC`` whose ``classification_run_id`` differs from
+    the run identified by ``clustering_run_pk`` (partial-only iBGCs and stale
     rows from earlier runs), compute composite-Dice similarity to every
-    primary NRB of the run and derive:
+    primary iBGC of the run and derive:
 
       * ``umap_x`` / ``umap_y`` — weighted average of the top-K primary
         neighbours' coordinates (similarity-weighted).
       * ``gene_cluster_family`` — leaf path of the weighted-majority primary
         neighbour vote (mirrors :mod:`discovery.services.clustering.reclassify`).
-      * ``novelty_score`` — ``1 − max(sim to validated primary NRB)``.
-      * ``domain_novelty`` — fraction of this NRB's domains not present in any
-        primary member of the inherited leaf GCF. NULL when the NRB carries
+      * ``novelty_score`` — ``1 − max(sim to validated primary iBGC)``.
+      * ``domain_novelty`` — fraction of this iBGC's domains not present in any
+        primary member of the inherited leaf GCF. NULL when the iBGC carries
         no source-vocabulary domains.
       * ``umap_projected`` = True; ``classification_run`` set to the target
         run; ``classified_at`` updated.
 
-    NRBs whose top-K similarity sum is below ``min_total_similarity`` (or that
+    iBGCs whose top-K similarity sum is below ``min_total_similarity`` (or that
     have no overlapping vocabulary with the primary set) are left unprojected
     and counted as ``skipped``.
     """
@@ -284,15 +284,15 @@ def project_partial_nrbs(
     from discovery.models import (
         ClusteringRun,
         DashboardBgc,
-        NonRedundantBGC,
+        IntegratedBGC,
     )
     from discovery.services.clustering.adjacency import (
-        build_nrb_adjacency_pair_matrix,
+        build_ibgc_adjacency_pair_matrix,
     )
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity,
     )
-    from discovery.services.clustering.membership import build_nrb_domain_matrix
+    from discovery.services.clustering.membership import build_ibgc_domain_matrix
     from discovery.services.clustering.reclassify import _align_rows
 
     run = ClusteringRun.objects.get(pk=clustering_run_pk)
@@ -300,13 +300,13 @@ def project_partial_nrbs(
     weights = tuple(run.score_weights) if run.score_weights else (0.5, 0.5)
 
     # ── 1. Identify partials ─────────────────────────────────────────────
-    partial_nrb_ids = list(
-        NonRedundantBGC.objects.exclude(classification_run_id=run.pk)
+    partial_ibgc_ids = list(
+        IntegratedBGC.objects.exclude(classification_run_id=run.pk)
         .order_by("id")
         .values_list("id", flat=True)
     )
-    if not partial_nrb_ids:
-        log.info("project_partial_nrbs: no partials to project (run=%s)", run.pk)
+    if not partial_ibgc_ids:
+        log.info("project_partial_ibgcs: no partials to project (run=%s)", run.pk)
         return {
             "clustering_run_pk": run.pk,
             "projected": 0,
@@ -315,36 +315,36 @@ def project_partial_nrbs(
         }
 
     primary_ids = list(
-        NonRedundantBGC.objects.filter(classification_run_id=run.pk)
+        IntegratedBGC.objects.filter(classification_run_id=run.pk)
         .order_by("id")
         .values_list("id", flat=True)
     )
     if not primary_ids:
         log.warning(
-            "project_partial_nrbs: run=%s has no primary NRBs — nothing to "
+            "project_partial_ibgcs: run=%s has no primary iBGCs — nothing to "
             "project against",
             run.pk,
         )
         return {
             "clustering_run_pk": run.pk,
             "projected": 0,
-            "skipped": len(partial_nrb_ids),
-            "scope": len(partial_nrb_ids),
+            "skipped": len(partial_ibgc_ids),
+            "scope": len(partial_ibgc_ids),
         }
 
     # ── 2. Primary matrices (rebuilt fresh; cache exists for parity only) ─
-    M_dom_pri, pri_row_ids, dom_accs = build_nrb_domain_matrix(
-        sources=sources, nrb_ids_subset=primary_ids,
+    M_dom_pri, pri_row_ids, dom_accs = build_ibgc_domain_matrix(
+        sources=sources, ibgc_ids_subset=primary_ids,
     )
     if M_dom_pri.shape[0] == 0:
         return {
             "clustering_run_pk": run.pk,
             "projected": 0,
-            "skipped": len(partial_nrb_ids),
-            "scope": len(partial_nrb_ids),
+            "skipped": len(partial_ibgc_ids),
+            "scope": len(partial_ibgc_ids),
         }
-    M_pair_pri, pri_row_ids_adj, pair_vocab = build_nrb_adjacency_pair_matrix(
-        sources=sources, nrb_ids_subset=primary_ids,
+    M_pair_pri, pri_row_ids_adj, pair_vocab = build_ibgc_adjacency_pair_matrix(
+        sources=sources, ibgc_ids_subset=primary_ids,
     )
     M_pair_pri = _align_rows(M_pair_pri, pri_row_ids_adj, pri_row_ids)
     n_primary = M_dom_pri.shape[0]
@@ -352,8 +352,8 @@ def project_partial_nrbs(
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
     primary_meta = {
-        nrb.id: (nrb.umap_x, nrb.umap_y, nrb.gene_cluster_family)
-        for nrb in NonRedundantBGC.objects.filter(
+        ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family)
+        for ibgc in IntegratedBGC.objects.filter(
             id__in=primary_ids
         ).only("id", "umap_x", "umap_y", "gene_cluster_family")
     }
@@ -371,8 +371,8 @@ def project_partial_nrbs(
 
     validated_ids = set(
         DashboardBgc.objects.filter(
-            is_validated=True, non_redundant_bgc__isnull=False
-        ).values_list("non_redundant_bgc_id", flat=True)
+            is_validated=True, integrated_bgc__isnull=False
+        ).values_list("integrated_bgc_id", flat=True)
     )
     validated_col_set = {pri_id_to_row[v] for v in validated_ids if v in pri_id_to_row}
 
@@ -388,22 +388,22 @@ def project_partial_nrbs(
 
     # ── 3. Walk partials in chunks ───────────────────────────────────────
     now = timezone.now()
-    update_batch: list[NonRedundantBGC] = []
+    update_batch: list[IntegratedBGC] = []
 
-    for start in range(0, len(partial_nrb_ids), chunk_size):
-        chunk_ids = partial_nrb_ids[start : start + chunk_size]
-        M_dom_q, q_row_ids, _ = build_nrb_domain_matrix(
+    for start in range(0, len(partial_ibgc_ids), chunk_size):
+        chunk_ids = partial_ibgc_ids[start : start + chunk_size]
+        M_dom_q, q_row_ids, _ = build_ibgc_domain_matrix(
             sources=sources,
             domain_accs_subset=dom_accs.tolist(),
-            nrb_ids_subset=chunk_ids,
+            ibgc_ids_subset=chunk_ids,
         )
         if M_dom_q.shape[0] == 0:
             continue
 
-        M_pair_q, q_pair_ids, _ = build_nrb_adjacency_pair_matrix(
+        M_pair_q, q_pair_ids, _ = build_ibgc_adjacency_pair_matrix(
             sources=sources,
             pair_vocab_subset=pair_vocab.tolist(),
-            nrb_ids_subset=chunk_ids,
+            ibgc_ids_subset=chunk_ids,
         )
         M_pair_q = _align_rows(M_pair_q, q_pair_ids, q_row_ids)
 
@@ -415,7 +415,7 @@ def project_partial_nrbs(
         sim_block = sim_full[n_primary:, :n_primary].tocsr()
         M_dom_q_csr = M_dom_q.tocsr()
 
-        for q_row, q_nrb_id in enumerate(q_row_ids.tolist()):
+        for q_row, q_ibgc_id in enumerate(q_row_ids.tolist()):
             sp_start = sim_block.indptr[q_row]
             sp_end = sim_block.indptr[q_row + 1]
             if sp_start == sp_end:
@@ -445,8 +445,8 @@ def project_partial_nrbs(
             # Novelty: max sim restricted to validated primary cols within this
             # row's non-zero entries. Diagonal is already zeroed on sim, so
             # validated-vs-self is naturally excluded for any partial that
-            # happens to also be validated (those are admitted as primary NRBs
-            # by build_non_redundant_bgcs, so this shouldn't occur in
+            # happens to also be validated (those are admitted as primary iBGCs
+            # by build_integrated_bgcs, so this shouldn't occur in
             # practice — guard kept for safety).
             if validated_col_set:
                 max_sim_validated = 0.0
@@ -473,8 +473,8 @@ def project_partial_nrbs(
                     domain_novelty = n_unique / n_dom
 
             update_batch.append(
-                NonRedundantBGC(
-                    id=int(q_nrb_id),
+                IntegratedBGC(
+                    id=int(q_ibgc_id),
                     umap_x=umap_x,
                     umap_y=umap_y,
                     umap_projected=True,
@@ -488,13 +488,13 @@ def project_partial_nrbs(
 
         if progress_cb is not None:
             progress_cb({
-                "processed": min(start + chunk_size, len(partial_nrb_ids)),
-                "total": len(partial_nrb_ids),
+                "processed": min(start + chunk_size, len(partial_ibgc_ids)),
+                "total": len(partial_ibgc_ids),
                 "projected": len(update_batch),
             })
 
     if update_batch:
-        NonRedundantBGC.objects.bulk_update(
+        IntegratedBGC.objects.bulk_update(
             update_batch,
             [
                 "umap_x", "umap_y", "umap_projected",
@@ -505,14 +505,14 @@ def project_partial_nrbs(
         )
 
     projected = len(update_batch)
-    skipped = len(partial_nrb_ids) - projected
+    skipped = len(partial_ibgc_ids) - projected
     log.info(
-        "project_partial_nrbs: run=%s projected=%d skipped=%d scope=%d",
-        run.pk, projected, skipped, len(partial_nrb_ids),
+        "project_partial_ibgcs: run=%s projected=%d skipped=%d scope=%d",
+        run.pk, projected, skipped, len(partial_ibgc_ids),
     )
     return {
         "clustering_run_pk": run.pk,
         "projected": projected,
         "skipped": skipped,
-        "scope": len(partial_nrb_ids),
+        "scope": len(partial_ibgc_ids),
     }

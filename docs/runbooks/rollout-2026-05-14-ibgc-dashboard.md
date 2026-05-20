@@ -1,4 +1,4 @@
-# Rollout Runbook — NRB Dashboard + Embedding Retirement
+# Rollout Runbook — iBGC Dashboard + Embedding Retirement
 
 **Target date:** 2026-05-14
 **Source ref:** `dev @ b479900` (15 commits ahead of `origin/dev`, +16 uncommitted files)
@@ -9,8 +9,8 @@
 ## 1. Context
 
 Recent work (since `1c9a99a checkpoint: Report fixes`) replaces the ESM-embedding-based
-similarity stack with the **composite-Dice / Leiden** NRB pipeline and ships the new
-**NRB-first Discovery dashboard**, including:
+similarity stack with the **composite-Dice / Leiden** iBGC pipeline and ships the new
+**iBGC-first Discovery dashboard**, including:
 
 - New filter surface (`detector_tools`, `assembly_type`, `chemont_ids`, `bgc_accession`,
   `assembly_ids`, `best_hit_protein_id`, `is_type_strain`, `source_names`)
@@ -244,7 +244,7 @@ kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-celery \
   --context <ebi-context> -- \
   celery -A bgc_data_portal purge -f
 
-# 2. Re-run clustering so NRB rows / scoring cache / Leiden hierarchy exist.
+# 2. Re-run clustering so iBGC rows / scoring cache / Leiden hierarchy exist.
 kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
   --context <ebi-context> -- \
   python manage.py run_bgc_clustering --apply
@@ -269,10 +269,10 @@ kubectl exec -n bgc-data-portal-hl-exp deploy/bgc-data-portal-django \
   --context <ebi-context> -- pytest tests/unit/ -q
 
 # 3. Hit the dashboard manually and confirm:
-#    - NRB roster loads with the new is_type_strain badge
+#    - iBGC roster loads with the new is_type_strain badge
 #    - TopFiltersStrip exposes the new chips (detector tools, ChemOnt, etc.)
 #    - Shortlist report generation works end-to-end
-#    - Protein sequence search returns NRB hits with best_hit_protein_id
+#    - Protein sequence search returns iBGC hits with best_hit_protein_id
 ```
 
 Leave exp running for **at least one business day** before promoting. If anything
@@ -367,7 +367,7 @@ kubectl exec -n bgc-data-portal-hl-prod deploy/bgc-data-portal-celery \
   --context <prod-context> -- \
   celery -A bgc_data_portal purge -f
 
-# 2. Re-run clustering so NRBs are populated with composite-Dice / Leiden
+# 2. Re-run clustering so iBGCs are populated with composite-Dice / Leiden
 #    output. Required because 0017 dropped the legacy cluster tables.
 kubectl exec -n bgc-data-portal-hl-prod deploy/bgc-data-portal-django \
   --context <prod-context> -- \
@@ -399,7 +399,7 @@ kubectl exec -n bgc-data-portal-hl-prod deploy/bgc-data-portal-django \
   --context <prod-context> -- pytest tests/unit/ -q
 
 # 3. UI walkthrough on https://www.ebi.ac.uk/finn-srv/mgnify-bgcs:
-#    - dashboard loads, NRB roster paginates
+#    - dashboard loads, iBGC roster paginates
 #    - new filters return the expected counts
 #    - report download works
 #    - protein sequence search returns results

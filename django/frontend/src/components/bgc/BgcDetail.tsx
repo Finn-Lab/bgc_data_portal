@@ -7,11 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
-import { useModeStore } from "@/stores/mode-store";
-import { useSelectionStore } from "@/stores/selection-store";
 import { useQueryStore } from "@/stores/query-store";
 import { useShortlistStore } from "@/stores/shortlist-store";
-import { ExternalLink, ListPlus, Microscope, Search, Star } from "lucide-react";
+import { ExternalLink, ListPlus, Search, Star } from "lucide-react";
 import type { ChemOntAnnotationNode } from "@/api/types";
 import { HelpTooltip } from "@/components/ui/help-tooltip";
 
@@ -31,8 +29,6 @@ interface BgcDetailProps {
 export function BgcDetail({ bgcId }: BgcDetailProps) {
   const { data: bgc, isLoading } = useBgcDetail(bgcId);
   const { data: regionData, isLoading: regionLoading } = useBgcRegion(bgcId);
-  const setMode = useModeStore((s) => s.setMode);
-  const setActiveAssemblyId = useSelectionStore((s) => s.setActiveAssemblyId);
   const setSimilarBgcSourceId = useQueryStore((s) => s.setSimilarBgcSourceId);
   const addBgc = useShortlistStore((s) => s.addBgc);
   const [selectedCds, setSelectedCds] = useState<RegionCds | null>(null);
@@ -78,27 +74,12 @@ export function BgcDetail({ bgcId }: BgcDetailProps) {
           </div>
         </div>
         <div className="flex gap-2">
-          {bgc.parent_assembly && bgc.parent_assembly.assembly_id != null && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 text-xs"
-              onClick={() => {
-                setActiveAssemblyId(bgc.parent_assembly!.assembly_id!);
-                setMode("explore");
-              }}
-            >
-              <Microscope className="h-3 w-3" />
-              Explore parent assembly
-            </Button>
-          )}
           <Button
             variant="outline"
             size="sm"
             className="gap-1 text-xs"
             onClick={() => {
               setSimilarBgcSourceId(bgc.id);
-              setMode("query");
             }}
           >
             <Search className="h-3 w-3" />

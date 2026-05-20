@@ -104,7 +104,7 @@ export interface ChemOntAnnotationNode {
 }
 
 // Curated per-BGC compound (SMILES, structure). No longer carries CHAMOIS-derived
-// ChemOnt classes — those are aggregated at BGC / NRB level in `chemont_tree`.
+// ChemOnt classes — those are aggregated at BGC / iBGC level in `chemont_tree`.
 export interface NaturalProductSummary {
   id: number;
   name: string;
@@ -571,9 +571,9 @@ export interface BgcAssessmentResult {
   nearest_validated_bgc_id: number | null;
 }
 
-// ── NRB (Non-Redundant BGC) schemas ──────────────────────────────────────
+// ── iBGC (Integrated BGC) schemas ──────────────────────────────────────
 
-export interface NrbRosterItem {
+export interface IbgcRosterItem {
   id: number;
   label: string;
   classification_path: string;
@@ -594,16 +594,16 @@ export interface NrbRosterItem {
   best_hit_protein_id: string | null;
   best_pident: number | null;
   best_qcoverage: number | null;
-  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
   is_asset: boolean;
 }
 
-export interface PaginatedNrbRosterResponse {
-  items: NrbRosterItem[];
+export interface PaginatedIbgcRosterResponse {
+  items: IbgcRosterItem[];
   pagination: PaginationMeta;
 }
 
-export interface NrbMemberBgc {
+export interface IbgcMemberBgc {
   id: number;
   accession: string;
   detector_name: string | null;
@@ -612,7 +612,7 @@ export interface NrbMemberBgc {
   size_kb: number;
 }
 
-export interface NrbDetail {
+export interface IbgcDetail {
   id: number;
   label: string;
   classification_path: string;
@@ -631,13 +631,13 @@ export interface NrbDetail {
   umap_y: number | null;
   parent_assembly: ParentAssemblySummary | null;
   representative_bgc_id: number | null;
-  member_bgcs: NrbMemberBgc[];
+  member_bgcs: IbgcMemberBgc[];
   domain_architecture: DomainArchitectureItem[];
   natural_products: NaturalProductSummary[];
   chemont_tree: ChemOntAnnotationNode[];
 }
 
-export interface NrbScatterPoint {
+export interface IbgcScatterPoint {
   id: number;
   x: number;
   y: number;
@@ -649,11 +649,11 @@ export interface NrbScatterPoint {
   is_type_strain: boolean;
   umap_projected: boolean;
   similarity_score: number | null;
-  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
   is_asset?: boolean;
 }
 
-export interface NrbUmapPoint {
+export interface IbgcUmapPoint {
   id: number;
   label: string;
   umap_x: number;
@@ -664,17 +664,17 @@ export interface NrbUmapPoint {
   is_validated: boolean;
   is_type_strain: boolean;
   umap_projected: boolean;
-  /** Asset NRB sourced from an ephemeral upload (negative id). */
+  /** Asset iBGC sourced from an ephemeral upload (negative id). */
   is_asset?: boolean;
 }
 
-export interface NrbCountResponse {
+export interface IbgcCountResponse {
   exact_count: number;
   cap: number;
   will_sample: boolean;
 }
 
-export type NrbScatterAxis =
+export type IbgcScatterAxis =
   | "size_kb"
   | "n_cds"
   | "novelty_score"
@@ -688,7 +688,7 @@ export type NrbScatterAxis =
 export interface ReportSnapshotResponse {
   token: string;
   expires_at: string;
-  n_nrbs: number;
+  n_ibgcs: number;
 }
 
 export interface DomainCompositionEntry {
@@ -696,7 +696,7 @@ export interface DomainCompositionEntry {
   domain_name: string;
   domain_description: string;
   go_slim: string;
-  nrb_count: number;
+  ibgc_count: number;
   fraction: number;
   tier: "core" | "variable" | "rare";
 }
@@ -730,7 +730,7 @@ export interface DomainGoslimMatrix {
 
 export interface GcfDistributionEntry {
   classification_path: string;
-  nrb_count: number;
+  ibgc_count: number;
   fraction: number;
 }
 
@@ -744,7 +744,7 @@ export interface LengthBucket {
   count: number;
 }
 
-export interface ReportNrbRow {
+export interface ReportIbgcRow {
   id: number;
   label: string;
   classification_path: string;
@@ -774,7 +774,7 @@ export interface ReportAssemblyRow {
   taxonomy_phylum: string | null;
   assembly_size_mb: number | null;
   total_bgcs_in_assembly: number;
-  nrbs_in_shortlist: number;
+  ibgcs_in_shortlist: number;
   is_type_strain: boolean;
 }
 
@@ -787,9 +787,9 @@ export interface ReportPayload {
   token: string;
   generated_at: string;
   expires_at: string;
-  n_nrbs: number;
+  n_ibgcs: number;
   n_assemblies: number;
-  nrb_rows: ReportNrbRow[];
+  ibgc_rows: ReportIbgcRow[];
   domain_composition: DomainCompositionSummary;
   gcf_distribution: GcfDistributionEntry[];
   score_distributions: ReportScoreDistribution[];

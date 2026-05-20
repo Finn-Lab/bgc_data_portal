@@ -36,8 +36,8 @@ export function postDomainQuery(
   );
 }
 
-// Composite-Dice "find similar NRBs" replaces the retired embedding-based
-// similar-BGC endpoint. See `src/api/nrbs.ts` → `postSimilarNrbQuery`.
+// Composite-Dice "find similar iBGCs" replaces the retired embedding-based
+// similar-BGC endpoint. See `src/api/ibgcs.ts` → `postSimilarIbgcQuery`.
 
 export interface ChemicalQueryRequest {
   smiles: string;

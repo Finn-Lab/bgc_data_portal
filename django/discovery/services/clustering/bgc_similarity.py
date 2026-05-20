@@ -2,8 +2,8 @@
 
 The composite score is ``w_d · Dice(M_domains) + w_a · Dice(M_pairs)`` where:
 
-* ``M_domains`` is the NRB × domain-accession binary matrix.
-* ``M_pairs``   is the NRB × adjacent-pair binary matrix.
+* ``M_domains`` is the iBGC × domain-accession binary matrix.
+* ``M_pairs``   is the iBGC × adjacent-pair binary matrix.
 
 Both matrices share row ordering, so the two Dice scores are sparse matrices
 of identical shape and can be summed directly. The result is symmetrized and
@@ -43,7 +43,7 @@ def compute_composite_similarity(
 
     Returns
     -------
-    sparse CSR symmetric NRB × NRB similarity, diagonal zeroed.
+    sparse CSR symmetric iBGC × iBGC similarity, diagonal zeroed.
     """
     import scipy.sparse as sp
 

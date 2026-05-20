@@ -2,7 +2,7 @@
 
 Verifies:
   * TSV has the expected columns and only rows for MIBiG DashboardBgcs
-    (is_validated=True with an NRB).
+    (is_validated=True with an iBGC).
   * Per-leaf-cluster purity columns compute correctly.
   * Both Plotly HTMLs are written and contain the plotly.js marker.
   * Empty-MIBiG fallback: no TSV, no heatmap, but the monochrome UMAP HTML
@@ -20,7 +20,7 @@ from django.conf import settings
 from discovery.models import (
     ClusteringRun,
     DashboardBgc,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 from discovery.services.clustering.mibig_analysis import (
     emit_run_artifacts,
@@ -44,15 +44,15 @@ def _bgc(contig, *, is_validated=False, classification_path=""):
     )
 
 
-def _nrb(contig, *, source_bgcs, start=1, end=10_000):
-    nrb = NonRedundantBGC.objects.create(
+def _ibgc(contig, *, source_bgcs, start=1, end=10_000):
+    ibgc = IntegratedBGC.objects.create(
         contig=contig, start_position=start, end_position=end,
         source_tools=["GECCO"],
     )
     DashboardBgc.objects.filter(id__in=[b.id for b in source_bgcs]).update(
-        non_redundant_bgc=nrb,
+        integrated_bgc=ibgc,
     )
-    return nrb
+    return ibgc
 
 
 def _run(sha):
@@ -71,19 +71,19 @@ def test_artifact_dir_and_files_emitted_for_mibig_run(tmp_path, settings):
 
     # Two Polyketide MIBiGs in leaf "cluster.0001.0001" (cluster A);
     # one NRP MIBiG in leaf "cluster.0002.0001" (cluster B);
-    # one non-MIBiG NRB also in cluster A.
+    # one non-MIBiG iBGC also in cluster A.
     poly_a = _bgc(contig_a, is_validated=True, classification_path="Polyketide.Macrolide")
     poly_b = _bgc(contig_a, is_validated=True, classification_path="Polyketide.PKSI")
     nrp = _bgc(contig_b, is_validated=True, classification_path="NRP.Glycopeptide")
     other = _bgc(contig_a, is_validated=False)
 
-    nrb_a1 = _nrb(contig_a, source_bgcs=[poly_a])
-    nrb_a2 = _nrb(contig_a, source_bgcs=[poly_b], start=20_000, end=30_000)
-    nrb_b = _nrb(contig_b, source_bgcs=[nrp])
-    nrb_other = _nrb(contig_a, source_bgcs=[other], start=40_000, end=50_000)
+    ibgc_a1 = _ibgc(contig_a, source_bgcs=[poly_a])
+    ibgc_a2 = _ibgc(contig_a, source_bgcs=[poly_b], start=20_000, end=30_000)
+    ibgc_b = _ibgc(contig_b, source_bgcs=[nrp])
+    ibgc_other = _ibgc(contig_a, source_bgcs=[other], start=40_000, end=50_000)
 
     run = _run("c" * 64)
-    nrb_ids = np.array([nrb_a1.id, nrb_a2.id, nrb_b.id, nrb_other.id], dtype=np.int64)
+    ibgc_ids = np.array([ibgc_a1.id, ibgc_a2.id, ibgc_b.id, ibgc_other.id], dtype=np.int64)
     leaf_paths = [
         "cluster.0001.0001",
         "cluster.0001.0001",
@@ -97,7 +97,7 @@ def test_artifact_dir_and_files_emitted_for_mibig_run(tmp_path, settings):
         [1.2, 0.9],
     ])
 
-    out_dir = emit_run_artifacts(run, nrb_ids=nrb_ids, leaf_paths=leaf_paths, coords=coords)
+    out_dir = emit_run_artifacts(run, ibgc_ids=ibgc_ids, leaf_paths=leaf_paths, coords=coords)
     assert out_dir == tmp_path / run.sha256[:12]
     assert out_dir.exists()
 
@@ -124,18 +124,18 @@ def test_artifact_dir_and_files_emitted_for_mibig_run(tmp_path, settings):
 
 
 def test_background_sample_caps_non_mibig_and_keeps_all_mibig():
-    # 10 NRBs total; ids 1..3 are MIBiG (always excluded from background — they
+    # 10 iBGCs total; ids 1..3 are MIBiG (always excluded from background — they
     # are drawn separately via per-class colored overlays), ids 4..10 are
     # non-MIBiG candidates for the gray cloud.
-    nrb_lookup = {
+    ibgc_lookup = {
         i: (f"cluster.{i:04d}", float(i), float(-i))
         for i in range(1, 11)
     }
     mibig_ids = {1, 2, 3}
 
-    # Cap below the number of non-MIBiG NRBs forces sampling.
+    # Cap below the number of non-MIBiG iBGCs forces sampling.
     sampled, total = _sample_background_coords(
-        nrb_lookup, mibig_ids, cap=3, seed=42,
+        ibgc_lookup, mibig_ids, cap=3, seed=42,
     )
     assert total == 7  # 10 − 3 MIBiG
     assert len(sampled) == 3
@@ -147,19 +147,19 @@ def test_background_sample_caps_non_mibig_and_keeps_all_mibig():
 
     # Deterministic: same seed → identical sample order.
     sampled_again, _ = _sample_background_coords(
-        nrb_lookup, mibig_ids, cap=3, seed=42,
+        ibgc_lookup, mibig_ids, cap=3, seed=42,
     )
     assert sampled == sampled_again
 
     # Different seeds typically yield different subsets.
     sampled_other, _ = _sample_background_coords(
-        nrb_lookup, mibig_ids, cap=3, seed=7,
+        ibgc_lookup, mibig_ids, cap=3, seed=7,
     )
     assert sampled_other != sampled
 
-    # Cap >= total non-MIBiG: returns every non-MIBiG NRB, no random draw.
+    # Cap >= total non-MIBiG: returns every non-MIBiG iBGC, no random draw.
     sampled_full, total_full = _sample_background_coords(
-        nrb_lookup, mibig_ids, cap=100, seed=42,
+        ibgc_lookup, mibig_ids, cap=100, seed=42,
     )
     assert total_full == 7
     assert len(sampled_full) == 7
@@ -170,14 +170,14 @@ def test_empty_mibig_fallback_only_emits_umap(tmp_path, settings):
 
     contig = DashboardContigFactory()
     bgc = _bgc(contig, is_validated=False)
-    nrb = _nrb(contig, source_bgcs=[bgc])
+    ibgc = _ibgc(contig, source_bgcs=[bgc])
 
     run = _run("d" * 64)
-    nrb_ids = np.array([nrb.id], dtype=np.int64)
+    ibgc_ids = np.array([ibgc.id], dtype=np.int64)
     leaf_paths = ["cluster.0001"]
     coords = np.array([[0.0, 0.0]])
 
-    out_dir = emit_run_artifacts(run, nrb_ids=nrb_ids, leaf_paths=leaf_paths, coords=coords)
+    out_dir = emit_run_artifacts(run, ibgc_ids=ibgc_ids, leaf_paths=leaf_paths, coords=coords)
 
     assert (out_dir / "umap_scatter.html").exists()
     assert not (out_dir / "mibig_validation.tsv").exists()

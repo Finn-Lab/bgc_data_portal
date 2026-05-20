@@ -1,8 +1,8 @@
-"""Integration tests for the NRB count endpoint.
+"""Integration tests for the iBGC count endpoint.
 
-``/api/dashboard/nrbs/count/`` drives the empty-state guard + the
+``/api/dashboard/ibgcs/count/`` drives the empty-state guard + the
 "Showing X of Y, sampled" banner in the v2 Discovery dashboard. These
-tests pin (a) that the filter surface matches ``/nrbs/roster/`` and
+tests pin (a) that the filter surface matches ``/ibgcs/roster/`` and
 (b) that ``will_sample`` flips on the right side of
 ``DASHBOARD_RESULT_CAP``.
 """
@@ -23,7 +23,7 @@ from discovery.models import (
     DashboardBgc,
     DashboardContig,
     DashboardDetector,
-    NonRedundantBGC,
+    IntegratedBGC,
 )
 
 
@@ -42,8 +42,8 @@ def _make_contig(assembly, idx=0):
     )
 
 
-def _make_nrb(contig, *, source_tools):
-    return NonRedundantBGC.objects.create(
+def _make_ibgc(contig, *, source_tools):
+    return IntegratedBGC.objects.create(
         contig=contig,
         start_position=1_000,
         end_position=11_000,
@@ -58,8 +58,8 @@ def _make_nrb(contig, *, source_tools):
 
 
 @pytest.fixture
-def nrb_dataset():
-    """Three NRBs: 1 MIBiG, 2 antiSMASH (same source/assembly)."""
+def ibgc_dataset():
+    """Three iBGCs: 1 MIBiG, 2 antiSMASH (same source/assembly)."""
     src_mibig, _ = AssemblySource.objects.get_or_create(name="MIBiG")
     src_gtdb, _ = AssemblySource.objects.get_or_create(name="GTDB")
 
@@ -79,9 +79,9 @@ def nrb_dataset():
     c_mibig = _make_contig(a_mibig, 0)
     c_gtdb = _make_contig(a_gtdb, 0)
 
-    n1 = _make_nrb(c_mibig, source_tools=["MIBiG"])
-    n2 = _make_nrb(c_gtdb, source_tools=["antiSMASH"])
-    n3 = _make_nrb(c_gtdb, source_tools=["antiSMASH"])
+    n1 = _make_ibgc(c_mibig, source_tools=["MIBiG"])
+    n2 = _make_ibgc(c_gtdb, source_tools=["antiSMASH"])
+    n3 = _make_ibgc(c_gtdb, source_tools=["antiSMASH"])
 
     det_mibig = DashboardDetector.objects.create(
         name="MIBiG v3.1", tool="MIBiG", version="3.1.0",
@@ -96,61 +96,61 @@ def nrb_dataset():
         bgc_accession="MGYB10000001.MIB.1.01",
         start_position=1_000, end_position=11_000,
         classification_path="Polyketide", detector=det_mibig,
-        non_redundant_bgc=n1,
+        integrated_bgc=n1,
     )
     DashboardBgc.objects.create(
         assembly=a_gtdb, contig=c_gtdb,
         bgc_accession="MGYB10000002.ANT.1.01",
         start_position=1_000, end_position=11_000,
         classification_path="NRP", detector=det_anti,
-        non_redundant_bgc=n2,
+        integrated_bgc=n2,
     )
     DashboardBgc.objects.create(
         assembly=a_gtdb, contig=c_gtdb,
         bgc_accession="MGYB10000003.ANT.1.01",
         start_position=2_000, end_position=12_000,
         classification_path="NRP", detector=det_anti,
-        non_redundant_bgc=n3,
+        integrated_bgc=n3,
     )
     return {"mibig": n1, "anti1": n2, "anti2": n3}
 
 
 def _count(api_client, **params):
     qs = "&".join(f"{k}={v}" for k, v in params.items())
-    url = f"/api/dashboard/nrbs/count/?{qs}" if qs else "/api/dashboard/nrbs/count/"
+    url = f"/api/dashboard/ibgcs/count/?{qs}" if qs else "/api/dashboard/ibgcs/count/"
     resp = api_client.get(url)
     assert resp.status_code == 200, resp.content
     return json.loads(resp.content)
 
 
 @pytest.mark.django_db
-class TestNrbCount:
-    def test_no_filter_returns_full_count(self, api_client, nrb_dataset):
+class TestIbgcCount:
+    def test_no_filter_returns_full_count(self, api_client, ibgc_dataset):
         body = _count(api_client)
         assert body["exact_count"] == 3
         assert body["cap"] == DASHBOARD_RESULT_CAP
         assert body["will_sample"] is False
 
-    def test_detector_tools_narrows(self, api_client, nrb_dataset):
-        # Same filter surface as /nrbs/roster/ — must narrow identically.
+    def test_detector_tools_narrows(self, api_client, ibgc_dataset):
+        # Same filter surface as /ibgcs/roster/ — must narrow identically.
         body = _count(api_client, detector_tools="MIBiG")
         assert body["exact_count"] == 1
 
-    def test_source_names_narrows(self, api_client, nrb_dataset):
+    def test_source_names_narrows(self, api_client, ibgc_dataset):
         body = _count(api_client, source_names="GTDB")
         assert body["exact_count"] == 2
 
-    def test_nrb_ids_allow_list(self, api_client, nrb_dataset):
-        ids = f"{nrb_dataset['mibig'].id},{nrb_dataset['anti1'].id}"
-        body = _count(api_client, nrb_ids=ids)
+    def test_ibgc_ids_allow_list(self, api_client, ibgc_dataset):
+        ids = f"{ibgc_dataset['mibig'].id},{ibgc_dataset['anti1'].id}"
+        body = _count(api_client, ibgc_ids=ids)
         assert body["exact_count"] == 2
 
-    def test_unknown_filter_value_returns_zero(self, api_client, nrb_dataset):
+    def test_unknown_filter_value_returns_zero(self, api_client, ibgc_dataset):
         body = _count(api_client, source_names="NoSuchSource")
         assert body["exact_count"] == 0
         assert body["will_sample"] is False
 
-    def test_will_sample_threshold(self, api_client, monkeypatch, nrb_dataset):
+    def test_will_sample_threshold(self, api_client, monkeypatch, ibgc_dataset):
         # ``will_sample`` is purely a function of count > cap; pin the
         # threshold to 1 so we don't need to materialise 5k rows in tests.
         monkeypatch.setattr(
