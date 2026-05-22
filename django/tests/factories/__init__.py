@@ -1,7 +1,29 @@
-"""factory_boy index.
+"""factory_boy index for the v2 discovery schema.
 
-The legacy mgnify_bgcs factories (``models.py``, ``builders.py``) were
-removed with the legacy app. Discovery-app factories are pending a v2
-rewrite (Phase 4); import directly from ``tests.factories.discovery_models``
-once that lands.
+Re-exports the factories from :mod:`discovery_models` so callers can do
+``from tests.factories import IntegratedBgcFactory``.
 """
+
+from tests.factories.discovery_models import (
+    AssemblySourceFactory,
+    ConsensusBgcFactory,
+    ContigCdsFactory,
+    ContigDomainFactory,
+    DashboardAssemblyFactory,
+    DashboardContigFactory,
+    DashboardDetectorFactory,
+    IntegratedBgcFactory,
+    SourceBgcPredictionFactory,
+)
+
+__all__ = [
+    "AssemblySourceFactory",
+    "ConsensusBgcFactory",
+    "ContigCdsFactory",
+    "ContigDomainFactory",
+    "DashboardAssemblyFactory",
+    "DashboardContigFactory",
+    "DashboardDetectorFactory",
+    "IntegratedBgcFactory",
+    "SourceBgcPredictionFactory",
+]
