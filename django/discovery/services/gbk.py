@@ -1,8 +1,18 @@
-"""GenBank record builder for discovery BGCs.
+"""GenBank record builder for discovery iBGCs.
 
-Generates multi-record GBK files from DashboardBgc data, using contig
-sequences and CDS translations stored in the discovery schema's on-demand
-sequence tables (ContigSequence, CdsSequence).
+Generates multi-record GBK files from ``IntegratedBgc`` rows. Each record
+is one iBGC region with a flanking window of ``FLANKING_WINDOW`` bp on the
+parent contig. Features include:
+
+  * one ``iBGC`` feature for the consolidated range
+  * one ``BGC`` feature per overlapping ``SourceBgcPrediction`` (per-tool)
+  * ``CDS`` features for every ``ContigCds`` overlapping the iBGC range;
+    each carries a ``claimed_by`` qualifier listing the tools whose
+    predictions overlap that CDS
+  * ``misc_feature`` per ``ContigDomain`` attached to each CDS
+
+Sequences come from the on-demand ``ContigSequence`` / ``CdsSequence``
+tables in the discovery schema.
 """
 
 import io
@@ -16,7 +26,12 @@ from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation, SeqFeature
 from Bio.SeqRecord import SeqRecord
 
-from discovery.models import DashboardBgc
+from discovery.models import (
+    ContigCds,
+    ContigDomain,
+    IntegratedBgc,
+    SourceBgcPrediction,
+)
 
 FLANKING_WINDOW = 2000
 
@@ -25,123 +40,133 @@ def _crop(val: int, lo: int, hi: int) -> int:
     return max(lo, min(val, hi))
 
 
-def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
-    """Build a single SeqRecord for a BGC with flanking window.
+def _claimed_by_tools_for_cds(
+    cds: ContigCds, predictions: list[SourceBgcPrediction],
+) -> list[str]:
+    """Return sorted unique tool codes whose ``bgc_range`` overlaps the CDS."""
+    tools: set[str] = set()
+    for pred in predictions:
+        if pred.bgc_range is None or cds.cds_range is None:
+            continue
+        if pred.bgc_range.lower < cds.cds_range.upper and \
+           cds.cds_range.lower < pred.bgc_range.upper:
+            tool = pred.detector.tool if pred.detector_id else ""
+            if tool:
+                tools.add(tool)
+    return sorted(tools)
 
-    Expects ``bgc.contig`` and ``bgc.contig.seq`` to be prefetched.
-    CDS entries should have ``seq`` prefetched via ``cds_list`` + ``cds_list__seq``.
+
+def build_ibgc_genbank_record(ibgc: IntegratedBgc) -> SeqRecord:
+    """Build a single SeqRecord for an iBGC with flanking window.
+
+    Expects ``ibgc.contig`` and its ``seq`` to be prefetched. The CDS pool
+    is fetched on the fly via the range-overlap query.
     """
-    contig = bgc.contig
+    contig = ibgc.contig
     contig_seq_obj = getattr(contig, "seq", None) if contig else None
 
     if contig_seq_obj is None:
-        return _build_placeholder_record(bgc)
+        return _build_placeholder_record(ibgc)
 
     contig_seq = contig_seq_obj.get_sequence()
     contig_len = len(contig_seq)
 
-    window_start = max(0, bgc.start_position - FLANKING_WINDOW)
-    window_end = min(contig_len, bgc.end_position + FLANKING_WINDOW)
+    window_start = max(0, ibgc.start_position - FLANKING_WINDOW)
+    window_end = min(contig_len, ibgc.end_position + FLANKING_WINDOW)
     region_seq = contig_seq[window_start:window_end]
 
     contig_acc = contig.accession or contig.sequence_sha256
-    assembly = bgc.assembly
+
+    predictions = list(
+        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc.id)
+        .select_related("detector")
+    )
+
+    cds_list = list(
+        ContigCds.objects.filter(
+            contig_id=ibgc.contig_id,
+            cds_range__overlap=ibgc.bgc_range,
+        ).select_related("seq").order_by("cds_range")
+    )
+
+    domains_by_cds: dict[int, list[ContigDomain]] = {}
+    if cds_list:
+        cds_ids = [c.id for c in cds_list]
+        for dom in ContigDomain.objects.filter(cds_id__in=cds_ids).order_by(
+            "cds_id", "start_position",
+        ):
+            domains_by_cds.setdefault(dom.cds_id, []).append(dom)
 
     record = SeqRecord(
         Seq(region_seq),
         id=contig_acc,
-        name=contig_acc[:16],  # GenBank LOCUS name max 16 chars
+        name=contig_acc[:16],  # GenBank LOCUS max 16 chars
         description=(
             f"Region {window_start}-{window_end} on "
-            f"{contig_acc} (BGC {bgc.bgc_accession})"
+            f"{contig_acc} (iBGC {ibgc.accession})"
         ),
     )
 
+    assembly = predictions[0].assembly if predictions else None
     record.annotations["molecule_type"] = "DNA"
     record.annotations["topology"] = "linear"
     record.annotations["organism"] = assembly.organism_name if assembly else "Unknown"
     record.annotations["source"] = json.dumps({
         "contig_accession": contig_acc,
         "assembly_accession": assembly.assembly_accession if assembly else "",
-        "bgc_accession": bgc.bgc_accession,
-        "start_position": bgc.start_position + 1,
-        "end_position": bgc.end_position,
+        "ibgc_accession": ibgc.accession,
+        "cbgc_accession": ibgc.cbgc.accession if ibgc.cbgc_id else "",
+        "start_position": ibgc.start_position + 1,
+        "end_position": ibgc.end_position,
     })
 
     features: List[SeqFeature] = []
 
-    # ── Region feature (antiSMASH-style aggregate window) ────────────────────
-    region = getattr(bgc, "region", None)
-    if region is not None:
-        reg_rel_start = _crop(region.start_position, window_start, window_end) - window_start
-        reg_rel_end = _crop(region.end_position, window_start, window_end) - window_start
-        if reg_rel_end > reg_rel_start:
-            features.append(SeqFeature(
-                FeatureLocation(reg_rel_start, reg_rel_end),
-                type="Region",
-                qualifiers={
-                    "ID": [region.accession],
-                    "start": [str(region.start_position + 1)],
-                    "end": [str(region.end_position)],
-                },
-            ))
+    # ── iBGC feature ─────────────────────────────────────────────────────
+    ibgc_rel_start = _crop(ibgc.start_position, window_start, window_end) - window_start
+    ibgc_rel_end = _crop(ibgc.end_position, window_start, window_end) - window_start
+    if ibgc_rel_end > ibgc_rel_start:
+        ibgc_qualifiers = {
+            "ID": [ibgc.accession],
+            "start": [str(ibgc.start_position + 1)],
+            "end": [str(ibgc.end_position)],
+            "source_tools": [",".join(ibgc.source_tools or [])],
+        }
+        if ibgc.gene_cluster_family:
+            ibgc_qualifiers["gene_cluster_family"] = [ibgc.gene_cluster_family]
+        if ibgc.novelty_score is not None:
+            ibgc_qualifiers["novelty_score"] = [f"{ibgc.novelty_score:.4f}"]
+        if ibgc.domain_novelty is not None:
+            ibgc_qualifiers["domain_novelty"] = [f"{ibgc.domain_novelty:.4f}"]
+        features.append(SeqFeature(
+            FeatureLocation(ibgc_rel_start, ibgc_rel_end),
+            type="iBGC",
+            qualifiers=ibgc_qualifiers,
+        ))
 
-    # ── iBGC feature (consolidated integrated BGC) ─────────────────────────
-    ibgc = getattr(bgc, "integrated_bgc", None)
-    if ibgc is not None:
-        ibgc_rel_start = _crop(ibgc.start_position, window_start, window_end) - window_start
-        ibgc_rel_end = _crop(ibgc.end_position, window_start, window_end) - window_start
-        if ibgc_rel_end > ibgc_rel_start:
-            ibgc_qualifiers = {
-                "ID": [f"iBGC-{ibgc.id}"],
-                "start": [str(ibgc.start_position + 1)],
-                "end": [str(ibgc.end_position)],
-                "source_tools": [",".join(ibgc.source_tools or [])],
-            }
-            if ibgc.gene_cluster_family:
-                ibgc_qualifiers["gene_cluster_family"] = [ibgc.gene_cluster_family]
-            if ibgc.novelty_score is not None:
-                ibgc_qualifiers["novelty_score"] = [f"{ibgc.novelty_score:.4f}"]
-            if ibgc.domain_novelty is not None:
-                ibgc_qualifiers["domain_novelty"] = [f"{ibgc.domain_novelty:.4f}"]
-            features.append(SeqFeature(
-                FeatureLocation(ibgc_rel_start, ibgc_rel_end),
-                type="iBGC",
-                qualifiers=ibgc_qualifiers,
-            ))
-
-    # ── BGC feature (the SanntiS / antiSMASH / GECCO prediction) ─────────────
-    bgc_rel_start = bgc.start_position - window_start
-    bgc_rel_end = bgc.end_position - window_start
-
-    parts = bgc.classification_path.split(".") if bgc.classification_path else []
-    classification = "/".join(parts)
-    bgc_class_l1 = parts[0] if parts else "Unknown"
-    bgc_feat = SeqFeature(
-        FeatureLocation(bgc_rel_start, bgc_rel_end),
-        type="BGC",
-        qualifiers={
-            "ID": [bgc.bgc_accession],
-            "BGC_CLASS": [bgc_class_l1],
-            "classification": [classification or "Unknown"],
-            "detector": [bgc.detector.name if bgc.detector else "Unknown"],
-            "tool": [bgc.detector.name if bgc.detector else "Unknown"],
-            "contig_edge": ["True" if bgc.is_partial else "False"],
-        },
-    )
-    features.append(bgc_feat)
-
-    # ── CDS features (with per-domain misc_feature children) ────────────────
-    # Group domains by their owning CDS so each CDS feature is immediately
-    # followed by all its domain hits. No dedup — every domain row from
-    # bgc.bgc_domains is emitted, including IPR mappings when set.
-    domains_by_cds: dict[int, list] = {}
-    for dom in bgc.bgc_domains.all():
-        if dom.cds_id is None:
+    # ── BGC feature per overlapping SourceBgcPrediction ─────────────────
+    for pred in predictions:
+        if pred.bgc_range is None:
             continue
-        domains_by_cds.setdefault(dom.cds_id, []).append(dom)
+        rel_start = _crop(pred.start_position, window_start, window_end) - window_start
+        rel_end = _crop(pred.end_position, window_start, window_end) - window_start
+        if rel_end <= rel_start:
+            continue
+        tool = pred.detector.tool if pred.detector_id else "Unknown"
+        features.append(SeqFeature(
+            FeatureLocation(rel_start, rel_end),
+            type="BGC",
+            qualifiers={
+                "ID": [pred.prediction_accession],
+                "detector": [tool],
+                "tool": [tool],
+                "contig_edge": ["True" if pred.is_partial else "False"],
+                "validated": ["True" if pred.is_validated else "False"],
+            },
+        ))
 
-    for cds in bgc.cds_list.all():
+    # ── CDS features (with per-domain misc_feature children) ─────────────
+    for cds in cds_list:
         cds_start = _crop(cds.start_position, window_start, window_end)
         cds_end = _crop(cds.end_position, window_start, window_end)
         rel_start = cds_start - window_start
@@ -150,22 +175,25 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
         seq_obj = getattr(cds, "seq", None)
         aa_seq = seq_obj.get_sequence() if seq_obj else ""
 
-        qualifiers = {
+        claimed_by = _claimed_by_tools_for_cds(cds, predictions)
+
+        qualifiers: dict[str, list[str]] = {
             "ID": [cds.protein_id_str],
             "gene_caller": [cds.gene_caller or ""],
         }
+        if claimed_by:
+            qualifiers["claimed_by"] = [";".join(claimed_by)]
         if aa_seq:
             qualifiers["translation"] = [aa_seq]
             qualifiers["protein_id"] = [cds.protein_id_str]
         if cds.cluster_representative:
             qualifiers["cluster_representative"] = [cds.cluster_representative]
 
-        cds_feat = SeqFeature(
+        features.append(SeqFeature(
             FeatureLocation(rel_start, rel_end, strand=cds.strand),
             type="CDS",
             qualifiers=qualifiers,
-        )
-        features.append(cds_feat)
+        ))
 
         for dom in domains_by_cds.get(cds.id, []):
             dom_rel_start, dom_rel_end = _domain_dna_window(
@@ -173,7 +201,7 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
             )
             if dom_rel_end <= dom_rel_start:
                 continue
-            dom_qualifiers = {
+            dom_qualifiers: dict[str, list[str]] = {
                 "signature_acc": [dom.domain_acc or ""],
                 "ref_db": [dom.ref_db or ""],
                 "name": [dom.domain_name or ""],
@@ -206,15 +234,7 @@ def build_bgc_genbank_record(bgc: DashboardBgc) -> SeqRecord:
 
 
 def _domain_dna_window(domain, cds, window_start: int, window_end: int) -> tuple[int, int]:
-    """Project a domain's protein-aa span onto the relative DNA coords.
-
-    ``BgcDomain.start_position``/``end_position`` are 1-based inclusive
-    amino-acid coordinates on the CDS's protein. We map them to the
-    record-relative DNA window so the resulting ``FeatureLocation`` lies
-    inside the parent CDS. Reverse-strand CDSes mirror the projection from
-    the CDS end. Coordinates are clamped to the flanking window so we
-    never emit features outside the record sequence.
-    """
+    """Project a domain's protein-aa span onto the relative DNA coords."""
     aa_start = max(1, int(domain.start_position or 1))
     aa_end = max(aa_start, int(domain.end_position or aa_start))
     if (cds.strand or 1) >= 0:
@@ -228,60 +248,51 @@ def _domain_dna_window(domain, cds, window_start: int, window_end: int) -> tuple
     return rel_start, rel_end
 
 
-def _build_placeholder_record(bgc: DashboardBgc) -> SeqRecord:
+def _build_placeholder_record(ibgc: IntegratedBgc) -> SeqRecord:
     """Build a minimal record when contig sequence is unavailable."""
-    length = max(1, bgc.end_position - bgc.start_position)
+    length = max(1, ibgc.end_position - ibgc.start_position)
+    contig_acc = ibgc.contig.accession if ibgc.contig else None
     record = SeqRecord(
         Seq("N" * length),
-        id=(bgc.contig.accession if bgc.contig else None) or "unknown",
-        name=bgc.bgc_accession[:16],
-        description=f"BGC {bgc.bgc_accession} (sequence unavailable)",
+        id=contig_acc or "unknown",
+        name=ibgc.accession[:16],
+        description=f"iBGC {ibgc.accession} (sequence unavailable)",
     )
     record.annotations["molecule_type"] = "DNA"
     return record
 
 
-def _fetch_bgcs_for_gbk(filter_kwargs: dict):
+def _fetch_ibgcs_for_gbk(filter_kwargs: dict):
     return (
-        DashboardBgc.objects.filter(**filter_kwargs)
-        .select_related(
-            "assembly",
-            "contig",
-            "contig__seq",
-            "detector",
-            "region",
-            "integrated_bgc",
-        )
-        .prefetch_related("cds_list", "cds_list__seq", "bgc_domains")
-        .order_by("integrated_bgc_id", "id")
+        IntegratedBgc.objects.filter(**filter_kwargs)
+        .select_related("contig", "contig__seq", "cbgc")
+        .order_by("id")
     )
 
 
-def build_multi_bgc_gbk(bgc_ids: List[int]) -> str:
-    """Build a multi-record GBK string for a list of dashboard BGC IDs."""
-    bgcs = _fetch_bgcs_for_gbk({"id__in": bgc_ids})
-    records = [build_bgc_genbank_record(bgc) for bgc in bgcs]
+def build_multi_ibgc_gbk(ibgc_ids: List[int]) -> str:
+    """Build a multi-record GBK string for a list of iBGC IDs."""
+    ibgcs = _fetch_ibgcs_for_gbk({"id__in": list(ibgc_ids)})
+    records = [build_ibgc_genbank_record(ibgc) for ibgc in ibgcs]
     handle = StringIO()
     SeqIO.write(records, handle, "genbank")
     return handle.getvalue()
 
 
 def build_shortlist_gbk_zip(ibgc_ids: List[int]) -> bytes:
-    """Build a zip archive of GBK files, one per source DashboardBgc.
+    """Build a zip archive of GBK files, one per iBGC.
 
-    Source BGCs are grouped by their parent iBGC; files are named
-    ``iBGC-{ibgc_id}/{bgc_accession}.gbk`` so the resulting tree reflects the
-    iBGC → source-BGC hierarchy. Returns the zip bytes (in-memory).
+    Files are named ``<ibgc_accession>.gbk`` at the top level. Returns the
+    zip bytes (in-memory).
     """
-    bgcs = list(_fetch_bgcs_for_gbk({"integrated_bgc_id__in": list(ibgc_ids)}))
+    ibgcs = list(_fetch_ibgcs_for_gbk({"id__in": list(ibgc_ids)}))
 
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for bgc in bgcs:
-            record = build_bgc_genbank_record(bgc)
+        for ibgc in ibgcs:
+            record = build_ibgc_genbank_record(ibgc)
             handle = StringIO()
             SeqIO.write([record], handle, "genbank")
-            ibgc_id = bgc.integrated_bgc_id or 0
-            filename = f"iBGC-{ibgc_id}/{bgc.bgc_accession}.gbk"
+            filename = f"{ibgc.accession}.gbk"
             zf.writestr(filename, handle.getvalue())
     return buf.getvalue()

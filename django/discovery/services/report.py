@@ -7,6 +7,10 @@ histogram, predictor distribution, assembly roster, assembly stats).
 
 The endpoint layer caches the payload in Redis keyed by ``sha256(sorted ids)``
 so reloading the report page is cheap. Nothing is persisted to the DB.
+
+Per the v2 schema, the operational unit is ``IntegratedBgc`` and per-iBGC
+domain pooling joins through ``ContigDomain → ContigCds → IntegratedBgc``
+via ``contig`` + ``bgc_range && cds_range`` overlap.
 """
 
 from __future__ import annotations
@@ -16,14 +20,14 @@ from collections import defaultdict
 from datetime import timedelta
 from typing import Optional
 
+from django.db import connection
 from django.utils import timezone
 
 from discovery.models import (
-    BgcDomain,
     DashboardAssembly,
-    DashboardBgc,
     DashboardContig,
-    IntegratedBGC,
+    IntegratedBgc,
+    SourceBgcPrediction,
 )
 
 log = logging.getLogger(__name__)
@@ -56,8 +60,34 @@ def _taxonomy_phylum(taxonomy_path: Optional[str]) -> Optional[str]:
     return parts[1] if len(parts) >= 2 else parts[0]
 
 
-def _is_partial(ibgc: IntegratedBGC) -> bool:
+def _is_partial(ibgc: IntegratedBgc) -> bool:
     return bool(ibgc.umap_projected) or ibgc.classification_run_id is None
+
+
+def _fetch_domain_rows_for_ibgcs(ibgc_ids: list[int]) -> list[tuple]:
+    """Return ``(ibgc_id, domain_acc, domain_name, domain_description, go_slim)``.
+
+    One row per ``ContigDomain`` whose parent CDS's ``cds_range`` overlaps
+    an iBGC's ``bgc_range`` on the same contig.
+    """
+    if not ibgc_ids:
+        return []
+    sql = """
+        SELECT i.id              AS ibgc_id,
+               cd.domain_acc     AS domain_acc,
+               cd.domain_name    AS domain_name,
+               cd.domain_description AS domain_description,
+               cd.go_slim        AS go_slim
+        FROM discovery_contig_domain cd
+        JOIN discovery_cds cc ON cc.id = cd.cds_id
+        JOIN discovery_ibgc i
+          ON i.contig_id = cc.contig_id
+         AND i.bgc_range && cc.cds_range
+        WHERE i.id = ANY(%s::bigint[])
+    """
+    with connection.cursor() as cur:
+        cur.execute(sql, [list(ibgc_ids)])
+        return cur.fetchall()
 
 
 def build_report_payload(
@@ -71,15 +101,7 @@ def build_report_payload(
     ``extra_ibgc_rows`` are already-shaped asset roster rows (from
     ``asset:{token}:ibgcs`` in Redis); ``extra_domain_rows`` is the asset's
     flat per-iBGC-deduped domain-hit list (from
-    ``asset:{token}:domain_hits``). Together they feed every panel that
-    derives from per-iBGC or per-domain rows: score distributions,
-    completeness pie, length histogram, BGC-class pie, predictor pie,
-    domain composition (and the GO slim matrix), GCF distribution, and
-    the source distribution (asset iBGCs all collapse into a single
-    'Assets' bucket).
-
-    Taxonomy sunburst + assembly stats stay persistent-only — assets have
-    no ``DashboardAssembly`` row to join against.
+    ``asset:{token}:domain_hits``).
 
     Returns a JSON-serialisable dict matching the ``ReportPayload`` schema
     (minus ``token`` which the endpoint sets).
@@ -90,7 +112,7 @@ def build_report_payload(
     extra_ibgc_rows = list(extra_ibgc_rows or [])
     extra_domain_rows = list(extra_domain_rows or [])
     ibgcs = list(
-        IntegratedBGC.objects.select_related("contig").filter(id__in=db_ibgc_ids)
+        IntegratedBgc.objects.select_related("contig", "cbgc").filter(id__in=db_ibgc_ids)
     )
     n_ibgcs = len(ibgcs) + len(extra_ibgc_rows)
     now = timezone.now()
@@ -99,13 +121,13 @@ def build_report_payload(
     if n_ibgcs == 0:
         return _empty_payload(now, expires_at)
 
-    # ── Member BGCs grouped by iBGC (single sweep) ─────────────────────────
+    # ── Source predictions grouped by iBGC (single sweep) ──────────────────
     members = list(
-        DashboardBgc.objects
+        SourceBgcPrediction.objects
         .filter(integrated_bgc_id__in=db_ibgc_ids)
         .select_related("assembly", "assembly__source", "contig", "detector")
     )
-    members_by_ibgc: dict[int, list[DashboardBgc]] = defaultdict(list)
+    members_by_ibgc: dict[int, list[SourceBgcPrediction]] = defaultdict(list)
     for m in members:
         members_by_ibgc[m.integrated_bgc_id].append(m)
 
@@ -115,7 +137,6 @@ def build_report_payload(
     for ibgc in ibgcs:
         mems = members_by_ibgc.get(ibgc.id, [])
         is_validated = any(m.is_validated for m in mems)
-        # ORed across all member assemblies — matches dashboard semantics.
         is_type_strain = any(
             m.assembly is not None and m.assembly.is_type_strain for m in mems
         )
@@ -125,9 +146,11 @@ def build_report_payload(
         contig = ibgc.contig
         ibgc_rows.append({
             "id": ibgc.id,
-            "label": f"iBGC-{ibgc.id}",
+            "accession": ibgc.accession,
+            "cbgc_accession": ibgc.cbgc.accession if ibgc.cbgc_id else None,
+            "label": ibgc.accession,
             "classification_path": ibgc.gene_cluster_family or "",
-            "size_kb": round((ibgc.end_position - ibgc.start_position) / 1000.0, 3),
+            "size_kb": round(ibgc.size_kb, 3),
             "novelty_score": ibgc.novelty_score,
             "domain_novelty": ibgc.domain_novelty,
             "n_source_bgcs": len(mems),
@@ -148,29 +171,18 @@ def build_report_payload(
     domain_name_lookup: dict[str, str] = {}
     domain_desc_lookup: dict[str, str] = {}
     domain_goslim_lookup: dict[str, str] = {}
-    domain_pairs = (
-        BgcDomain.objects
-        .filter(bgc__integrated_bgc_id__in=db_ibgc_ids)
-        .values_list(
-            "bgc__integrated_bgc_id",
-            "domain_acc",
-            "domain_name",
-            "domain_description",
-            "go_slim",
-        )
-    )
-    # BgcDomain.go_slim is a list of slim term names; the heatmap categories
-    # are keyed by a single string, so collapse to the first term (sorted)
-    # for now. Multi-slim heatmap explosion can be revisited later.
+
+    # ContigDomain.go_slim is a list of slim term names; the heatmap categories
+    # are keyed by a single string, so collapse to the first term (sorted).
     def _slim_str(value) -> str:
         if isinstance(value, list):
             return value[0] if value else ""
         return value or ""
 
-    for nid, acc, name, desc, slim in domain_pairs:
+    for nid, acc, name, desc, slim in _fetch_domain_rows_for_ibgcs(db_ibgc_ids):
         if not acc:
             continue
-        domain_to_ibgcs[acc].add(nid)
+        domain_to_ibgcs[acc].add(int(nid))
         if name and acc not in domain_name_lookup:
             domain_name_lookup[acc] = name
         if desc and acc not in domain_desc_lookup:
@@ -179,8 +191,7 @@ def build_report_payload(
         if slim_str and acc not in domain_goslim_lookup:
             domain_goslim_lookup[acc] = slim_str
 
-    # Fold in asset domain hits (negative iBGC ids); the set keyed by acc
-    # treats them identically to persisted iBGCs for the tier denominator.
+    # Fold in asset domain hits (negative iBGC ids).
     for r in extra_domain_rows:
         acc = r.get("domain_acc")
         if not acc:
@@ -199,9 +210,7 @@ def build_report_payload(
 
     composition_rows: list[dict] = []
     core_count = variable_count = rare_count = 0
-    # Per (go_slim, tier) bucket of distinct domains for the heatmap.
     matrix_buckets: dict[tuple[str, str], list[dict]] = defaultdict(list)
-    # Long-format rows for the analyst JSON export (one per iBGC × domain hit).
     domains_long: list[dict] = []
     NO_GOSLIM = "No GO slim"
     for acc, hit_ibgcs in sorted(
@@ -255,9 +264,6 @@ def build_report_payload(
     }
 
     # ── GO slim × tier matrix (for the Domain composition heatmap) ────────
-    # Categories: every go_slim value with ≥1 domain in the shortlist, plus
-    # "No GO slim" if any unmapped domains. Sorted by total descending so the
-    # heaviest categories sit on the left of the heatmap.
     category_totals: dict[str, int] = defaultdict(int)
     for (slim, _tier), domains in matrix_buckets.items():
         category_totals[slim] += len(domains)
@@ -286,9 +292,6 @@ def build_report_payload(
     gcf_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
         gcf_counts[ibgc.gene_cluster_family or "(unclassified)"] += 1
-    # Asset iBGCs were KNN-projected onto the latest ClusteringRun in
-    # services/asset_upload/project.py:_project_against_run — their
-    # classification_path is the inherited leaf GCF.
     for r in extra_ibgc_rows:
         gcf_counts[r.get("classification_path") or "(unclassified)"] += 1
     gcf_distribution = sorted(
@@ -329,7 +332,6 @@ def build_report_payload(
         1 for n in ibgcs
         if not n.umap_projected and n.classification_run_id is None
     )
-    # Asset rows: projected when umap_projected, else unclustered.
     for r in extra_ibgc_rows:
         if r.get("umap_projected"):
             projected_n += 1
@@ -343,22 +345,13 @@ def build_report_payload(
     ]
 
     # ── BGC class pie ─────────────────────────────────────────────────────
-    # Mirrors the ``bgc_class`` filter (api.py): an iBGC matches a class when
-    # any of its source DashboardBgcs has ``classification_path`` starting
-    # with that class. An iBGC with source members in multiple classes counts
-    # once per distinct class.
+    # In v2 the class is the top-level segment of the iBGC's
+    # ``gene_cluster_family`` (no per-prediction classification_path field).
     class_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
-        mems = members_by_ibgc.get(ibgc.id, [])
-        classes: set[str] = set()
-        for m in mems:
-            cp = (m.classification_path or "").strip()
-            if cp:
-                classes.add(cp.split(".")[0])
-        if not classes:
-            classes.add("(unclassified)")
-        for head in classes:
-            class_counts[head] += 1
+        cp = (ibgc.gene_cluster_family or "").strip()
+        head = cp.split(".")[0] if cp else "(unclassified)"
+        class_counts[head] += 1
     for r in extra_ibgc_rows:
         cp = (r.get("classification_path") or "").strip()
         head = cp.split(".")[0] if cp else "(unclassified)"
@@ -371,7 +364,7 @@ def build_report_payload(
     # ── Length histogram ──────────────────────────────────────────────────
     bucket_counts = [0] * len(LENGTH_BUCKETS)
     for ibgc in ibgcs:
-        kb = (ibgc.end_position - ibgc.start_position) / 1000.0
+        kb = ibgc.size_kb
         for i, (lo, hi, _) in enumerate(LENGTH_BUCKETS):
             if lo <= kb < hi:
                 bucket_counts[i] += 1
@@ -401,9 +394,6 @@ def build_report_payload(
     )
 
     # ── Source distribution (iBGCs per source collection) ──────────────────
-    # For each iBGC, collect the set of source-collection names across its
-    # source DashboardBgcs (deduped per iBGC so an iBGC with two members from
-    # the same collection counts once for that collection).
     source_counts: dict[str, int] = defaultdict(int)
     for ibgc in ibgcs:
         names: set[str] = set()
@@ -413,7 +403,6 @@ def build_report_payload(
                 names.add(src.name)
         for name in names:
             source_counts[name] += 1
-    # Asset iBGCs have no AssemblySource row; collapse them into one bucket.
     if extra_ibgc_rows:
         source_counts["Assets"] += len(extra_ibgc_rows)
     source_distribution = sorted(
@@ -456,9 +445,6 @@ def build_report_payload(
             "is_type_strain": asm.is_type_strain,
         })
 
-    # Reuse existing assembly-stats helper for taxonomy / biome / source.
-    # Stats are decorative; on failure we log and continue with an empty dict
-    # so the rest of the report still renders.
     from discovery.services.stats import compute_assembly_stats
     try:
         assembly_stats = compute_assembly_stats(
@@ -472,8 +458,6 @@ def build_report_payload(
         assembly_stats = {}
 
     # ── iBGC-derived taxonomy sunburst ─────────────────────────────────────
-    # One count per iBGC (using its contig's taxonomy_path), so the sunburst
-    # reflects shortlist hits — not the size of the parent assembly.
     from discovery.services.stats import build_taxonomy_sunburst_from_paths
     ibgc_taxonomy_paths = [
         n.contig.taxonomy_path for n in ibgcs
@@ -481,8 +465,6 @@ def build_report_payload(
     ]
     taxonomy_sunburst = build_taxonomy_sunburst_from_paths(ibgc_taxonomy_paths)
 
-    # Prepend ephemeral asset rows so they appear at the top of the report's
-    # iBGC roster (matches the dashboard's ordering).
     if extra_ibgc_rows:
         ibgc_rows = list(extra_ibgc_rows) + ibgc_rows
 
@@ -504,8 +486,6 @@ def build_report_payload(
         "assembly_stats": assembly_stats,
         "taxonomy_sunburst": taxonomy_sunburst,
         "domain_goslim_matrix": domain_goslim_matrix,
-        # Internal: long-form per-iBGC × domain rows for the analyst export.
-        # Not part of the ``ReportPayload`` schema (stripped before responding).
         "_domains_long": domains_long,
     }
 
@@ -514,12 +494,7 @@ ANALYST_SCHEMA_VERSION = "1"
 
 
 def build_report_analyst_export(token: str, payload: dict) -> dict:
-    """Reshape a cached Report payload into an analyst-friendly JSON.
-
-    Two-layer structure: a ``metadata`` block plus tidy long-form arrays
-    suitable for pandas/R consumption. Pure function over the cached
-    payload — no DB queries — so it stays reload-safe within the TTL.
-    """
+    """Reshape a cached Report payload into an analyst-friendly JSON."""
     return {
         "metadata": {
             "schema_version": ANALYST_SCHEMA_VERSION,

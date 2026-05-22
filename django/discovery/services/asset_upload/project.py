@@ -237,7 +237,7 @@ def _project_against_run(
     import numpy as np
     import scipy.sparse as sp
 
-    from discovery.models import DashboardBgc, IntegratedBGC
+    from discovery.models import IntegratedBgc, SourceBgcPrediction
     from discovery.services.clustering.bgc_similarity import (
         compute_composite_similarity,
     )
@@ -272,7 +272,7 @@ def _project_against_run(
     # Primary metadata for coord averaging + leaf voting.
     primary_meta = {
         ibgc.id: (ibgc.umap_x, ibgc.umap_y, ibgc.gene_cluster_family or "")
-        for ibgc in IntegratedBGC.objects.filter(
+        for ibgc in IntegratedBgc.objects.filter(
             id__in=[int(x) for x in pri_row_ids.tolist()]
         ).only("id", "umap_x", "umap_y", "gene_cluster_family")
     }
@@ -289,7 +289,7 @@ def _project_against_run(
     pri_id_to_row = {int(x): i for i, x in enumerate(pri_row_ids.tolist())}
 
     validated_ibgc_ids = set(
-        DashboardBgc.objects.filter(
+        SourceBgcPrediction.objects.filter(
             is_validated=True, integrated_bgc__isnull=False
         ).values_list("integrated_bgc_id", flat=True)
     )
@@ -540,7 +540,7 @@ def _region_payload(vibgc: VirtualIbgc) -> dict[str, Any]:
     """Region payload matching ``BgcRegionOut`` for the asset iBGC.
 
     Coordinates are translated to be relative to the iBGC interval, like the
-    persistent region view does for DashboardBgc rows.
+    persistent region view does for IntegratedBgc rows.
     """
     window_start = vibgc.start_position
     region_length = vibgc.end_position - vibgc.start_position

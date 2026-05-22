@@ -1,18 +1,30 @@
 """Build the iBGC × domain-label membership matrix.
 
-Each row is a :class:`discovery.models.IntegratedBGC`; each column is a
-unique **domain label**. The matrix is binary: a 1 means the iBGC carries
-that label at least once across any of its source DashboardBgc rows.
+Each row is a :class:`discovery.models.IntegratedBgc`; each column is a
+unique **domain label**. The matrix is binary: a 1 means at least one
+``ContigDomain`` whose parent CDS's ``cds_range`` overlaps the iBGC's
+``bgc_range`` on the same contig carries that label.
 
-**IPR-when-available projection** — each ``BgcDomain`` row's label is its
+**Contig-anchored join** — there is no direct FK between ``ContigDomain``
+and ``IntegratedBgc`` in the v2 schema. The two are reached via:
+
+    ContigDomain → ContigCds (cds_id)
+                 → DashboardContig (contig_id)
+                 → IntegratedBgc (contig_id == cds.contig_id
+                                  AND bgc_range && cds_range)
+
+This is expressed as a single SQL join below; GIN on ``bgc_range`` and
+the FK index on ``cds_id`` keep it cheap.
+
+**IPR-when-available projection** — each row's label is its
 ``interpro_entry_acc`` when non-blank (e.g. ``IPR000123``), else the raw
-signature ``domain_acc`` (e.g. ``PF00001``). The input is still gated by
-``ref_db`` ∈ ``{PFAM, NCBIFAM, TIGRFAM}`` (case-insensitive); IPR is purely
-a projection of those rows. See :func:`project_to_ipr`.
+signature ``domain_acc`` (e.g. ``PF00001``). Input rows are gated by
+``ref_db`` ∈ ``{PFAM, NCBIFAM, TIGRFAM}`` (case-insensitive). See
+:func:`project_to_ipr`.
 
-Dedup runs on the projected label: ``(ibgc_id, label, cds.start_position)``
-counts each label once per CDS position, and the binary projection then
-collapses to a single column entry per iBGC.
+Dedup runs on the projected label: ``(ibgc_id, label, cds_start)`` counts
+each label once per CDS position, and the binary projection then collapses
+to a single column entry per iBGC.
 
 Heavy imports (numpy, scipy.sparse) are deferred inside the function body
 so this module can be imported on the web container without ML deps.
@@ -32,7 +44,7 @@ log = logging.getLogger(__name__)
 
 CHUNK = 200_000
 
-DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM","TIGRFAM")
+DEFAULT_DOMAIN_SOURCES: tuple[str, ...] = ("PFAM", "NCBIFAM", "TIGRFAM")
 
 
 def project_to_ipr(domain_acc: str, interpro_entry_acc: str | None) -> str:
@@ -54,27 +66,11 @@ def _normalize_sources(sources: Sequence[str]) -> tuple[str, ...]:
     return tuple(sorted({s.upper() for s in sources}))
 
 
-def _bigint_array_in(ids: Sequence[int]):
-    """Return an expression usable as the RHS of an ``__in`` lookup that sends
-    the id list as a single ``bigint[]`` bind parameter.
-
-    Why: PostgreSQL's wire protocol caps bind parameters at 65 535 (uint16).
-    The ORM's default ``__in=[...]`` expansion sends one param per id, so any
-    iBGC / BGC id list larger than that raises ``OperationalError("number of
-    parameters must be between 0 and 65535")``. Wrapping in ``ANY(%s::bigint[])``
-    keeps the whole list as one param.
-    """
-    from django.db.models.expressions import RawSQL
-
-    return RawSQL("SELECT unnest(%s::bigint[])", [list(ids)])
-
-
 def build_ibgc_domain_matrix(
     *,
     sources: Sequence[str] = DEFAULT_DOMAIN_SOURCES,
     ibgc_ids_subset: Sequence[int] | None = None,
     domain_accs_subset: Sequence[str] | None = None,
-    extra_bgc_ids: Sequence[int] | None = None,
 ) -> tuple["sp.csr_matrix", "np.ndarray", "np.ndarray"]:
     """Build the iBGC × domain-accession binary matrix.
 
@@ -83,88 +79,57 @@ def build_ibgc_domain_matrix(
     sources:
         ``ref_db`` values to keep. Normalized to upper-case at the boundary.
     ibgc_ids_subset:
-        Optional explicit list of ``IntegratedBGC.id`` values to include.
-        Used by the reclassifier path to project rows onto the primary run's
-        vocabulary.
+        Optional explicit list of ``IntegratedBgc.id`` values to include.
     domain_accs_subset:
         Optional column vocabulary. When supplied, columns outside this set
         are dropped; ordering is preserved.
-    extra_bgc_ids:
-        Optional list of *raw* ``DashboardBgc.id`` values to include as
-        additional rows (i.e. virtual iBGCs sized as a single source row).
-        Used by the reclassifier so partial BGCs can be stacked under the
-        same column layout. Rows from this list are keyed by negative
-        ``bgc_id`` to avoid collision with real iBGC ids.
 
     Returns
     -------
     M : sparse CSR uint8 (n_rows × n_domain_accs)
-    row_ids : np.ndarray[int64] — row label per row; positive = iBGC id,
-              negative = ``-DashboardBgc.id`` for ``extra_bgc_ids`` rows.
+    row_ids : np.ndarray[int64] — IntegratedBgc.id per row.
     domain_accs : np.ndarray[object] — column label per column.
     """
     import numpy as np
     import scipy.sparse as sp
 
-    from django.db.models.functions import Upper
-
-    from discovery.models import BgcDomain
+    from django.db import connection
 
     upper_sources = _normalize_sources(sources)
 
-    # Case-insensitive ref_db match: the bulk loader stores ref_db verbatim
-    # from the ETL (typically mixed-case like "Pfam"/"NCBIfam"/"TIGRfam"),
-    # while the API contract is upper-case at the boundary. Annotating with
-    # Upper() lets us compare without depending on stored casing.
-    qs = (
-        BgcDomain.objects
-        .annotate(ref_db_upper=Upper("ref_db"))
-        .filter(
-            ref_db_upper__in=upper_sources,
-            bgc__integrated_bgc__isnull=False,
-        )
-    )
+    sql = """
+        SELECT i.id              AS ibgc_id,
+               cd.domain_acc     AS domain_acc,
+               cd.interpro_entry_acc AS ipr_acc,
+               lower(cc.cds_range)   AS cds_start
+        FROM discovery_contig_domain cd
+        JOIN discovery_cds cc ON cc.id = cd.cds_id
+        JOIN discovery_ibgc i
+          ON i.contig_id = cc.contig_id
+         AND i.bgc_range && cc.cds_range
+        WHERE UPPER(cd.ref_db) = ANY(%s::text[])
+    """
+    params: list = [list(upper_sources)]
     if ibgc_ids_subset is not None:
-        qs = qs.filter(
-            bgc__integrated_bgc_id__in=_bigint_array_in(ibgc_ids_subset)
-        )
-    ibgc_qs = qs.values_list(
-        "bgc__integrated_bgc_id",
-        "domain_acc",
-        "interpro_entry_acc",
-        "cds__start_position",
-    )
+        sql += " AND i.id = ANY(%s::bigint[])"
+        params.append(list(ibgc_ids_subset))
 
-    # Set keyed on row identity, projected label, and on-protein anchor for dedup.
     pair_set: set[tuple[int, str, int]] = set()
     n = 0
-    for row_id, acc, ipr_acc, cds_start in ibgc_qs.iterator(chunk_size=CHUNK):
-        if not acc:
-            continue
-        label = project_to_ipr(acc, ipr_acc)
-        pair_set.add((int(row_id), label, int(cds_start or 0)))
-        n += 1
-        if n % 1_000_000 == 0:
-            log.info("build_ibgc_domain_matrix: streamed %d ibgc-domain rows", n)
-
-    # Extra single-DashboardBgc rows (e.g. partials being reclassified).
-    if extra_bgc_ids:
-        extra_qs = (
-            BgcDomain.objects
-            .annotate(ref_db_upper=Upper("ref_db"))
-            .filter(
-                ref_db_upper__in=upper_sources,
-                bgc_id__in=_bigint_array_in(extra_bgc_ids),
-            )
-            .values_list(
-                "bgc_id", "domain_acc", "interpro_entry_acc", "cds__start_position",
-            )
-        )
-        for bgc_id, acc, ipr_acc, cds_start in extra_qs.iterator(chunk_size=CHUNK):
-            if not acc:
-                continue
-            label = project_to_ipr(acc, ipr_acc)
-            pair_set.add((-int(bgc_id), label, int(cds_start or 0)))
+    with connection.cursor() as cur:
+        cur.execute(sql, params)
+        while True:
+            rows = cur.fetchmany(CHUNK)
+            if not rows:
+                break
+            for row_id, acc, ipr_acc, cds_start in rows:
+                if not acc:
+                    continue
+                label = project_to_ipr(acc, ipr_acc)
+                pair_set.add((int(row_id), label, int(cds_start or 0)))
+                n += 1
+            if n // 1_000_000 and (n // 1_000_000) != ((n - len(rows)) // 1_000_000):
+                log.info("build_ibgc_domain_matrix: streamed %d ibgc-domain rows", n)
 
     if not pair_set:
         empty = sp.csr_matrix((0, 0), dtype=np.uint8)

@@ -1,26 +1,26 @@
 """Post-clustering MIBiG validation artifacts.
 
-After a clustering run has been applied (iBGCs + DashboardBgcs updated with
-their gene_cluster_family and umap coords), this module emits three files
+After a clustering run has been applied (iBGCs updated with their leaf
+``gene_cluster_family`` and UMAP coords), this module emits three files
 under ``settings.CLUSTERING_ARTIFACTS_DIR / <run_sha[:12]>/``:
 
-* ``mibig_validation.tsv``                  — one row per MIBiG DashboardBgc
-* ``umap_scatter.html``                     — Plotly UMAP, MIBiG colored by class
+* ``mibig_validation.tsv``                  — one row per validated iBGC
+* ``umap_scatter.html``                     — Plotly UMAP, MIBiG colored by NP class
 * ``mibig_class_cluster_heatmap.html``      — Plotly heatmap (class × leaf cluster)
 
-The TSV captures cluster assignments + purity metrics for each MIBiG entry,
-giving a direct quality check against curated MIBiG taxonomies. The
+The TSV captures cluster assignments + purity metrics for each validated
+iBGC, giving a direct quality check against curated NP taxonomies. The
 visualizations are interactive (Plotly HTML, plotly.js loaded from CDN) so
 the run dir stays compact.
 
-The gray-background trace in the UMAP plot is capped at
-``MAX_BACKGROUND_IBGCS`` randomly sampled non-MIBiG iBGCs (deterministic via
-the run seed); every MIBiG iBGC is always drawn through its colored per-class
-overlay, so visual focus is preserved as datasets scale into the hundreds
-of thousands.
+"MIBiG class" is derived from the top-level segment of the iBGC's first
+``IbgcNaturalProduct.np_class_path``. iBGCs without an NP record fall back
+to the generic ``"validated"`` bucket so they still appear in the overlays.
 
-If a dataset has no MIBiG entries at all the function logs a warning and
-emits only a monochrome UMAP — no error is raised.
+The gray-background trace in the UMAP plot is capped at
+``MAX_BACKGROUND_IBGCS`` randomly sampled non-validated iBGCs (deterministic
+via the run seed); every validated iBGC is always drawn through its colored
+per-class overlay.
 """
 
 from __future__ import annotations
@@ -35,6 +35,8 @@ log = logging.getLogger(__name__)
 
 TOP_N_CLUSTERS_FOR_HEATMAP = 50
 MAX_BACKGROUND_IBGCS = 5_000
+
+UNCLASSIFIED_BUCKET = "validated"
 
 
 def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
@@ -65,7 +67,7 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
         int(ibgc_id): (leaf_paths[i], float(coords[i, 0]), float(coords[i, 1]))
         for i, ibgc_id in enumerate(ibgc_ids)
     }
-    mibig_rows = _collect_mibig_rows(ibgc_lookup)
+    mibig_rows = _collect_validated_rows(ibgc_lookup)
 
     if mibig_rows:
         _build_mibig_validation_tsv(mibig_rows, out_dir / "mibig_validation.tsv")
@@ -75,8 +77,8 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
         )
     else:
         log.warning(
-            "emit_run_artifacts: no MIBiG entries (is_validated=True with iBGC) — "
-            "skipping TSV and heatmap; emitting monochrome UMAP only"
+            "emit_run_artifacts: no validated iBGCs — skipping TSV and heatmap; "
+            "emitting monochrome UMAP only"
         )
 
     _build_umap_plot_html(
@@ -89,38 +91,73 @@ def emit_run_artifacts(run, *, ibgc_ids, leaf_paths, coords) -> Path:
     return out_dir
 
 
-def _collect_mibig_rows(
+def _collect_validated_rows(
     ibgc_lookup: dict[int, tuple[str, float, float]],
 ) -> list[dict[str, Any]]:
-    """Pull MIBiG DashboardBgc rows and join with their iBGC cluster info."""
-    from discovery.models import DashboardBgc
+    """Pull validated iBGCs and join with cluster info + NP class breakdown.
+
+    One row per validated iBGC (an iBGC with at least one
+    ``SourceBgcPrediction.is_validated=True``). ``mibig_class_top`` comes
+    from the top-level segment of the first ``IbgcNaturalProduct.np_class_path``;
+    iBGCs without an NP record fall back to the ``UNCLASSIFIED_BUCKET``.
+    """
+    from discovery.models import (
+        IbgcNaturalProduct,
+        IntegratedBgc,
+        SourceBgcPrediction,
+    )
+
+    validated_ibgc_ids = list(
+        SourceBgcPrediction.objects.filter(
+            is_validated=True, integrated_bgc__isnull=False,
+        ).values_list("integrated_bgc_id", flat=True).distinct()
+    )
+    if not validated_ibgc_ids:
+        return []
+
+    np_paths_by_ibgc: dict[int, str] = {}
+    for ibgc_id, path in (
+        IbgcNaturalProduct.objects.filter(ibgc_id__in=validated_ibgc_ids)
+        .exclude(np_class_path="")
+        .order_by("ibgc_id", "id")
+        .values_list("ibgc_id", "np_class_path")
+        .iterator(chunk_size=5_000)
+    ):
+        np_paths_by_ibgc.setdefault(int(ibgc_id), path)
+
+    detector_by_prediction: dict[int, str] = {}
+    pred_accessions_by_ibgc: dict[int, list[str]] = defaultdict(list)
+    for pred_id, ibgc_id, acc, tool in (
+        SourceBgcPrediction.objects.filter(
+            is_validated=True, integrated_bgc__isnull=False,
+        ).select_related("detector").values_list(
+            "id", "integrated_bgc_id", "prediction_accession", "detector__tool",
+        )
+    ):
+        detector_by_prediction[int(pred_id)] = tool or ""
+        pred_accessions_by_ibgc[int(ibgc_id)].append(acc)
+
+    ibgc_meta = {
+        ibgc.id: ibgc.accession
+        for ibgc in IntegratedBgc.objects.filter(id__in=validated_ibgc_ids).only(
+            "id", "accession",
+        )
+    }
 
     rows: list[dict[str, Any]] = []
-    qs = (
-        DashboardBgc.objects
-        .filter(is_validated=True, integrated_bgc__isnull=False)
-        .select_related("detector")
-        .values_list(
-            "bgc_accession",
-            "id",
-            "detector__tool",
-            "integrated_bgc_id",
-            "classification_path",
-        )
-    )
-    for accession, dbgc_id, detector_tool, ibgc_id, class_path in qs:
+    for ibgc_id in validated_ibgc_ids:
         cluster_info = ibgc_lookup.get(int(ibgc_id))
         if cluster_info is None:
-            # iBGC exists but isn't in the current run's vocabulary — skip.
             continue
         leaf_path, ux, uy = cluster_info
-        class_path = class_path or ""
-        class_top = class_path.split(".", 1)[0] if class_path else "unclassified"
+        class_path = np_paths_by_ibgc.get(int(ibgc_id), "")
+        class_top = class_path.split(".", 1)[0] if class_path else UNCLASSIFIED_BUCKET
         rows.append({
-            "mibig_accession": accession,
-            "dashboard_bgc_id": int(dbgc_id),
-            "detector_tool": detector_tool or "",
+            "ibgc_accession": ibgc_meta.get(int(ibgc_id), str(ibgc_id)),
             "integrated_bgc_id": int(ibgc_id),
+            "source_prediction_accessions": "|".join(
+                sorted(pred_accessions_by_ibgc.get(int(ibgc_id), []))
+            ),
             "leaf_cluster_path": leaf_path,
             "umap_x": ux,
             "umap_y": uy,
@@ -136,7 +173,6 @@ def _build_mibig_validation_tsv(mibig_rows: list[dict[str, Any]], out_path: Path
     if not mibig_rows:
         return
 
-    # Per-leaf-cluster counts for purity columns.
     leaf_size: Counter[str] = Counter()
     leaf_class_counts: dict[str, Counter[str]] = defaultdict(Counter)
     for row in mibig_rows:
@@ -150,13 +186,11 @@ def _build_mibig_validation_tsv(mibig_rows: list[dict[str, Any]], out_path: Path
         mibig_count_in_leaf = leaf_size[leaf]
         same_class = leaf_class_counts[leaf][cls_top]
         purity = same_class / mibig_count_in_leaf if mibig_count_in_leaf else 0.0
-        # ltree level decomposition.
         level_parts = leaf.split(".") if leaf else []
         enriched.append({
-            "mibig_accession": row["mibig_accession"],
-            "dashboard_bgc_id": row["dashboard_bgc_id"],
-            "detector_tool": row["detector_tool"],
+            "ibgc_accession": row["ibgc_accession"],
             "integrated_bgc_id": row["integrated_bgc_id"],
+            "source_prediction_accessions": row["source_prediction_accessions"],
             "leaf_cluster_path": leaf,
             "level_0_cluster": level_parts[0] if len(level_parts) > 0 else "",
             "level_1_cluster": level_parts[1] if len(level_parts) > 1 else "",
@@ -172,7 +206,7 @@ def _build_mibig_validation_tsv(mibig_rows: list[dict[str, Any]], out_path: Path
         })
 
     df = pd.DataFrame(enriched).sort_values(
-        ["leaf_cluster_path", "mibig_class_top", "mibig_accession"]
+        ["leaf_cluster_path", "mibig_class_top", "ibgc_accession"]
     )
     df.to_csv(out_path, sep="\t", index=False)
     log.info("MIBiG validation TSV: %d rows → %s", len(df), out_path)
@@ -185,13 +219,7 @@ def _sample_background_coords(
     cap: int,
     seed: int,
 ) -> tuple[list[tuple[float, float]], int]:
-    """Pick the gray-background iBGCs: random sample of non-MIBiG, capped at ``cap``.
-
-    Returns ``(sampled_xy_pairs, total_non_mibig)`` so the caller can label
-    the trace with how many points the cloud represents vs. the full set.
-    MIBiG iBGCs are excluded here because they are always drawn separately
-    via the per-class colored overlays.
-    """
+    """Pick the gray-background iBGCs: random sample of non-validated, capped at ``cap``."""
     items = [
         (x, y) for ibgc_id, (_path, x, y) in ibgc_lookup.items()
         if ibgc_id not in mibig_ibgc_ids
@@ -214,9 +242,6 @@ def _build_umap_plot_html(
     import plotly.graph_objects as go
 
     fig = go.Figure()
-    # Background trace: random sample of non-MIBiG iBGCs (capped). All MIBiG
-    # iBGCs are always plotted via the per-class colored overlays below, so
-    # excluding them here avoids double-drawing.
     mibig_ibgc_ids = {int(row["integrated_bgc_id"]) for row in mibig_rows}
     bg_items, total_non_mibig = _sample_background_coords(
         ibgc_lookup, mibig_ibgc_ids, cap=MAX_BACKGROUND_IBGCS, seed=seed,
@@ -226,11 +251,11 @@ def _build_umap_plot_html(
         ys = [y for _, y in bg_items]
         if total_non_mibig > len(bg_items):
             bg_name = (
-                f"non-MIBiG iBGCs (sample of {len(bg_items):,}"
+                f"non-validated iBGCs (sample of {len(bg_items):,}"
                 f" / {total_non_mibig:,})"
             )
         else:
-            bg_name = f"non-MIBiG iBGCs ({len(bg_items):,})"
+            bg_name = f"non-validated iBGCs ({len(bg_items):,})"
         fig.add_trace(
             go.Scattergl(
                 x=xs, y=ys, mode="markers",
@@ -240,7 +265,6 @@ def _build_umap_plot_html(
             )
         )
 
-    # Per-class MIBiG overlays.
     if mibig_rows:
         rows_by_class: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in mibig_rows:
@@ -255,8 +279,8 @@ def _build_umap_plot_html(
                     marker=dict(size=7),
                     name=class_top,
                     text=[
-                        f"{r['mibig_accession']}<br>"
-                        f"{r['mibig_class_full_path']}<br>"
+                        f"{r['ibgc_accession']}<br>"
+                        f"{r['mibig_class_full_path'] or '(no NP record)'}<br>"
                         f"cluster={r['leaf_cluster_path']}"
                         for r in cluster_rows
                     ],
@@ -288,7 +312,6 @@ def _build_confusion_heatmap_html(
     if not mibig_rows:
         return
 
-    # Aggregate counts per (class_top, leaf_path).
     counts: dict[tuple[str, str], int] = Counter()
     leaf_totals: Counter[str] = Counter()
     classes: set[str] = set()
@@ -299,7 +322,6 @@ def _build_confusion_heatmap_html(
         leaf_totals[leaf] += 1
         classes.add(cls)
 
-    # Pick top-N leaves by total MIBiG count.
     top_leaves = [leaf for leaf, _ in leaf_totals.most_common(TOP_N_CLUSTERS_FOR_HEATMAP)]
     classes_sorted = sorted(classes)
 
@@ -315,7 +337,7 @@ def _build_confusion_heatmap_html(
             x=top_leaves,
             y=classes_sorted,
             colorscale="Viridis",
-            colorbar=dict(title="MIBiG count"),
+            colorbar=dict(title="iBGC count"),
             hovertemplate="class=%{y}<br>cluster=%{x}<br>count=%{z}<extra></extra>",
             text=matrix if annotate else None,
             texttemplate="%{text}" if annotate else None,
