@@ -16,10 +16,10 @@ from django.urls import path, re_path
 from debug_toolbar.toolbar import debug_toolbar_urls
 
 from . import views
-from mgnify_bgcs import api as mgnify_api
+from .api import api as ninja_api
 from discovery.api import discovery_router
 
-mgnify_api.api.add_router("/discovery/", discovery_router)
+ninja_api.add_router("/discovery/", discovery_router)
 
 handler404 = "bgc_data_portal.views.custom_404_view"
 
@@ -30,19 +30,7 @@ urlpatterns = [
     path("docs/<path:path>", views.DocsView.as_view(), name="docs_file"),
     path("docs/<path:path>/", views.DocsView.as_view(), name="docs"),
     path("", views.landing_page, name="landing_page"),
-    path(
-        "bgc/",
-        views.bgc_page,
-        name="bgc_page",
-    ),
-    path("bgc/download/", views.download_bgc, name="download_bgc"),
-    path("search/", views.search, name="search"),
-    path("search/status/", views.job_status, name="job_status"),
-    path("results/", views.results_view, name="results_view"),
-    path(
-        "results/download-tsv/", views.download_results_tsv, name="download_results_tsv"
-    ),
     path("dashboard/", views.dashboard_spa, name="dashboard"),
     re_path(r"^dashboard/.*$", views.dashboard_spa),
-    path("api/", mgnify_api.api.urls, name="api"),
+    path("api/", ninja_api.urls, name="api"),
 ] + debug_toolbar_urls()

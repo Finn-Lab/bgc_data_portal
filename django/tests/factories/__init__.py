@@ -1,31 +1,7 @@
-"""Re-exports all factories for convenient import."""
+"""factory_boy index.
 
-from tests.factories.models import (
-    AssemblyFactory,
-    BgcClassFactory,
-    BgcDetectorFactory,
-    BgcFactory,
-    BiomeFactory,
-    CdsFactory,
-    ContigFactory,
-    DomainFactory,
-    GeneCallerFactory,
-    ProteinDomainFactory,
-    ProteinFactory,
-    StudyFactory,
-)
-
-__all__ = [
-    "StudyFactory",
-    "BiomeFactory",
-    "AssemblyFactory",
-    "ContigFactory",
-    "BgcClassFactory",
-    "BgcDetectorFactory",
-    "BgcFactory",
-    "DomainFactory",
-    "ProteinFactory",
-    "ProteinDomainFactory",
-    "GeneCallerFactory",
-    "CdsFactory",
-]
+The legacy mgnify_bgcs factories (``models.py``, ``builders.py``) were
+removed with the legacy app. Discovery-app factories are pending a v2
+rewrite (Phase 4); import directly from ``tests.factories.discovery_models``
+once that lands.
+"""

@@ -70,7 +70,6 @@ INSTALLED_APPS = [
     "ninja",
     "matomo",
     "rest_framework",
-    "mgnify_bgcs",
     "django_celery_results",
     "pgvector",
     "csp",
