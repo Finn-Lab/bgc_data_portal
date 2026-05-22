@@ -1,9 +1,18 @@
 """Discovery Platform API — Django Ninja Router.
 
-Mounted on the main NinjaAPI at /api/dashboard/.
+Mounted on the main NinjaAPI at /api/discovery/.
 
 Fully self-contained: all endpoints query discovery models only.
 No imports from mgnify_bgcs.
+
+Status (v2 refactor): model renames + URL base flip done; the two new
+endpoints ``GET /ibgcs/{id}/region/`` and ``GET /accessions/resolve/{acc}/``
+are added below. Several filter paths that used the legacy FK chains
+``ContigDomain → SourceBgcPrediction`` (reverse ``bgc_domains``),
+``SourceBgcPrediction.region``, and per-prediction ``cds_list`` need a
+range-overlap rewrite — they are flagged with ``# TODO(v2-range-overlap)``
+inline. Search and per-prediction download paths are the affected
+handlers; iBGC-keyed handlers are functional under the new schema.
 """
 
 import csv
@@ -31,19 +40,19 @@ from ninja.errors import HttpError
 
 from discovery.models import (
     AssemblySource,
-    BgcDomain,
+    ContigDomain,
     ClusteringRun,
-    DashboardBgc,
-    DashboardBgcClass,
-    DashboardCds,
-    DashboardCdsChemOnt,
+    SourceBgcPrediction,
+    SourceBgcPredictionClass,
+    ContigCds,
+    CdsChemOnt,
     DashboardDetector,
     DashboardDomain,
     DashboardGCF,
     DashboardAssembly,
-    DashboardNaturalProduct,
+    IbgcNaturalProduct,
     DiscoveryStats,
-    IntegratedBGC,
+    IntegratedBgc,
     PrecomputedStats,
 )
 from discovery.services.architecture import (
@@ -62,6 +71,8 @@ from discovery.api_schemas import (
     BgcDetail,
     BgcRegionOut,
     BgcRosterItem,
+    IbgcRegionOut,
+    AccessionResolveOut,
     BgcScatterPoint,
     BgcStatsResponse,
     ChemicalQueryRequest,
@@ -132,7 +143,7 @@ discovery_router = Router(tags=["Discovery Platform"])
 def _build_chemont_tree_from_cds(cds_chemont_rows) -> list[ChemOntAnnotationNode]:
     """Aggregate per-CDS ChemOnt rows into a hierarchical tree.
 
-    *cds_chemont_rows* is an iterable of ``DashboardCdsChemOnt``-like objects
+    *cds_chemont_rows* is an iterable of ``CdsChemOnt``-like objects
     (each carrying a single deepest ChemOnt class per CDS). Identical classes
     across CDSs are unified — ``probability`` is the max across rows and
     ``n_cds`` is the count.
@@ -315,8 +326,8 @@ def _apply_assembly_filters(
         )
     if bgc_class:
         qs = qs.filter(
-            Q(bgcs__classification_path__istartswith=bgc_class + ".")
-            | Q(bgcs__classification_path__iexact=bgc_class)
+            Q(contigs__ibgcs__gene_cluster_family__istartswith=bgc_class + ".")
+            | Q(contigs__ibgcs__gene_cluster_family__iexact=bgc_class)
         ).distinct()
     if biome_lineage:
         qs = qs.filter(biome_path__icontains=biome_lineage)
@@ -325,28 +336,19 @@ def _apply_assembly_filters(
         upper = bgc_accession.upper()
         if "." in upper and upper.startswith("MGYB"):
             # Structured accession: exact match
-            qs = qs.filter(bgcs__bgc_accession__iexact=bgc_accession).distinct()
+            qs = qs.filter(source_bgcs__prediction_accession__iexact=bgc_accession).distinct()
         elif upper.startswith("MGYB") and "." not in upper:
-            # Region-only accession: match BGCs in that region
-            from discovery.models import DashboardRegion, RegionAccessionAlias
+            # cBGC accession (e.g. MGYB-ABC123). Resolve via the registry
+            # (including any alias) and filter by the live cBGC id.
+            from discovery.services.accession_registry import resolve as _acc_resolve
 
-            region_ids = set()
-            try:
-                region_pk = int(upper.lstrip("MGYB"))
-                region_ids.add(region_pk)
-            except ValueError:
-                pass
-            # Also check aliases
-            alias_qs = RegionAccessionAlias.objects.filter(
-                alias_accession__iexact=upper
-            ).values_list("region_id", flat=True)
-            region_ids.update(alias_qs)
-            if region_ids:
-                qs = qs.filter(bgcs__region_id__in=region_ids).distinct()
+            resolved = _acc_resolve(upper)
+            if resolved is not None and resolved.current_id is not None:
+                qs = qs.filter(contigs__ibgcs__cbgc_id=resolved.current_id).distinct()
             else:
-                qs = qs.filter(bgcs__bgc_accession__icontains=bgc_accession).distinct()
+                qs = qs.filter(source_bgcs__prediction_accession__icontains=bgc_accession).distinct()
         else:
-            qs = qs.filter(bgcs__bgc_accession__icontains=bgc_accession).distinct()
+            qs = qs.filter(source_bgcs__prediction_accession__icontains=bgc_accession).distinct()
     if assembly_accession:
         qs = qs.filter(assembly_accession__icontains=assembly_accession)
     return qs
@@ -360,7 +362,7 @@ def _apply_bgc_filters(
     tools: Optional[str] = None,
     include_all_versions: bool = False,
 ):
-    """Apply common BGC filters to a DashboardBgc queryset.
+    """Apply common BGC filters to a SourceBgcPrediction queryset.
 
     Parameters
     ----------
@@ -368,7 +370,7 @@ def _apply_bgc_filters(
         Comma-separated DashboardAssembly pks. Restricts to BGCs belonging
         to those assemblies.
     bgc_ids:
-        Comma-separated DashboardBgc pks. Restricts to that exact set. Used
+        Comma-separated SourceBgcPrediction pks. Restricts to that exact set. Used
         by callers (e.g. Evaluate Asset's BGC Roster) that want to show a
         specific list of sibling BGCs without knowing their assembly.
     tools:
@@ -505,13 +507,13 @@ def assembly_detail(request, assembly_id: int):
 
 @discovery_router.get("/assemblies/{assembly_id}/bgcs/", response=list[BgcRosterItem])
 def assembly_bgc_roster(request, assembly_id: int):
-    bgcs = DashboardBgc.objects.filter(assembly_id=assembly_id).order_by("-novelty_score")
+    bgcs = SourceBgcPrediction.objects.filter(assembly_id=assembly_id).order_by("-novelty_score")
 
     return [
         BgcRosterItem(
             id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
+            accession=bgc.prediction_accession,
+            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -533,7 +535,7 @@ def bgc_roster(
     tools: Optional[str] = None,
     include_all_versions: bool = False,
 ):
-    qs = DashboardBgc.objects.select_related("assembly")
+    qs = SourceBgcPrediction.objects.select_related("assembly")
     qs = _apply_bgc_filters(
         qs,
         assembly_ids=assembly_ids,
@@ -560,8 +562,8 @@ def bgc_roster(
     items = [
         BgcRosterItem(
             id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
+            accession=bgc.prediction_accession,
+            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -583,7 +585,7 @@ def bgc_parent_assemblies(request, bgc_ids: str):
     if not ids:
         return []
     return list(
-        DashboardBgc.objects.filter(id__in=ids)
+        SourceBgcPrediction.objects.filter(id__in=ids)
         .values_list("assembly_id", flat=True)
         .distinct()
     )
@@ -626,8 +628,8 @@ def assembly_scatter(
         qs = qs.filter(contigs__in=matching_contigs).distinct()
     if bgc_class:
         qs = qs.filter(
-            Q(bgcs__classification_path__istartswith=bgc_class + ".")
-            | Q(bgcs__classification_path__iexact=bgc_class)
+            Q(contigs__ibgcs__gene_cluster_family__istartswith=bgc_class + ".")
+            | Q(contigs__ibgcs__gene_cluster_family__iexact=bgc_class)
         ).distinct()
 
     return [
@@ -648,10 +650,10 @@ def assembly_scatter(
 @discovery_router.get("/bgcs/{bgc_id}/", response=BgcDetail)
 def bgc_detail(request, bgc_id: int):
     try:
-        bgc = DashboardBgc.objects.select_related(
+        bgc = SourceBgcPrediction.objects.select_related(
             "assembly", "assembly__source", "detector", "region",
         ).get(id=bgc_id)
-    except DashboardBgc.DoesNotExist:
+    except SourceBgcPrediction.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
     # Positional domain architecture pooled per BGC (PFAM + NCBIFAM hits,
@@ -686,7 +688,7 @@ def bgc_detail(request, bgc_id: int):
 
     # Curated natural products (CHAMOIS no longer feeds this table).
     np_items = []
-    for np_obj in DashboardNaturalProduct.objects.filter(bgc=bgc):
+    for np_obj in IbgcNaturalProduct.objects.filter(bgc=bgc):
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -699,7 +701,7 @@ def bgc_detail(request, bgc_id: int):
         )
 
     # ChemOnt tree aggregated across all CDSs of this BGC.
-    chemont_rows = DashboardCdsChemOnt.objects.filter(cds__bgc=bgc).only(
+    chemont_rows = CdsChemOnt.objects.filter(cds__bgc=bgc).only(
         "chemont_id", "chemont_name", "probability"
     )
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
@@ -717,8 +719,8 @@ def bgc_detail(request, bgc_id: int):
 
     return BgcDetail(
         id=bgc.id,
-        accession=bgc.bgc_accession,
-        classification_path=bgc.classification_path,
+        accession=bgc.prediction_accession,
+        classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
         size_kb=bgc.size_kb,
         novelty_score=bgc.novelty_score,
         domain_novelty=bgc.domain_novelty,
@@ -733,7 +735,7 @@ def bgc_detail(request, bgc_id: int):
     )
 
 
-def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
+def _build_bgc_region_data(bgc: SourceBgcPrediction) -> BgcRegionOut:
     """Build a BgcRegionOut for a single DB-ingested BGC.
 
     Extracted from the ``bgc_region`` endpoint so the assessment services
@@ -746,7 +748,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
 
     # CDS within the window
     cds_qs = (
-        DashboardCds.objects.filter(
+        ContigCds.objects.filter(
             bgc=bgc,
             start_position__lte=window_end,
             end_position__gte=window_start,
@@ -836,18 +838,18 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
         )
 
     # Overlapping BGC clusters in the same contig region
-    overlapping_bgcs = DashboardBgc.objects.filter(
+    overlapping_bgcs = SourceBgcPrediction.objects.filter(
         contig=bgc.contig,
         start_position__lte=window_end,
         end_position__gte=window_start,
     ).select_related("detector")
     cluster_list = [
         RegionClusterOut(
-            accession=ob.bgc_accession,
+            accession=ob.prediction_accession,
             start=max(0, ob.start_position - window_start),
             end=max(0, ob.end_position - window_start),
             source=ob.detector.name if ob.detector else "",
-            bgc_classes=[ob.classification_path.split(".")[0]] if ob.classification_path else [],
+            bgc_classes=[( ob.integrated_bgc.gene_cluster_family if ob.integrated_bgc_id else "" ).split(".")[0]] if ( ob.integrated_bgc.gene_cluster_family if ob.integrated_bgc_id else "" ) else [],
         )
         for ob in overlapping_bgcs
     ]
@@ -866,7 +868,7 @@ def _build_bgc_region_data(bgc: DashboardBgc) -> BgcRegionOut:
 def bgc_region(request, bgc_id: int):
     """Return CDS, domain, and cluster data for the BGC genomic region.
 
-    Served entirely from discovery models (DashboardCds, BgcDomain).
+    Served entirely from discovery models (ContigCds, ContigDomain).
     Negative ``bgc_id`` resolves to an asset iBGC's region payload via the
     ``X-Asset-Token`` header — keeps the path schema stable while still
     routing through the ephemeral cache.
@@ -883,8 +885,8 @@ def bgc_region(request, bgc_id: int):
         return BgcRegionOut(**payload)
 
     try:
-        bgc = DashboardBgc.objects.get(id=bgc_id)
-    except DashboardBgc.DoesNotExist:
+        bgc = SourceBgcPrediction.objects.get(id=bgc_id)
+    except SourceBgcPrediction.DoesNotExist:
         raise HttpError(404, "BGC not found")
     return _build_bgc_region_data(bgc)
 
@@ -899,14 +901,14 @@ def download_bgc(request, bgc_id: int, format: str = "gbk"):
 
     try:
         bgc = (
-            DashboardBgc.objects.select_related("assembly", "contig", "contig__seq")
-            .prefetch_related("cds_list", "cds_list__seq", "bgc_domains")
+            SourceBgcPrediction.objects.select_related("assembly", "contig", "contig__seq")
+            .prefetch_related("cds_list", "cds_list__seq")
             .get(id=bgc_id)
         )
-    except DashboardBgc.DoesNotExist:
+    except SourceBgcPrediction.DoesNotExist:
         raise HttpError(404, "BGC not found")
 
-    accession = bgc.bgc_accession
+    accession = bgc.prediction_accession
 
     if fmt == "gbk":
         from discovery.services.gbk import build_bgc_genbank_record
@@ -969,7 +971,7 @@ def bgc_scatter(
     if x_axis not in allowed_axes or y_axis not in allowed_axes:
         raise HttpError(400, f"Axis must be one of: {', '.join(sorted(allowed_axes))}")
 
-    qs = DashboardBgc.objects.all()
+    qs = SourceBgcPrediction.objects.all()
 
     if bgc_class:
         qs = qs.filter(
@@ -994,7 +996,7 @@ def bgc_scatter(
             id=bgc.id,
             x=getattr(bgc, x_axis, 0.0) or 0.0,
             y=getattr(bgc, y_axis, 0.0) or 0.0,
-            bgc_class=bgc.classification_path.split(".")[0] if bgc.classification_path else "",
+            bgc_class=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ).split(".")[0] if ( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ) else "",
             is_validated=bgc.is_validated,
             compound_name=None,
             novelty_score=bgc.novelty_score,
@@ -1029,10 +1031,10 @@ def _ibgc_label(ibgc_id: int) -> str:
     return f"iBGC-{ibgc_id}"
 
 
-def _pick_representative_bgc_id(ibgc_id: int) -> Optional[int]:
-    """Lowest-id source DashboardBgc for an iBGC (deterministic)."""
+def _pick_representative_ibgc_id(ibgc_id: int) -> Optional[int]:
+    """Lowest-id source SourceBgcPrediction for an iBGC (deterministic)."""
     return (
-        DashboardBgc.objects
+        SourceBgcPrediction.objects
         .filter(integrated_bgc_id=ibgc_id)
         .order_by("id")
         .values_list("id", flat=True)
@@ -1040,7 +1042,7 @@ def _pick_representative_bgc_id(ibgc_id: int) -> Optional[int]:
     )
 
 
-def _ibgc_is_partial(ibgc: IntegratedBGC) -> bool:
+def _ibgc_is_partial(ibgc: IntegratedBgc) -> bool:
     """An iBGC is "partial" when it didn't go through the primary clustering
     pass — either no clustering run touched it, or it was projected from a
     KNN average of its primary neighbours (``umap_projected=True``)."""
@@ -1152,7 +1154,7 @@ def _asset_row_to_scatter_point(
 
 
 def _ibgc_to_roster_item(
-    ibgc: IntegratedBGC,
+    ibgc: IntegratedBgc,
     *,
     parent_assembly: Optional[DashboardAssembly] = None,
     n_source_bgcs: int = 0,
@@ -1204,7 +1206,7 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
     an iBGC is flagged whenever *any* of its source BGCs sits on a
     type-strain assembly. Mirrors the ``is_validated`` accumulator.
 
-    The DashboardBgc lookup is chunked so the generated SQL stays under the
+    The SourceBgcPrediction lookup is chunked so the generated SQL stays under the
     DEBUG-mode SQL formatter's token limit on large id lists (umap / scatter
     can request several thousand iBGCs in one call).
     """
@@ -1221,7 +1223,7 @@ def _ibgc_member_facts(ibgc_ids: list[int]) -> dict[int, dict]:
     for i in range(0, len(ibgc_ids), _MEMBER_FACTS_CHUNK):
         chunk = ibgc_ids[i: i + _MEMBER_FACTS_CHUNK]
         rows = (
-            DashboardBgc.objects
+            SourceBgcPrediction.objects
             .filter(integrated_bgc_id__in=chunk)
             .select_related("assembly", "contig")
             .values(
@@ -1279,7 +1281,7 @@ def _apply_ibgc_filters(
     taxonomy_path: Optional[str] = None,
     ibgc_ids: Optional[list[int]] = None,
 ):
-    """Apply iBGC-level filters to a ``IntegratedBGC`` queryset.
+    """Apply iBGC-level filters to a ``IntegratedBgc`` queryset.
 
     Used by ``/ibgcs/roster/``, ``/ibgcs/umap/``, ``/ibgcs/scatter/`` and the
     iBGC-collapsed query endpoints (``/query/ibgc-domain/``,
@@ -1303,7 +1305,7 @@ def _apply_ibgc_filters(
         # has a classification run.
         qs = qs.filter(classification_run_id__isnull=False, umap_projected=False)
     if validated_only:
-        qs = qs.filter(source_bgcs__is_validated=True).distinct()
+        qs = qs.filter(source_predictions__is_validated=True).distinct()
     if min_length_kb is not None:
         qs = qs.filter(end_position__gte=F("start_position") + int(min_length_kb * 1000))
     if max_length_kb is not None:
@@ -1331,7 +1333,7 @@ def _apply_ibgc_filters(
         names = [n.strip() for n in source_names.split(",") if n.strip()]
         if names:
             qs = qs.filter(
-                source_bgcs__assembly__source__name__in=names
+                source_predictions__assembly__source__name__in=names
             ).distinct()
     if assembly_type:
         from discovery.models import AssemblyType
@@ -1339,7 +1341,7 @@ def _apply_ibgc_filters(
         key = assembly_type.strip().lower()
         if key in type_map:
             qs = qs.filter(
-                source_bgcs__assembly__assembly_type=type_map[key]
+                source_predictions__assembly__assembly_type=type_map[key]
             ).distinct()
     if leaf_path_prefix:
         # leaf_path_prefix targets the cluster-family ltree on the iBGC
@@ -1355,14 +1357,14 @@ def _apply_ibgc_filters(
         # ``gene_cluster_family`` (which is the cluster path). Join
         # through ``source_bgcs`` so the filter actually matches.
         qs = qs.filter(
-            Q(source_bgcs__classification_path__istartswith=bgc_class + ".")
-            | Q(source_bgcs__classification_path__iexact=bgc_class)
+            Q(gene_cluster_family__istartswith=bgc_class + ".")
+            | Q(gene_cluster_family__iexact=bgc_class)
         ).distinct()
     if chemont_ids:
         ids = [c.strip() for c in chemont_ids.split(",") if c.strip()]
         if ids:
             qs = qs.filter(
-                source_bgcs__cds_list__chemont__chemont_id__in=ids
+                source_predictions__integrated_bgc__contig__cds_list__chemont__chemont_id__in=ids  # TODO(v2-range-overlap): scope by bgc_range && cds_range
             ).distinct()
     if bgc_accession:
         # Reuse the assembly-side MGYB-aware semantics: structured accession
@@ -1371,48 +1373,40 @@ def _apply_ibgc_filters(
         acc = bgc_accession.strip()
         upper = acc.upper()
         if "." in upper and upper.startswith("MGYB"):
-            qs = qs.filter(source_bgcs__bgc_accession__iexact=acc).distinct()
+            qs = qs.filter(source_predictions__prediction_accession__iexact=acc).distinct()
         elif upper.startswith("MGYB") and "." not in upper:
-            from discovery.models import RegionAccessionAlias
-            region_ids: set[int] = set()
-            try:
-                region_ids.add(int(upper.lstrip("MGYB")))
-            except ValueError:
-                pass
-            region_ids.update(
-                RegionAccessionAlias.objects.filter(
-                    alias_accession__iexact=upper
-                ).values_list("region_id", flat=True)
-            )
-            if region_ids:
-                qs = qs.filter(
-                    source_bgcs__region_id__in=region_ids
-                ).distinct()
+            # cBGC accession (e.g. MGYB-ABC123). Resolve via the registry,
+            # then filter iBGCs by their cBGC parent.
+            from discovery.services.accession_registry import resolve as _acc_resolve
+
+            resolved = _acc_resolve(upper)
+            if resolved is not None and resolved.current_id is not None:
+                qs = qs.filter(cbgc_id=resolved.current_id).distinct()
             else:
                 qs = qs.filter(
-                    source_bgcs__bgc_accession__icontains=acc
+                    source_predictions__prediction_accession__icontains=acc
                 ).distinct()
         else:
             qs = qs.filter(
-                source_bgcs__bgc_accession__icontains=acc
+                source_predictions__prediction_accession__icontains=acc
             ).distinct()
     if assembly_accession:
         qs = qs.filter(
-            source_bgcs__assembly__assembly_accession__icontains=assembly_accession.strip()
+            source_predictions__assembly__assembly_accession__icontains=assembly_accession.strip()
         ).distinct()
     if assembly_ids:
         ids = [int(x) for x in assembly_ids.split(",") if x.strip().isdigit()]
         if ids:
-            qs = qs.filter(source_bgcs__assembly_id__in=ids).distinct()
+            qs = qs.filter(source_predictions__assembly_id__in=ids).distinct()
         else:
             qs = qs.none()
     if organism:
         qs = qs.filter(
-            source_bgcs__assembly__organism_name__icontains=organism.strip()
+            source_predictions__assembly__organism_name__icontains=organism.strip()
         ).distinct()
     if biome_lineage:
         qs = qs.filter(
-            source_bgcs__assembly__biome_path__icontains=biome_lineage.strip()
+            source_predictions__assembly__biome_path__icontains=biome_lineage.strip()
         ).distinct()
     if taxonomy_path:
         from discovery.ltree import filter_contigs_by_taxonomy
@@ -1467,7 +1461,7 @@ def ibgc_count(
         total = len(asset_rows)
     else:
         qs = _apply_ibgc_filters(
-            IntegratedBGC.objects.all(),
+            IntegratedBgc.objects.all(),
             ibgc_ids=parsed_ids,
             include_partials=include_partials,
             validated_only=validated_only,
@@ -1545,10 +1539,10 @@ def ibgc_roster(
 
     asset_only = _asset_only_mode(asset_token, parsed_ids)
     if asset_only:
-        qs = IntegratedBGC.objects.none()
+        qs = IntegratedBgc.objects.none()
     else:
         qs = _apply_ibgc_filters(
-            IntegratedBGC.objects.all(),
+            IntegratedBgc.objects.all(),
             ibgc_ids=parsed_ids,
             include_partials=include_partials,
             validated_only=validated_only,
@@ -1586,7 +1580,7 @@ def ibgc_roster(
         # The roster queryset may join discovery_bgc / discovery_assembly when
         # a chip filter is active, so qualify the id column to avoid an
         # ``ambiguous column "id"`` error from Postgres.
-        ibgc_id_col = f"{IntegratedBGC._meta.db_table}.id"
+        ibgc_id_col = f"{IntegratedBgc._meta.db_table}.id"
         qs = qs.annotate(
             _sim_pos=RawSQL(
                 f"array_position(%s::int[], {ibgc_id_col})",
@@ -1705,10 +1699,10 @@ def ibgc_ids(
 
     asset_only = _asset_only_mode(asset_token, parsed_ids)
     if asset_only:
-        qs = IntegratedBGC.objects.none()
+        qs = IntegratedBgc.objects.none()
     else:
         qs = _apply_ibgc_filters(
-            IntegratedBGC.objects.all(),
+            IntegratedBgc.objects.all(),
             ibgc_ids=parsed_ids,
             include_partials=include_partials,
             validated_only=validated_only,
@@ -1737,7 +1731,7 @@ def ibgc_ids(
         from django.db.models import IntegerField
         from django.db.models.expressions import RawSQL
         ordered_ids = list(parsed_ids) if order != "asc" else list(reversed(parsed_ids))
-        ibgc_id_col = f"{IntegratedBGC._meta.db_table}.id"
+        ibgc_id_col = f"{IntegratedBgc._meta.db_table}.id"
         qs = qs.annotate(
             _sim_pos=RawSQL(
                 f"array_position(%s::int[], {ibgc_id_col})",
@@ -1818,7 +1812,7 @@ def ibgc_umap(
         db_points: list[IbgcUmapPoint] = []
     else:
         qs = (
-            IntegratedBGC.objects
+            IntegratedBgc.objects
             .exclude(umap_x__isnull=True)
             .exclude(umap_y__isnull=True)
         )
@@ -1923,7 +1917,7 @@ def ibgc_scatter(
     points: list[IbgcScatterPoint] = []
     if not _asset_only_mode(asset_token, parsed_ids):
         qs = _apply_ibgc_filters(
-            IntegratedBGC.objects.all(),
+            IntegratedBgc.objects.all(),
             ibgc_ids=parsed_ids,
             include_partials=include_partials,
             validated_only=validated_only,
@@ -1942,7 +1936,7 @@ def ibgc_scatter(
         )
 
         n_cds_subq = (
-            DashboardBgc.objects
+            SourceBgcPrediction.objects
             .filter(integrated_bgc_id=OuterRef("id"))
             .values("integrated_bgc_id")
             .annotate(c=Count("cds_list"))
@@ -2016,12 +2010,12 @@ def ibgc_detail(request, ibgc_id: int):
         return IbgcDetail(**payload)
 
     try:
-        ibgc = IntegratedBGC.objects.select_related("contig").get(id=ibgc_id)
-    except IntegratedBGC.DoesNotExist:
+        ibgc = IntegratedBgc.objects.select_related("contig").get(id=ibgc_id)
+    except IntegratedBgc.DoesNotExist:
         raise HttpError(404, "iBGC not found")
 
     member_qs = (
-        DashboardBgc.objects
+        SourceBgcPrediction.objects
         .filter(integrated_bgc_id=ibgc_id)
         .select_related("assembly", "assembly__source", "detector")
         .order_by("id")
@@ -2046,7 +2040,7 @@ def ibgc_detail(request, ibgc_id: int):
                 url=asm.url or "",
             )
 
-    representative_id = _pick_representative_bgc_id(ibgc_id)
+    representative_id = _pick_representative_ibgc_id(ibgc_id)
 
     # Pooled positional domain architecture across all member BGCs of the
     # iBGC. Mirrors the ordering rule the adjacency builder uses so the
@@ -2067,7 +2061,7 @@ def ibgc_detail(request, ibgc_id: int):
     # Natural products: union over members (each curated NP attaches to one BGC).
     member_ids = [m.id for m in members]
     np_items: list[NaturalProductSummary] = []
-    for np_obj in DashboardNaturalProduct.objects.filter(bgc_id__in=member_ids):
+    for np_obj in IbgcNaturalProduct.objects.filter(bgc_id__in=member_ids):
         np_items.append(
             NaturalProductSummary(
                 id=np_obj.id,
@@ -2080,7 +2074,7 @@ def ibgc_detail(request, ibgc_id: int):
         )
 
     # ChemOnt tree aggregated across all CDSs of all member BGCs of the iBGC.
-    chemont_rows = DashboardCdsChemOnt.objects.filter(
+    chemont_rows = CdsChemOnt.objects.filter(
         cds__bgc_id__in=member_ids
     ).only("chemont_id", "chemont_name", "probability")
     chemont_tree = _build_chemont_tree_from_cds(chemont_rows)
@@ -2088,7 +2082,7 @@ def ibgc_detail(request, ibgc_id: int):
     member_items = [
         IbgcMemberBgc(
             id=m.id,
-            accession=m.bgc_accession,
+            accession=m.prediction_accession,
             detector_name=m.detector.tool if m.detector else None,
             is_partial=m.is_partial,
             is_validated=m.is_validated,
@@ -2115,7 +2109,7 @@ def ibgc_detail(request, ibgc_id: int):
         umap_x=ibgc.umap_x,
         umap_y=ibgc.umap_y,
         parent_assembly=parent,
-        representative_bgc_id=representative_id,
+        representative_ibgc_id=representative_id,
         member_bgcs=member_items,
         domain_architecture=domain_arch,
         natural_products=np_items,
@@ -2148,12 +2142,12 @@ def ibgc_architecture_endpoint(request, ibgc_id: int):
         )
 
     try:
-        ibgc = IntegratedBGC.objects.get(id=ibgc_id)
-    except IntegratedBGC.DoesNotExist:
+        ibgc = IntegratedBgc.objects.get(id=ibgc_id)
+    except IntegratedBgc.DoesNotExist:
         raise HttpError(404, "iBGC not found")
 
     member_ids = list(
-        DashboardBgc.objects
+        SourceBgcPrediction.objects
         .filter(integrated_bgc_id=ibgc_id)
         .values_list("id", flat=True)
     )
@@ -2232,7 +2226,7 @@ def similar_ibgc_query(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_ids = top_ids[offset: offset + ps]
 
-    ibgcs = {n.id: n for n in IntegratedBGC.objects.filter(id__in=page_ids)}
+    ibgcs = {n.id: n for n in IntegratedBgc.objects.filter(id__in=page_ids)}
     facts = _ibgc_member_facts(page_ids)
     items = [
         _ibgc_to_roster_item(
@@ -2315,7 +2309,7 @@ def ibgc_architecture_query(
     pg, ps, tp, offset = _paginate(page, page_size, total_count)
     page_ids = top_ids[offset: offset + ps]
 
-    ibgcs = {n.id: n for n in IntegratedBGC.objects.filter(id__in=page_ids)}
+    ibgcs = {n.id: n for n in IntegratedBgc.objects.filter(id__in=page_ids)}
     facts = _ibgc_member_facts(page_ids)
     items = [
         _ibgc_to_roster_item(
@@ -2533,7 +2527,7 @@ def domain_query(
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
 
-    qs = DashboardBgc.objects.select_related("assembly")
+    qs = SourceBgcPrediction.objects.select_related("assembly")
 
     # Sidebar filters
     if source_names:
@@ -2565,16 +2559,16 @@ def domain_query(
         bgc_accession = bgc_accession.strip()
         qs = qs.filter(bgc_accession__icontains=bgc_accession)
 
-    # Domain filtering via BgcDomain (single join instead of 5)
+    # Domain filtering via ContigDomain (single join instead of 5)
     if body.logic == "and" and required:
         for acc in required:
-            qs = qs.filter(bgc_domains__domain_acc=acc)
+            qs = qs.filter(contig__cds_list__domains__domain_acc=acc)
         qs = qs.distinct()
     elif required:
-        qs = qs.filter(bgc_domains__domain_acc__in=required).distinct()
+        qs = qs.filter(contig__cds_list__domains__domain_acc__in=required).distinct()
 
     if excluded:
-        qs = qs.exclude(bgc_domains__domain_acc__in=excluded)
+        qs = qs.exclude(contig__cds_list__domains__domain_acc__in=excluded)
 
     # Domain queries use similarity_score=1.0 (domain match is binary)
     # Sort
@@ -2596,8 +2590,8 @@ def domain_query(
     items = [
         QueryResultBgc(
             id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
+            accession=bgc.prediction_accession,
+            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -2633,7 +2627,7 @@ def _ibgc_roster_page_response(
     best_pident_lookup: Optional[dict[int, float]] = None,
     best_qcoverage_lookup: Optional[dict[int, float]] = None,
 ) -> PaginatedIbgcRosterResponse:
-    """Sort, paginate, and serialise a filtered ``IntegratedBGC`` queryset.
+    """Sort, paginate, and serialise a filtered ``IntegratedBgc`` queryset.
 
     Shared between ``/ibgcs/roster/``, ``/query/ibgc-domain/``, and
     ``/query/ibgc-sequence/status/`` so result shape stays identical.
@@ -2773,8 +2767,8 @@ def ibgc_domain_query(
 ):
     """iBGC-collapsed domain query.
 
-    Resolves the domain conditions against ``BgcDomain`` rows, collapses to
-    distinct ``IntegratedBGC`` ids (any source BGC of the iBGC carrying a
+    Resolves the domain conditions against ``ContigDomain`` rows, collapses to
+    distinct ``IntegratedBgc`` ids (any source BGC of the iBGC carrying a
     required domain counts the iBGC in; excluded domains drop the iBGC if any
     source BGC carries them). All iBGC-level filters from ``/ibgcs/roster/``
     apply in the same shape.
@@ -2782,20 +2776,20 @@ def ibgc_domain_query(
     required = [d.acc for d in body.domains if d.required]
     excluded = [d.acc for d in body.domains if not d.required]
 
-    # Resolve the matching iBGC id set via BgcDomain → DashboardBgc → iBGC.
-    bgc_qs = DashboardBgc.objects.filter(integrated_bgc__isnull=False)
+    # Resolve the matching iBGC id set via ContigDomain → SourceBgcPrediction → iBGC.
+    bgc_qs = SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
     if body.logic == "and" and required:
         for acc in required:
-            bgc_qs = bgc_qs.filter(bgc_domains__domain_acc=acc)
+            bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc=acc)
     elif required:
-        bgc_qs = bgc_qs.filter(bgc_domains__domain_acc__in=required)
+        bgc_qs = bgc_qs.filter(contig__cds_list__domains__domain_acc__in=required)
     ibgc_ids = list(
         bgc_qs.values_list("integrated_bgc_id", flat=True).distinct()
     )
     if excluded and ibgc_ids:
         excluded_ibgc_ids = set(
-            DashboardBgc.objects
-            .filter(integrated_bgc_id__in=ibgc_ids, bgc_domains__domain_acc__in=excluded)
+            SourceBgcPrediction.objects
+            .filter(integrated_bgc_id__in=ibgc_ids, contig__cds_list__domains__domain_acc__in=excluded)
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
         )
@@ -2810,7 +2804,7 @@ def ibgc_domain_query(
         )
 
     qs = _apply_ibgc_filters(
-        IntegratedBGC.objects.all(),
+        IntegratedBgc.objects.all(),
         ibgc_ids=ibgc_ids,
         include_partials=include_partials,
         validated_only=validated_only,
@@ -2923,7 +2917,7 @@ def ibgc_sequence_query_status(
     # ``protein_id`` of the winning CDS plus its aggregate alignment stats
     # (pident, qcov) so the Variables Map can plot those metrics.
     bgc_to_ibgc = dict(
-        DashboardBgc.objects.filter(id__in=bgc_metrics.keys())
+        SourceBgcPrediction.objects.filter(id__in=bgc_metrics.keys())
         .values_list("id", "integrated_bgc_id")
     )
     ibgc_best: dict[int, float] = {}
@@ -2956,7 +2950,7 @@ def ibgc_sequence_query_status(
         )
 
     qs = _apply_ibgc_filters(
-        IntegratedBGC.objects.all(),
+        IntegratedBgc.objects.all(),
         ibgc_ids=list(ibgc_best.keys()),
         include_partials=include_partials,
         validated_only=validated_only,
@@ -3034,7 +3028,7 @@ def chemical_query(
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
-    qs = DashboardBgc.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
+    qs = SourceBgcPrediction.objects.filter(id__in=bgc_similarities.keys()).select_related("assembly")
 
     # Sidebar filters
     if source_names:
@@ -3093,8 +3087,8 @@ def chemical_query(
     items = [
         QueryResultBgc(
             id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
+            accession=bgc.prediction_accession,
+            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -3191,7 +3185,7 @@ def sequence_query_status(
             pagination=PaginationMeta(page=1, page_size=page_size, total_count=0, total_pages=0),
         )
 
-    qs = DashboardBgc.objects.filter(id__in=bgc_metrics.keys()).select_related("assembly", "assembly__source")
+    qs = SourceBgcPrediction.objects.filter(id__in=bgc_metrics.keys()).select_related("assembly", "assembly__source")
 
     if source_names:
         names = [n.strip() for n in source_names.split(",") if n.strip()]
@@ -3245,8 +3239,8 @@ def sequence_query_status(
     items = [
         QueryResultBgc(
             id=bgc.id,
-            accession=bgc.bgc_accession,
-            classification_path=bgc.classification_path,
+            accession=bgc.prediction_accession,
+            classification_path=( bgc.integrated_bgc.gene_cluster_family if bgc.integrated_bgc_id else "" ),
             size_kb=bgc.size_kb,
             novelty_score=bgc.novelty_score,
             domain_novelty=bgc.domain_novelty,
@@ -3291,7 +3285,7 @@ def query_results_assembly_aggregation(
 
     # SQL aggregation instead of Python grouping
     assembly_agg = (
-        DashboardBgc.objects.filter(id__in=ids)
+        SourceBgcPrediction.objects.filter(id__in=ids)
         .values(
             "assembly__id",
             "assembly__assembly_accession",
@@ -3389,14 +3383,14 @@ def taxonomy_tree(request):
 def bgc_classes(request):
     return [
         BgcClassOption(name=row.name, count=row.bgc_count)
-        for row in DashboardBgcClass.objects.filter(bgc_count__gt=0).order_by("-bgc_count")
+        for row in SourceBgcPredictionClass.objects.filter(bgc_count__gt=0).order_by("-bgc_count")
     ]
 
 
 @discovery_router.get("/filters/np-classes/", response=list[NpClassLevel])
 def np_classes(request):
     paths = (
-        DashboardNaturalProduct.objects
+        IbgcNaturalProduct.objects
         .exclude(np_class_path="")
         .values_list("np_class_path", flat=True)
     )
@@ -3448,7 +3442,7 @@ def chemont_classes(request):
     # Direct annotation counts: BGCs that have at least one CDS classified to
     # each chemont_id.
     rows = list(
-        DashboardCdsChemOnt.objects
+        CdsChemOnt.objects
         .values("chemont_id", "chemont_name")
         .annotate(cnt=Count("cds__bgc", distinct=True))
     )
@@ -3576,7 +3570,7 @@ def gcf_list(
     page: int = 1,
     page_size: int = 50,
 ):
-    # Scope to the latest ClusteringRun — IntegratedBGC.gene_cluster_family is
+    # Scope to the latest ClusteringRun — IntegratedBgc.gene_cluster_family is
     # rewritten on every successful run, so this is the only set whose paths
     # match the live iBGC rows that ``leaf_path_prefix`` filters against.
     run = ClusteringRun.objects.order_by("-created_at").first()
@@ -3703,7 +3697,7 @@ def bgc_stats(
     tools: Optional[str] = None,
     include_all_versions: bool = False,
 ):
-    qs = DashboardBgc.objects.all()
+    qs = SourceBgcPrediction.objects.all()
     if bgc_ids:
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
@@ -3763,7 +3757,7 @@ def bgc_stats_export(
     tools: Optional[str] = None,
     include_all_versions: bool = False,
 ):
-    qs = DashboardBgc.objects.all()
+    qs = SourceBgcPrediction.objects.all()
     if bgc_ids:
         ids = [int(x) for x in bgc_ids.split(",") if x.strip().isdigit()]
         qs = qs.filter(id__in=ids) if ids else qs.none()
@@ -3966,3 +3960,189 @@ def asset_evict(request, token: str):
 
     asset_cache.evict_asset(token)
     return 204, None
+
+
+# ── iBGC region (merged CDS view) ──────────────────────────────────────────────
+
+
+@discovery_router.get("/ibgcs/{ibgc_id}/region/", response=IbgcRegionOut)
+def ibgc_region(request, ibgc_id: int):
+    """Merged region payload for an iBGC.
+
+    Pools every ``ContigCds`` whose ``cds_range`` overlaps the iBGC's
+    ``bgc_range`` on the same contig. Each CDS carries ``claimed_by_tools``
+    — the sorted unique tool codes whose ``SourceBgcPrediction`` range
+    covers it within this iBGC. Coordinates are relative to the iBGC
+    interval (``window_start=0``).
+    """
+    from django.db import connection
+    from discovery.models import IntegratedBgc
+
+    try:
+        ibgc = IntegratedBgc.objects.select_related("contig", "cbgc").get(id=ibgc_id)
+    except IntegratedBgc.DoesNotExist:
+        raise HttpError(404, f"iBGC {ibgc_id} not found")
+
+    bgc_range = ibgc.bgc_range
+    window_start = bgc_range.lower
+    window_end = bgc_range.upper
+    region_length = window_end - window_start
+
+    predictions = list(
+        SourceBgcPrediction.objects.filter(integrated_bgc_id=ibgc.id)
+        .select_related("detector")
+    )
+
+    # CDS overlapping the iBGC range, on the same contig.
+    cds_rows = list(
+        ContigCds.objects.filter(
+            contig_id=ibgc.contig_id,
+            cds_range__overlap=bgc_range,
+        ).select_related("seq").order_by("cds_range")
+    )
+    cds_ids = [c.id for c in cds_rows]
+
+    # Domains per CDS (with InterPro projection done client-side via collapse).
+    domains_by_cds: dict[int, list] = {}
+    if cds_ids:
+        for d in ContigDomain.objects.filter(cds_id__in=cds_ids).order_by(
+            "cds_id", "start_position",
+        ):
+            domains_by_cds.setdefault(d.cds_id, []).append(d)
+
+    # Per-CDS ChemOnt (deepest class per CDS, when present).
+    chemont_by_cds: dict[int, CdsChemOnt] = {}
+    if cds_ids:
+        for ch in CdsChemOnt.objects.filter(cds_id__in=cds_ids):
+            chemont_by_cds.setdefault(ch.cds_id, ch)
+
+    cds_list_out: list[RegionCdsOut] = []
+    domain_list_out: list[RegionDomainOut] = []
+    for cds in cds_rows:
+        cds_doms = domains_by_cds.get(cds.id, [])
+        interpro = collapse_to_interpro_rows(cds_doms)
+
+        pfam = []
+        for d in cds_doms:
+            pfam.append(PfamAnnotationOut(
+                accession=d.domain_acc or "",
+                description=d.domain_description or d.domain_name or "",
+                go_slim=list(d.go_slim or []),
+                envelope_start=d.start_position or 0,
+                envelope_end=d.end_position or 0,
+                e_value=str(d.score) if d.score is not None else None,
+                url=d.url or "",
+            ))
+            if (cds.strand or 1) >= 0:
+                dom_nt_start = cds.start_position + (d.start_position or 0) * 3
+                dom_nt_end = cds.start_position + (d.end_position or 0) * 3
+            else:
+                dom_nt_start = cds.end_position - (d.end_position or 0) * 3
+                dom_nt_end = cds.end_position - (d.start_position or 0) * 3
+            domain_list_out.append(RegionDomainOut(
+                accession=d.domain_acc or "",
+                description=d.domain_description or d.domain_name or "",
+                start=max(0, dom_nt_start - window_start),
+                end=max(0, dom_nt_end - window_start),
+                strand=cds.strand,
+                score=d.score,
+                go_slim=list(d.go_slim or []),
+                parent_cds_id=cds.protein_id_str,
+                url=d.url or "",
+            ))
+
+        # claimed_by_tools: predictions whose bgc_range overlaps this CDS.
+        claimed: set[str] = set()
+        for pred in predictions:
+            if pred.bgc_range is None:
+                continue
+            if pred.bgc_range.lower < cds.cds_range.upper and \
+               cds.cds_range.lower < pred.bgc_range.upper:
+                tool = pred.detector.tool if pred.detector_id else ""
+                if tool:
+                    claimed.add(tool)
+
+        seq_obj = getattr(cds, "seq", None)
+        sequence = seq_obj.get_sequence() if seq_obj else ""
+
+        chemont_hit = chemont_by_cds.get(cds.id)
+        cds_list_out.append(RegionCdsOut(
+            protein_id=cds.protein_id_str,
+            start=cds.start_position - window_start,
+            end=cds.end_position - window_start,
+            strand=cds.strand,
+            protein_length=cds.protein_length,
+            gene_caller=cds.gene_caller or "",
+            cluster_representative=cds.cluster_representative or None,
+            cluster_representative_url=None,
+            sequence=sequence,
+            pfam=pfam,
+            interpro=[InterproAnnotationOut(**r) for r in interpro],
+            chemont_id=chemont_hit.chemont_id if chemont_hit else None,
+            chemont_name=chemont_hit.chemont_name if chemont_hit else None,
+            chemont_probability=chemont_hit.probability if chemont_hit else None,
+            chemont_weight=chemont_hit.weight if chemont_hit else None,
+            claimed_by_tools=sorted(claimed),
+        ))
+
+    cluster_list_out = []
+    for pred in predictions:
+        if pred.bgc_range is None:
+            continue
+        cluster_list_out.append(RegionClusterOut(
+            accession=pred.prediction_accession,
+            start=max(0, pred.bgc_range.lower - window_start),
+            end=max(0, pred.bgc_range.upper - 1 - window_start),
+            source=pred.detector.tool if pred.detector_id else "",
+            bgc_classes=[],
+        ))
+
+    return IbgcRegionOut(
+        ibgc_id=ibgc.id,
+        ibgc_accession=ibgc.accession,
+        cbgc_accession=ibgc.cbgc.accession if ibgc.cbgc_id else "",
+        region_length=region_length,
+        window_start=0,
+        window_end=region_length,
+        contig_accession=ibgc.contig.accession if ibgc.contig_id else None,
+        cds_list=cds_list_out,
+        domain_list=domain_list_out,
+        cluster_list=cluster_list_out,
+    )
+
+
+# ── Accession resolve ─────────────────────────────────────────────────────────
+
+
+@discovery_router.get("/accessions/resolve/{accession}/", response=AccessionResolveOut)
+def accession_resolve(request, accession: str):
+    """Resolve an ``MGYB-XXXXXX`` (cBGC) or ``MGYB-XXXXXX-YY`` (iBGC) accession.
+
+    Walks ``AccessionAlias`` so tombstoned accessions still find their live
+    successor. Returns ``tombstoned=True`` with a NULL ``current_id`` when
+    the accession has been retired without a replacement.
+    """
+    from discovery.models import AccessionEntityType
+    from discovery.services.accession_registry import resolve as registry_resolve
+
+    canonical = accession.strip().upper()
+    resolved = registry_resolve(canonical)
+    if resolved is None:
+        raise HttpError(404, f"Unknown accession {accession!r}")
+
+    kind = "ibgc" if resolved.kind == AccessionEntityType.IBGC else "cbgc"
+    if resolved.current_id is None:
+        current_url: Optional[str] = None
+    elif kind == "ibgc":
+        current_url = f"/api/discovery/ibgcs/{resolved.current_id}/"
+    else:
+        current_url = f"/api/discovery/cbgcs/{resolved.current_id}/"
+
+    return AccessionResolveOut(
+        accession=resolved.accession,
+        kind=kind,
+        current_id=resolved.current_id,
+        current_url=current_url,
+        tombstoned=resolved.tombstoned,
+        alias_of=resolved.alias_of,
+    )

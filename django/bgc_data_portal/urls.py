@@ -19,7 +19,7 @@ from . import views
 from mgnify_bgcs import api as mgnify_api
 from discovery.api import discovery_router
 
-mgnify_api.api.add_router("/dashboard/", discovery_router)
+mgnify_api.api.add_router("/discovery/", discovery_router)
 
 handler404 = "bgc_data_portal.views.custom_404_view"
 
