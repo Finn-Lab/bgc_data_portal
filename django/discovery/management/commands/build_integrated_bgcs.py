@@ -1,8 +1,10 @@
-"""Rebuild the IntegratedBGC table.
+"""Rebuild the IntegratedBgc table.
 
-This is the pre-clustering step that consolidates latest-version BGC
-predictions into a integrated set: GECCO + SanntiS predictions merged on
-transitive interval overlap, plus standalone antiSMASH calls.
+This is the pre-clustering step that consolidates latest-version
+``SourceBgcPrediction`` rows into the integrated set: validated standalones,
+GECCO + SanntiS predictions merged on transitive interval overlap, and
+antiSMASH calls (absorbed when they overlap an existing iBGC, standalone
+otherwise).
 """
 
 from django.core.management.base import BaseCommand
@@ -11,7 +13,7 @@ from discovery.tasks import build_integrated_bgcs_task
 
 
 class Command(BaseCommand):
-    help = "Rebuild the IntegratedBGC table from latest-version BGC predictions"
+    help = "Rebuild the IntegratedBgc table from latest-version source predictions"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -27,7 +29,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         if options["sync"]:
-            self.stdout.write("Building IntegratedBGC table synchronously ...")
+            self.stdout.write("Building IntegratedBgc table synchronously ...")
             result = build_integrated_bgcs_task.apply().result
             self.stdout.write(self.style.SUCCESS(f"Done: {result}"))
         else:

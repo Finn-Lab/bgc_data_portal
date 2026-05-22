@@ -1,8 +1,8 @@
 """Dispatch a BGC clustering run (domain+adjacency hierarchical-CPM-Leiden).
 
-Operates on the ``IntegratedBGC`` table (run ``build_integrated_bgcs``
-first, or pass ``--rebuild-ibgc`` to chain it). Partial / antiSMASH-absorbed
-DashboardBgcs are handled by the chained ``reclassify_bgcs`` step.
+Operates on the ``IntegratedBgc`` table (run ``build_integrated_bgcs``
+first, or pass ``--rebuild-ibgc`` to chain it). Partial iBGCs are
+projected by the chained ``reclassify_bgcs`` step.
 """
 
 from django.core.management.base import BaseCommand
@@ -16,7 +16,7 @@ from discovery.tasks import (
 class Command(BaseCommand):
     help = (
         "Dispatch a domain+adjacency hierarchical-CPM-Leiden BGC clustering job "
-        "(reads the IntegratedBGC table; emits MIBiG validation artifacts when "
+        "(reads the IntegratedBgc table; emits MIBiG validation artifacts when "
         "--apply is set)."
     )
 
@@ -56,13 +56,13 @@ class Command(BaseCommand):
         parser.add_argument(
             "--apply",
             action="store_true",
-            help="Persist results to IntegratedBGC + DashboardBgc + DashboardGCF and emit MIBiG artifacts",
+            help="Persist results to IntegratedBgc + DashboardGCF and emit MIBiG artifacts",
         )
         parser.add_argument(
             "--auto-reclassify",
             action="store_true",
             default=True,
-            help="Chain reclassify_bgcs for non-primary DashboardBgcs after applying (default true)",
+            help="Chain reclassify_bgcs for non-primary iBGCs after applying (default true)",
         )
         parser.add_argument(
             "--no-auto-reclassify",
@@ -96,7 +96,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--rebuild-ibgc",
             action="store_true",
-            help="Rebuild the IntegratedBGC table before clustering (chains build_integrated_bgcs)",
+            help="Rebuild the IntegratedBgc table before clustering (chains build_integrated_bgcs)",
         )
         parser.add_argument(
             "--sync",
@@ -147,7 +147,7 @@ class Command(BaseCommand):
         # race; just dispatch them one after the other.
         if options["sync"]:
             if options["rebuild_ibgc"]:
-                self.stdout.write("Rebuilding IntegratedBGC table first ...")
+                self.stdout.write("Rebuilding IntegratedBgc table first ...")
                 ibgc_result = build_integrated_bgcs_task.apply().result
                 self.stdout.write(self.style.SUCCESS(f"iBGC rebuild: {ibgc_result}"))
             self.stdout.write("Running BGC clustering synchronously ...")

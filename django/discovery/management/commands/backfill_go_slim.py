@@ -1,4 +1,4 @@
-"""Recompute ``BgcDomain.go_slim`` from ``go_terms`` using the bundled slim map.
+"""Recompute ``ContigDomain.go_slim`` from ``go_terms`` using the bundled slim map.
 
 Ingestion and asset projection now populate ``go_slim`` inline at write
 time using :func:`discovery.services.go_slim.go_slim_for_terms`. Run this
@@ -9,7 +9,7 @@ wiring was in place.
 
 from django.core.management.base import BaseCommand
 
-from discovery.models import BgcDomain
+from discovery.models import ContigDomain
 from discovery.services.go_slim import go_slim_for_terms
 
 BATCH_SIZE = 5000
@@ -17,7 +17,7 @@ BATCH_SIZE = 5000
 
 class Command(BaseCommand):
     help = (
-        "Backfill BgcDomain.go_slim from go_terms using the bundled "
+        "Backfill ContigDomain.go_slim from go_terms using the bundled "
         "go_slim_map.json. Ingestion and asset projection populate go_slim "
         "inline at write time; this command is for refreshes after the slim "
         "map changes."
@@ -40,12 +40,12 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         batch_size = options["batch_size"]
 
-        total = BgcDomain.objects.count()
-        self.stdout.write(f"Total BgcDomain records: {total:,}")
+        total = ContigDomain.objects.count()
+        self.stdout.write(f"Total ContigDomain records: {total:,}")
 
         if dry_run:
             mismatched = 0
-            for domain in BgcDomain.objects.only("go_terms", "go_slim").iterator(
+            for domain in ContigDomain.objects.only("go_terms", "go_slim").iterator(
                 chunk_size=batch_size
             ):
                 if list(domain.go_slim or []) != go_slim_for_terms(domain.go_terms):
@@ -58,9 +58,9 @@ class Command(BaseCommand):
             return
 
         updated = 0
-        batch: list[BgcDomain] = []
+        batch: list[ContigDomain] = []
 
-        for domain in BgcDomain.objects.only("id", "go_terms", "go_slim").iterator(
+        for domain in ContigDomain.objects.only("id", "go_terms", "go_slim").iterator(
             chunk_size=batch_size
         ):
             slim = go_slim_for_terms(domain.go_terms)
@@ -69,15 +69,15 @@ class Command(BaseCommand):
                 batch.append(domain)
 
             if len(batch) >= batch_size:
-                BgcDomain.objects.bulk_update(batch, ["go_slim"])
+                ContigDomain.objects.bulk_update(batch, ["go_slim"])
                 updated += len(batch)
                 batch = []
                 self.stdout.write(f"  … {updated:,} updated", ending="\r")
 
         if batch:
-            BgcDomain.objects.bulk_update(batch, ["go_slim"])
+            ContigDomain.objects.bulk_update(batch, ["go_slim"])
             updated += len(batch)
 
         self.stdout.write(
-            self.style.SUCCESS(f"\n✔ Updated go_slim on {updated:,} BgcDomain records")
+            self.style.SUCCESS(f"\n✔ Updated go_slim on {updated:,} ContigDomain records")
         )

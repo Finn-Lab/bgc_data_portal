@@ -4,10 +4,12 @@ Reads ``clustering_run.json`` + hierarchy/coords/scores/partial parquet files
 and writes:
 
   * a new (or updated-by-sha256) ``ClusteringRun`` row
-  * ``DashboardGCF`` nodes for the tree
-  * ``IntegratedBGC`` per-row classification (primaries + partial projections)
-  * ``DashboardBgc`` back-prop on source BGCs of primary iBGCs
-  * ``IntegratedBGCClusteringSnapshot`` per-iBGC pre-import values for rollback
+  * ``DashboardGCF`` nodes for the tree (with ``representative_ibgc``)
+  * ``IntegratedBgc`` per-row classification (primaries + partial projections)
+  * ``IbgcClusteringSnapshot`` per-iBGC pre-import values for rollback
+
+Per-prediction (``SourceBgcPrediction``) rows are not modified — leaf path
+/ UMAP / scoring columns live on ``IntegratedBgc`` only in the v2 schema.
 
 The whole operation is wrapped in ``@transaction.atomic`` so a failure leaves
 the live state untouched. ``--dry-run`` validates the tarball and prints a
@@ -42,8 +44,8 @@ IBGC_BULK_UPDATE_FIELDS = (
 class Command(BaseCommand):
     help = (
         "Import an HPC bgc-cluster output tarball: upsert ClusteringRun, "
-        "DashboardGCF, IntegratedBGC, DashboardBgc back-prop, partials, "
-        "and rollback snapshot."
+        "DashboardGCF, IntegratedBgc (primaries + partials), and rollback "
+        "snapshot."
     )
 
     def add_arguments(self, parser):
@@ -134,26 +136,17 @@ class Command(BaseCommand):
             "Created" if created else "Updated", run.pk, sha[:12],
         )
 
-        # GCF tree — wipe and replace this run's nodes.
         DashboardGCF.objects.filter(clustering_run=run).delete()
         self._import_gcfs(run, payload["gcf_nodes"])
 
-        # Snapshot the *current* per-iBGC columns of every iBGC we'll touch,
-        # so set_active_clustering_run can roll back.
         primary_ids = [int(x) for x in payload["hierarchy"]["ibgc_id"]]
         partial_ids = [int(x) for x in payload["partial_assignments"]["ibgc_id"]]
         touched_ids = primary_ids + partial_ids
         if touched_ids:
             self._snapshot_existing(run, touched_ids)
 
-        # Apply primary iBGC classification.
         now = timezone.now()
         self._update_primary_ibgcs(run, payload, now)
-
-        # Back-propagate to source DashboardBgcs.
-        self._backprop_dashboard_bgcs(run, payload, now)
-
-        # Apply partial projections.
         self._update_partial_ibgcs(run, payload, now)
 
         return run
@@ -161,35 +154,21 @@ class Command(BaseCommand):
     # ── GCF tree ────────────────────────────────────────────────────────────
 
     def _import_gcfs(self, run, gcf_table: dict):
-        from discovery.models import DashboardBgc, DashboardGCF
+        from discovery.models import DashboardGCF
 
-        rep_ibgc_ids = [int(x) for x in gcf_table.get("representative_ibgc_id", [])]
-        # Resolve representative_ibgc_id -> a source DashboardBgc.id once per iBGC.
-        rep_bgc_map: dict[int, int | None] = {}
-        if rep_ibgc_ids:
-            unique_ids = list({i for i in rep_ibgc_ids if i})
-            qs = (
-                DashboardBgc.objects.filter(
-                    integrated_bgc_id__in=_bigint_array_in(unique_ids),
-                )
-                .order_by("integrated_bgc_id", "id")
-                .values_list("integrated_bgc_id", "id")
-            )
-            for ibgc_id, bgc_id in qs:
-                rep_bgc_map.setdefault(int(ibgc_id), int(bgc_id))
+        rep_ibgc_ids = [int(x) if x else None for x in gcf_table.get("representative_ibgc_id", [])]
 
         rows: list[DashboardGCF] = []
         n = len(gcf_table.get("family_path", []))
         for i in range(n):
             rep_ibgc = rep_ibgc_ids[i] if i < len(rep_ibgc_ids) else None
-            rep_bgc_id = rep_bgc_map.get(int(rep_ibgc)) if rep_ibgc else None
             rows.append(
                 DashboardGCF(
                     clustering_run=run,
                     family_path=gcf_table["family_path"][i],
                     parent_path=gcf_table["parent_path"][i] or "",
                     level=int(gcf_table["level"][i]),
-                    representative_bgc_id=rep_bgc_id,
+                    representative_ibgc_id=rep_ibgc,
                     member_count=int(gcf_table["member_count"][i]),
                     descendant_count=int(gcf_table["descendant_count"][i]),
                 )
@@ -201,19 +180,19 @@ class Command(BaseCommand):
 
     def _snapshot_existing(self, run, ibgc_ids: list[int]):
         from discovery.models import (
-            IntegratedBGC,
-            IntegratedBGCClusteringSnapshot,
+            IbgcClusteringSnapshot,
+            IntegratedBgc,
         )
 
         existing = list(
-            IntegratedBGC.objects.filter(id__in=_bigint_array_in(ibgc_ids))
+            IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids))
             .only(
                 "id", "umap_x", "umap_y", "umap_projected",
                 "gene_cluster_family", "novelty_score", "domain_novelty",
             )
         )
         snaps = [
-            IntegratedBGCClusteringSnapshot(
+            IbgcClusteringSnapshot(
                 clustering_run=run,
                 ibgc_id=ibgc.id,
                 umap_x=ibgc.umap_x,
@@ -225,9 +204,8 @@ class Command(BaseCommand):
             )
             for ibgc in existing
         ]
-        # Wipe any existing snapshot rows for this run (idempotent re-import).
-        IntegratedBGCClusteringSnapshot.objects.filter(clustering_run=run).delete()
-        IntegratedBGCClusteringSnapshot.objects.bulk_create(
+        IbgcClusteringSnapshot.objects.filter(clustering_run=run).delete()
+        IbgcClusteringSnapshot.objects.bulk_create(
             snaps, batch_size=5_000, ignore_conflicts=False,
         )
         log.info("Snapshot wrote %d rows for run pk=%s", len(snaps), run.pk)
@@ -235,7 +213,7 @@ class Command(BaseCommand):
     # ── Primary iBGCs ────────────────────────────────────────────────────────
 
     def _update_primary_ibgcs(self, run, payload: dict, now):
-        from discovery.models import IntegratedBGC
+        from discovery.models import IntegratedBgc
 
         h = payload["hierarchy"]
         coords = payload["coords"]
@@ -261,7 +239,7 @@ class Command(BaseCommand):
 
         ibgc_ids = [int(x) for x in h["ibgc_id"]]
         leaf_paths = list(h["leaf_path"])
-        rows = list(IntegratedBGC.objects.filter(id__in=_bigint_array_in(ibgc_ids)))
+        rows = list(IntegratedBgc.objects.filter(id__in=_bigint_array_in(ibgc_ids)))
         leaf_by_id = dict(zip(ibgc_ids, leaf_paths))
         for ibgc in rows:
             x, y = coords_by_id.get(ibgc.id, (None, None))
@@ -274,61 +252,15 @@ class Command(BaseCommand):
             ibgc.domain_novelty = dn
             ibgc.classification_run = run
             ibgc.classified_at = now
-        IntegratedBGC.objects.bulk_update(
+        IntegratedBgc.objects.bulk_update(
             rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
         )
-        log.info("Updated %d primary IntegratedBGC rows", len(rows))
-
-    # ── DashboardBgc back-prop ─────────────────────────────────────────────
-
-    def _backprop_dashboard_bgcs(self, run, payload: dict, now):
-        from discovery.models import DashboardBgc
-
-        h = payload["hierarchy"]
-        coords = payload["coords"]
-        ibgc_ids = [int(x) for x in h["ibgc_id"]]
-        if not ibgc_ids:
-            return
-        leaf_by_id = dict(zip(ibgc_ids, h["leaf_path"]))
-        coords_by_id = {
-            int(coords["ibgc_id"][i]): (
-                float(coords["umap_x"][i]),
-                float(coords["umap_y"][i]),
-            )
-            for i in range(len(coords["ibgc_id"]))
-        }
-
-        source_bgcs = list(
-            DashboardBgc.objects.filter(
-                integrated_bgc_id__in=_bigint_array_in(ibgc_ids),
-            ).only(
-                "id", "integrated_bgc_id", "umap_x", "umap_y",
-                "gene_cluster_family", "classification_source",
-                "classification_run_id", "classified_at",
-            )
-        )
-        for bgc in source_bgcs:
-            x, y = coords_by_id.get(bgc.integrated_bgc_id, (None, None))
-            bgc.umap_x = x
-            bgc.umap_y = y
-            bgc.gene_cluster_family = leaf_by_id.get(bgc.integrated_bgc_id, "")
-            bgc.classification_source = "primary"
-            bgc.classification_run = run
-            bgc.classified_at = now
-        DashboardBgc.objects.bulk_update(
-            source_bgcs,
-            [
-                "umap_x", "umap_y", "gene_cluster_family",
-                "classification_source", "classification_run", "classified_at",
-            ],
-            batch_size=10_000,
-        )
-        log.info("Back-propagated to %d source DashboardBgc rows", len(source_bgcs))
+        log.info("Updated %d primary IntegratedBgc rows", len(rows))
 
     # ── Partial projections ────────────────────────────────────────────────
 
     def _update_partial_ibgcs(self, run, payload: dict, now):
-        from discovery.models import IntegratedBGC
+        from discovery.models import IntegratedBgc
 
         p = payload["partial_assignments"]
         n = len(p["ibgc_id"])
@@ -342,7 +274,7 @@ class Command(BaseCommand):
         dn = [_maybe_float(x) for x in p["domain_novelty"]]
         by_id = {ids[i]: (leaf[i], ux[i], uy[i], nv[i], dn[i]) for i in range(n)}
 
-        rows = list(IntegratedBGC.objects.filter(id__in=_bigint_array_in(ids)))
+        rows = list(IntegratedBgc.objects.filter(id__in=_bigint_array_in(ids)))
         for ibgc in rows:
             leaf_p, x, y, novelty, dom = by_id[ibgc.id]
             ibgc.umap_x = x
@@ -353,10 +285,10 @@ class Command(BaseCommand):
             ibgc.domain_novelty = dom
             ibgc.classification_run = run
             ibgc.classified_at = now
-        IntegratedBGC.objects.bulk_update(
+        IntegratedBgc.objects.bulk_update(
             rows, list(IBGC_BULK_UPDATE_FIELDS), batch_size=5_000,
         )
-        log.info("Updated %d partial-projection IntegratedBGC rows", len(rows))
+        log.info("Updated %d partial-projection IntegratedBgc rows", len(rows))
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────

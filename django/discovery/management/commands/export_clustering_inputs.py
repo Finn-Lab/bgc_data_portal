@@ -97,7 +97,7 @@ class Command(BaseCommand):
         import scipy.sparse as sp
         from common_core.clustering.schema import ClusteringInputs, RunParams
 
-        from discovery.models import DashboardBgc, IntegratedBGC
+        from discovery.models import SourceBgcPrediction, IntegratedBgc
         from discovery.services.clustering.adjacency import (
             build_ibgc_adjacency_pair_matrix,
         )
@@ -106,14 +106,14 @@ class Command(BaseCommand):
         )
         from discovery.services.clustering.pipeline import _align_rows
 
-        if not IntegratedBGC.objects.exists():
+        if not IntegratedBgc.objects.exists():
             raise CommandError(
-                "IntegratedBGC table is empty — run build_integrated_bgcs first."
+                "IntegratedBgc table is empty — run build_integrated_bgcs first."
             )
 
         # Primary set: iBGCs with at least one non-partial-or-validated source BGC.
         clusterable_ibgc_ids = list(
-            DashboardBgc.objects.filter(integrated_bgc__isnull=False)
+            SourceBgcPrediction.objects.filter(integrated_bgc__isnull=False)
             .filter(Q(is_partial=False) | Q(is_validated=True))
             .values_list("integrated_bgc_id", flat=True)
             .distinct()
@@ -136,7 +136,7 @@ class Command(BaseCommand):
 
         # Partials: iBGCs not in the primary set.
         partial_ibgc_ids = list(
-            IntegratedBGC.objects.exclude(id__in=list(ibgc_ids.tolist()))
+            IntegratedBgc.objects.exclude(id__in=list(ibgc_ids.tolist()))
             .order_by("id")
             .values_list("id", flat=True)
         )
@@ -170,7 +170,7 @@ class Command(BaseCommand):
 
         validated_ibgc_ids = np.asarray(
             sorted(
-                DashboardBgc.objects.filter(
+                SourceBgcPrediction.objects.filter(
                     is_validated=True, integrated_bgc__isnull=False,
                 ).values_list("integrated_bgc_id", flat=True).distinct()
             ),

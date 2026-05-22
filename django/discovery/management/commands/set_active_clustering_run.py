@@ -29,7 +29,7 @@ IBGC_RESTORE_FIELDS = (
 
 class Command(BaseCommand):
     help = (
-        "Restore IntegratedBGC per-row columns from a ClusteringRun's "
+        "Restore IntegratedBgc per-row columns from a ClusteringRun's "
         "import-time snapshot and re-point classification_run."
     )
 
@@ -44,7 +44,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from discovery.models import ClusteringRun, IntegratedBGCClusteringSnapshot
+        from discovery.models import ClusteringRun, IbgcClusteringSnapshot
 
         sha_arg = options["sha"]
         match = ClusteringRun.objects.filter(sha256__startswith=sha_arg)
@@ -57,7 +57,7 @@ class Command(BaseCommand):
             )
         target = match.first()
 
-        n_snaps = IntegratedBGCClusteringSnapshot.objects.filter(
+        n_snaps = IbgcClusteringSnapshot.objects.filter(
             clustering_run=target,
         ).count()
         if n_snaps == 0:
@@ -83,17 +83,17 @@ class Command(BaseCommand):
     @transaction.atomic
     def _apply(self, target) -> int:
         from discovery.models import (
-            IntegratedBGC,
-            IntegratedBGCClusteringSnapshot,
+            IntegratedBgc,
+            IbgcClusteringSnapshot,
         )
 
         snaps = list(
-            IntegratedBGCClusteringSnapshot.objects.filter(clustering_run=target)
+            IbgcClusteringSnapshot.objects.filter(clustering_run=target)
         )
         snap_by_id = {s.ibgc_id: s for s in snaps}
         now = timezone.now()
 
-        ibgcs = list(IntegratedBGC.objects.filter(id__in=list(snap_by_id.keys())))
+        ibgcs = list(IntegratedBgc.objects.filter(id__in=list(snap_by_id.keys())))
         for ibgc in ibgcs:
             s = snap_by_id[ibgc.id]
             ibgc.umap_x = s.umap_x
@@ -104,7 +104,7 @@ class Command(BaseCommand):
             ibgc.domain_novelty = s.domain_novelty
             ibgc.classification_run = target
             ibgc.classified_at = now
-        IntegratedBGC.objects.bulk_update(
+        IntegratedBgc.objects.bulk_update(
             ibgcs, list(IBGC_RESTORE_FIELDS), batch_size=5_000,
         )
         log.info(
